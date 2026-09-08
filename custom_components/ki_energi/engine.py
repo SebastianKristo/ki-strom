@@ -664,7 +664,7 @@ class KiEngine:
                 "forklaring": f"Motoren krasjet: {e}", "feilspor": spor[-900:]})
 
     def _migrer_250(self) -> None:
-        """v2.6.0: ki_maks_time_kwh var økonomisk grense (4,9). Nå er den absolutt, og økonomien
+        """v2.7.0: ki_maks_time_kwh var økonomisk grense (4,9). Nå er den absolutt, og økonomien
         regnes av nettleiemodellen. Løft gammel standardverdi én gang så det nye rommet kan brukes."""
         h = self.hub
         if self.st.get("migrert_250"):
@@ -674,7 +674,7 @@ class KiEngine:
             return  # vent til hjelperen er gjenopprettet
         if abs(float(e.verdi) - 4.9) < 1e-6:
             h.sett("ki_maks_time_kwh", 6.0)
-            self.logg_hendelse("Oppgradering 2.6.0: absolutt timegrense løftet fra 4,90 til 6,00 kWh. "
+            self.logg_hendelse("Oppgradering 2.7.0: absolutt timegrense løftet fra 4,90 til 6,00 kWh. "
                                "Økonomisk grense regnes nå av nettleiemodellen (topp tre per dato).")
         self.st["migrert_250"] = True
         h.lagre()

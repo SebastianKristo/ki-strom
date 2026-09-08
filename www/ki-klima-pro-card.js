@@ -21,7 +21,7 @@
  * Config:  type: custom:ki-klima-pro-card
  */
 
-const KI_PRO_VERSJON = "2.6.0";
+const KI_PRO_VERSJON = "2.7.0";
 
 console.info(
   `%c KI-KLIMA-PRO-CARD %c ${KI_PRO_VERSJON} `,
@@ -299,7 +299,7 @@ class KiKlimaProCard extends HTMLElement {
       // Står markøren i et inputfelt (klokkeslett), venter vi med å tegne på nytt til feltet
       // er forlatt — ellers lukkes velgeren hver gang en sensor oppdateres.
       const aktiv = this._rot && this._rot.activeElement;
-      if (aktiv && (aktiv.tagName === "INPUT" || aktiv.tagName === "TEXTAREA")) { this._ventTegn = true; return; }
+      if (aktiv && (aktiv.tagName === "INPUT" || aktiv.tagName === "TEXTAREA" || aktiv.tagName === "SELECT")) { this._ventTegn = true; return; }
       this._tegn();
     }
   }
@@ -789,20 +789,27 @@ class KiKlimaProCard extends HTMLElement {
         <div class="tegnforklaring"><span><i class="l1"></i>Effekt (W)</span><span><i class="l2"></i>Temperatur (°C)</span></div>`)}`;
   }
 
+  // Tallfelt som rullevelger (native <select>: hjul på iPhone/Android, nedtrekk på desktop).
   _stepperRad(entity, navn, dec, enhet) {
     const st = this._st(entity);
     const a = st ? st.attributes : {};
-    const steg = a.step ?? (dec === 0 ? 1 : dec === 1 ? 0.5 : 0.05);
+    const steg = Number(a.step ?? (dec === 0 ? 1 : dec === 1 ? 0.5 : 0.05));
+    const min = Number(a.min ?? 0), maks = Number(a.max ?? 100);
+    const naa = st ? Number(st.state) : NaN;
+    const desimaler = Math.max(dec, steg < 1 ? String(steg).split(".")[1]?.length || 0 : 0);
+    const valg = [];
+    const antall = Math.min(2000, Math.round((maks - min) / steg));
+    let harNaa = false;
+    for (let i = 0; i <= antall; i++) {
+      const v = Number((min + i * steg).toFixed(6));
+      if (isFinite(naa) && Math.abs(v - naa) < steg / 2) harNaa = true;
+      valg.push(`<option value="${v}" ${isFinite(naa) && Math.abs(v - naa) < steg / 2 ? "selected" : ""}>${nf(v, desimaler)}${enhet}</option>`);
+    }
+    if (isFinite(naa) && !harNaa) valg.unshift(`<option value="${naa}" selected>${nf(naa, desimaler)}${enhet}</option>`);
     return `<div class="rad kompakt">
       <div class="radtekst"><div class="radnavn">${esc(navn)}</div></div>
-      <div class="stepper ${st ? "" : "mangler"}">
-        <div class="steg" data-handling="tall" data-entity="${entity}" data-dir="-1">−</div>
-        <input class="stegverdi" type="number" inputmode="decimal" data-entity="${entity}"
-          value="${st ? Number(st.state).toFixed(dec) : ""}" step="${steg}"
-          ${a.min != null ? `min="${a.min}"` : ""} ${a.max != null ? `max="${a.max}"` : ""}>
-        <span class="enhet">${esc(enhet.trim())}</span>
-        <div class="steg" data-handling="tall" data-entity="${entity}" data-dir="1">+</div>
-      </div></div>`;
+      <select class="velger ${st ? "" : "mangler"}" data-entity="${entity}">${valg.join("")}</select>
+    </div>`;
   }
 
   // Klokkeslett med av/på-bryter i samme rad.
@@ -1925,7 +1932,7 @@ class KiKlimaProCard extends HTMLElement {
   }
 
   _endre(ev) {
-    const tall = ev.composedPath().find((n) => n && n.type === "number" && n.dataset && n.dataset.entity);
+    const tall = ev.composedPath().find((n) => n && (n.type === "number" || n.tagName === "SELECT") && n.dataset && n.dataset.entity);
     if (tall) {
       const v = Number(String(tall.value).replace(",", "."));
       if (isFinite(v)) this._kall("input_number", "set_value", { entity_id: tall.dataset.entity, value: v });
@@ -2046,7 +2053,15 @@ class KiKlimaProCard extends HTMLElement {
       .sonetemp { flex:0 0 auto; }
       .sonekropp .stepper, .rad .stepper { flex:0 0 auto; }
       .stegverdi { min-width:64px; }
-      .rad.kompakt { padding:5px 2px; }
+      .rad.kompakt { padding:4px 2px; }
+      select.velger { font-family:inherit; font-size:14px; font-weight:600; color:inherit;
+        background: rgba(128,128,128,.16); border:0; border-radius:75px; padding:6px 28px 6px 12px;
+        -webkit-appearance:none; appearance:none; text-align:right; max-width:50%; min-width:96px; cursor:pointer;
+        background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path d='M1 1l5 5 5-5' fill='none' stroke='%23888' stroke-width='2'/></svg>");
+        background-repeat:no-repeat; background-position:right 10px center; }
+      select.velger:focus { outline:none; box-shadow:0 0 0 2px rgba(128,128,128,.35); }
+      select.velger.mangler { opacity:.35; pointer-events:none; }
+      select.velger option { color: initial; }
       .stepper { padding:1px; gap:1px; }
       .steg { width:26px; height:26px; font-size:16px; }
       input.stegverdi { width:58px; min-width:0; border:0; background:transparent; color:inherit; font:inherit;
@@ -2165,12 +2180,14 @@ class KiKlimaProCard extends HTMLElement {
       .radtekst { flex:1 1 auto; min-width:0; }
       .radnavn { font-size:14.5px; font-weight:500; overflow-wrap:anywhere; }
       .radsub { font-size:12.5px; opacity:.6; line-height:1.35; overflow-wrap:anywhere; }
-      .radverdi { font-size:13.5px; font-weight:600; opacity:.85; flex:0 1 auto;
+      /* Verdien krymper aldri under sitt eget innhold (ellers blir «2 058 W» til «2058 …»);
+         teksten til venstre er den som må vike. Bare .brytbar får brekke. */
+      .radverdi { font-size:13.5px; font-weight:600; opacity:.85; flex:0 0 auto;
         font-variant-numeric:tabular-nums; white-space:nowrap; text-align:right;
         overflow:hidden; text-overflow:ellipsis; max-width:50%; min-width:0; }
       /* Lange verdier, som råattributter og entitets-ID-er, skal brekke i
          stedet for å presse kortet ut i bredden. */
-      .radverdi.brytbar { white-space:normal; overflow-wrap:anywhere;
+      .radverdi.brytbar { white-space:normal; overflow-wrap:anywhere; flex:0 1 auto;
         text-overflow:clip; max-width:60%; }
       .hjelplinje { font-size:12px; font-weight:600; opacity:.5; padding:10px 2px 2px; }
       .hjelp { display:inline-flex; align-items:center; justify-content:center;

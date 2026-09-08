@@ -1,3 +1,5 @@
+<p align="center"><img src="brand/logo.png" alt="KI Energi" width="520"></p>
+
 # KI Energi
 
 **Selvlærende energi- og klimastyring for Home Assistant — laget for norske rekkehus med Elvia-nettleie.**
@@ -56,7 +58,7 @@ offisielle [Nord Pool-integrasjonen](https://www.home-assistant.io/integrations/
 - [Entiteter](#entiteter)
 - [Nettleie etter døgnmaks](#nettleie-etter-døgnmaks)
 - [Tjenester](#tjenester)
-- [Oppgradering til 2.6.0](#oppgradering-til-260)
+- [Oppgradering til 2.7.0](#oppgradering-til-270)
 - [Migrering fra pakke + pyscript](#migrering-fra-pakke--pyscript)
 - [Feilsøking og FAQ](#feilsøking-og-faq)
 
@@ -99,7 +101,7 @@ nytt og legg til integrasjonen som over.
 
 HACS-kategorien *Integration* installerer bare selve integrasjonen. Kopier
 `www/ki-klima-pro-card.js` til `/config/www/` og legg til ressursen
-`/local/ki-klima-pro-card.js?v=2.6.0` under Innstillinger → Dashboard → ⋮ → Ressurser
+`/local/ki-klima-pro-card.js?v=2.7.0` under Innstillinger → Dashboard → ⋮ → Ressurser
 (type *JavaScript-modul*). Tøm nettleser-cache.
 
 ---
@@ -180,7 +182,7 @@ hash: "#klima"
 
 **En sone er et rom, ikke en ovn.** Under *Konfigurer → Soner* velger du én eller flere termostater
 og én effektsensor per ovn for rommet; motoren skriver samme settpunkt til alle og summerer
-effekten. Ved oppgradering til 2.6.0 slås soner med samme rom, type og profil sammen automatisk
+effekten. Ved oppgradering til 2.7.0 slås soner med samme rom, type og profil sammen automatisk
 (f.eks. «Stue panelovn» + «Stue oljefyr» → «Stue» med nøkkel `stue`); det logges, og
 `switch.ki_styr_<gammel nøkkel>` erstattes av `switch.ki_styr_stue`. Temperaturhjelperne
 (`number.ki_temp_stue_dag/natt`) beholdes.
@@ -226,7 +228,7 @@ til hans vanlige vekketid (tjeneste `ki_energi.leggetid`). Prioritet mellom sone
 konfigurasjonen).
 
 Alle blokker på fanene utenom Oversikt kan legges sammen ved å trykke på overskriften — kortet
-husker hva som er åpent og lukket. Alle tallfelt kan skrives i direkte (i tillegg til −/+). Tider
+husker hva som er åpent og lukket. Alle tall- og klokkeslettfelt er rullevelgere (hjul på iPhone/Android, nedtrekk på PC). Tider
 vises som en døgnplan med én rad per person, og sesonger (sommer, gardiner) som en månedsstripe
 der du trykker startmåned og sluttmåned. Åpner du en sone, ser du effekt og temperatur nå og en
 graf for siste seks timer.
@@ -457,7 +459,7 @@ integrasjonen via `mobile_app_notification_action`; ingen egne automasjoner tren
 
 ## Nettleie etter døgnmaks
 
-Fra 2.6.0 følger motoren Elvias faktiske modell i stedet for en fast timegrense.
+Fra 2.7.0 følger motoren Elvias faktiske modell i stedet for en fast timegrense.
 
 ### Måling av hele klokketimer
 
@@ -543,7 +545,7 @@ Innlærte profiler, τ, overstyringer, logg og VVB-tilstand lagres i
 
 ---
 
-## Oppgradering til 2.6.0
+## Oppgradering til 2.7.0
 
 * `number.ki_maks_time_kwh` betyr nå **absolutt** timegrense (anlegg/komfort), ikke økonomi.
   Sto den på den gamle standardverdien 4,90, løftes den automatisk til 6,00 én gang ved første
@@ -590,6 +592,13 @@ sonen i `sensor.ki_laster` med `handling: overstyrt`? Samme settpunkt skrives ma
 Feil og forslag: [Issues](https://github.com/SebastianKristo/ki-strom/issues).
 
 ---
+
+## Ikon og logo
+
+`brand/` inneholder `icon.svg/png` (256 px, HA-integrasjonsikon) og `logo.svg/png`. Ikonet ligger også i
+`custom_components/ki_energi/` så det vises lokalt. Vil du ha det i Home Assistant offisielt, send
+`brand/icon.png`, `icon@2x.png`, `logo.png` og `logo@2x.png` som PR til
+[home-assistant/brands](https://github.com/home-assistant/brands) under `custom_integrations/ki_energi/`.
 
 ## Utvikling
 
