@@ -95,7 +95,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.data[DOMAIN].pop(entry.entry_id, None)
     if not hass.data[DOMAIN]:
         for tj in ("overstyr", "fjern_overstyring", "nullstill_laering", "vvb_boost", "vvb_avbryt_boost",
-                   "vvb_tving_syklus", "hjemkomst", "hjemkomst_ferdig", "helg_sporsmal", "sett_standardverdier", "tick"):
+                   "vvb_tving_syklus", "hjemkomst", "hjemkomst_ferdig", "helg_sporsmal", "sett_standardverdier", "tick",
+                   "leggetid", "sett_prio"):
             hass.services.async_remove(DOMAIN, tj)
     return ok
 
@@ -188,6 +189,16 @@ def _registrer_tjenester(hass: HomeAssistant) -> None:
         hub.engine.logg_hendelse("Alle innstillinger satt til standardverdier.")
         await hub.engine.tick()
 
+    async def leggetid(call: ServiceCall):
+        hub = _hub(hass)
+        if hub:
+            await hub.engine.leggetid(call.data["sone"], bool(call.data.get("avbryt", False)))
+
+    async def sett_prio(call: ServiceCall):
+        hub = _hub(hass)
+        if hub:
+            await hub.engine.sett_prio(call.data["sone"], int(call.data["prio"]))
+
     async def tick(call: ServiceCall):
         hub = _hub(hass)
         if hub:
@@ -196,6 +207,10 @@ def _registrer_tjenester(hass: HomeAssistant) -> None:
             await hub.engine.tick()
 
     hass.services.async_register(DOMAIN, "overstyr", overstyr, schema=SCHEMA_OVERSTYR)
+    hass.services.async_register(DOMAIN, "leggetid", leggetid,
+                                 schema=vol.Schema({vol.Required("sone"): str, vol.Optional("avbryt", default=False): bool}))
+    hass.services.async_register(DOMAIN, "sett_prio", sett_prio,
+                                 schema=vol.Schema({vol.Required("sone"): str, vol.Required("prio"): vol.Coerce(int)}))
     hass.services.async_register(DOMAIN, "fjern_overstyring", fjern_overstyring, schema=SCHEMA_SONE)
     hass.services.async_register(DOMAIN, "nullstill_laering", nullstill_laering, schema=SCHEMA_HVA)
     hass.services.async_register(DOMAIN, "vvb_boost", vvb_boost, schema=SCHEMA_BOOST)

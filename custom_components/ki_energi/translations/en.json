@@ -158,6 +158,7 @@
           "effekt": "Effektsensor (W)",
           "duty": "Control signal / duty cycle (%)",
           "temp": "Romtemperatursensor (valgfri, ellers climate)",
+          "vindu": "Vindu-/dørsensorer (valgfri) — åpent = varmen settes ned",
           "type": "Type",
           "profil": "Styringsprofil",
           "prio": "Prioritet (1 = viktigst)",

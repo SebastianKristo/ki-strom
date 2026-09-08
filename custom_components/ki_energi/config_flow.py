@@ -253,6 +253,7 @@ class KiEnergiOptionsFlow(config_entries.OptionsFlow):
                 "navn": user_input["navn"], "rom": user_input.get("rom") or user_input["navn"],
                 "climate": user_input.get("climate") or "", "effekt": user_input.get("effekt") or "",
                 "duty": user_input.get("duty") or "", "temp": user_input.get("temp") or "",
+                "vindu": list(user_input.get("vindu") or []),
                 "type": user_input["type"], "prio": int(user_input["prio"]),
                 "nominell": float(user_input["nominell"]), "sol": bool(user_input.get("sol", False)),
                 "profil": user_input["profil"], "aktiv": bool(user_input.get("aktiv", True)),
@@ -266,6 +267,7 @@ class KiEnergiOptionsFlow(config_entries.OptionsFlow):
             vol.Optional("effekt"): _ent("sensor"),
             vol.Optional("duty"): _ent("sensor"),
             vol.Optional("temp"): _ent("sensor"),
+            vol.Optional("vindu"): _ent("binary_sensor", multiple=True),
             vol.Required("type", default=s.get("type", "panel")): selector.SelectSelector(selector.SelectSelectorConfig(
                 options=[selector.SelectOptionDict(value="panel", label="Panelovn (rask)"),
                          selector.SelectOptionDict(value="gulv", label="Gulvvarme (treg)")], mode="dropdown")),
@@ -277,6 +279,6 @@ class KiEnergiOptionsFlow(config_entries.OptionsFlow):
             vol.Required("aktiv", default=bool(s.get("aktiv", True))): selector.BooleanSelector(),
             vol.Optional("slett", default=False): selector.BooleanSelector(),
         })
-        forslag = {k: s.get(k) for k in ("climate", "effekt", "duty", "temp") if s.get(k)}
+        forslag = {k: s.get(k) for k in ("climate", "effekt", "duty", "temp", "vindu") if s.get(k)}
         return self.async_show_form(step_id="sone", data_schema=self.add_suggested_values_to_schema(skjema, forslag),
                                     description_placeholders={"key": key, "navn": s.get("navn", key)})

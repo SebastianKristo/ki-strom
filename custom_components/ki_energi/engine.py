@@ -42,6 +42,7 @@ class KiEngine:
         self.endret = False
         self.siste_tick: datetime | None = None
         self.hjemkomst_forklaring = ""
+        self.vindu_apent_siden: dict[str, datetime] = {}
 
     # ------------------------------------------------------------------
     #  Små hjelpere
@@ -237,6 +238,21 @@ class KiEngine:
         klarhet = max(0.0, 1.0 - skyer / 100.0)
         return round(min(1.0, math.sin(math.radians(hoyde)) * 1.6) * klarhet, 2)
 
+    def vindu_apent(self, key: str, konf: dict) -> tuple[bool, str]:
+        """Er et vindu/dør i sonen åpent lenger enn forsinkelsen? Returnerer (åpent, hvilket)."""
+        h = self.hub
+        apne = [e for e in (konf.get("vindu") or []) if h.pa(e)]
+        if not apne or not h.on("ki_vindu_stopp", True):
+            self.vindu_apent_siden.pop(key, None)
+            return False, ""
+        naa = dt_util.now()
+        siden = self.vindu_apent_siden.setdefault(key, naa)
+        if (naa - siden) < timedelta(minutes=h.num("ki_vindu_forsinkelse_min", 3)):
+            return False, ""
+        st = h.hass.states.get(apne[0])
+        navn = st.attributes.get("friendly_name", apne[0]) if st else apne[0]
+        return True, navn + (f" (+{len(apne) - 1})" if len(apne) > 1 else "")
+
     def sol_trekk(self, konf: dict) -> float:
         if not konf.get("sol"):
             return 0.0
@@ -279,6 +295,60 @@ class KiEngine:
     # ------------------------------------------------------------------
     #  Måltemperatur per sone
     # ------------------------------------------------------------------
+    def leggetid_aktiv(self, key: str) -> datetime | None:
+        """Er «leggetid» trykket for sonen, og gjelder den ennå? Returnerer sluttidspunkt."""
+        lt = self.st.get("leggetid", {}).get(key)
+        if not lt:
+            return None
+        til = dt_util.parse_datetime(lt)
+        if til is None or dt_util.now() >= til:
+            self.st["leggetid"].pop(key, None)
+            self.hub.lagre()
+            return None
+        return til
+
+    def vekketid(self, key: str, konf: dict) -> int:
+        """Når sonen normalt skal være varm igjen (minutter siden midnatt)."""
+        h = self.hub
+        profil = konf.get(Z_PROFIL, "fellesrom")
+        if profil == "cybele":
+            return h.tid_min("ki_cybele_dag", "05:30")
+        if profil == "sebastian":
+            helg = (dt_util.now() + timedelta(hours=8)).weekday() >= 5 or h.on("ki_sebastian_ferie")
+            return h.tid_min("ki_sebastian_vekking_helg" if helg else "ki_sebastian_vekking", "07:00")
+        return h.tid_min("ki_tid_dag_start", "06:30")
+
+    async def leggetid(self, sone: str, avbryt: bool = False) -> None:
+        """Start kveldssenking i sonen nå — varer til sonens vekketid."""
+        soner = self.hub.aktive_soner()
+        if sone not in soner:
+            _LOGGER.error("leggetid: ukjent sone %s", sone)
+            return
+        lt = self.st.setdefault("leggetid", {})
+        if avbryt:
+            lt.pop(sone, None)
+            self.logg_hendelse(f"Leggetid avbrutt for {soner[sone]['navn']}.")
+        else:
+            vekk = self.vekketid(sone, soner[sone])
+            naa = dt_util.now()
+            til = naa.replace(hour=vekk // 60, minute=vekk % 60, second=0, microsecond=0)
+            if til <= naa:
+                til += timedelta(days=1)
+            lt[sone] = til.isoformat(timespec="seconds")
+            self.logg_hendelse(f"Leggetid: {soner[sone]['navn']} senkes nå, varmes til kl. {til:%H:%M}.")
+        self.hub.lagre()
+        await self.tick()
+
+    async def sett_prio(self, sone: str, prio: int) -> None:
+        """Flytt en sone i prioritetsrekkefølgen (1 = viktigst)."""
+        if sone not in self.hub.soner():
+            _LOGGER.error("sett_prio: ukjent sone %s", sone)
+            return
+        self.st.setdefault("prio_overstyring", {})[sone] = max(1, min(5, int(prio)))
+        self.hub.lagre()
+        self.logg_hendelse(f"Prioritet for {self.hub.soner()[sone]['navn']} satt til {int(prio)}.")
+        await self.tick()
+
     def overstyring(self, key: str) -> dict | None:
         o = self.st.get("overstyringer", {}).get(key)
         if not o:
@@ -313,6 +383,10 @@ class KiEngine:
         if o:
             til = dt_util.parse_datetime(o["til"]).strftime("%H:%M")
             return float(o["temp"]), f"Manuell overstyring til kl. {til}", None
+        lt = self.leggetid_aktiv(key)
+        if lt:
+            t_natt_lt = h.num(konf.get(Z_TEMP_NATT) or "", h.num(konf.get(Z_TEMP_DAG) or "", 21.0) - 2.0)
+            return t_natt_lt, f"Leggetid — senket fram til kl. {lt:%H:%M}", lt.hour * 60 + lt.minute
 
         profil = konf.get(Z_PROFIL, "fellesrom")
         er_gulv = konf.get("type") == "gulv"
@@ -463,8 +537,10 @@ class KiEngine:
             if sol:
                 avvik -= sol
 
-            trenger = levende and styrt and avvik > 0.1
+            vindu, vindu_navn = self.vindu_apent(key, konf)
+            trenger = levende and styrt and avvik > 0.1 and not vindu
             laster.append(dict(
+                vindu=vindu, vindu_navn=vindu_navn, profil=konf.get(Z_PROFIL),
                 key=key, navn=konf["navn"], rom=konf["rom"], type=konf["type"],
                 prio=int(konf["prio"]), climate=konf["climate"], levende=levende, styrt=styrt,
                 mal=round(mal, 1), naa=round(naa, 1) if naa is not None else None,
@@ -508,6 +584,10 @@ class KiEngine:
             elif not last["styrt"]:
                 p.update(handling="manuell", settpunkt=None,
                          forklaring="Sonen står på manuell i klimakortet")
+            elif last["vindu"]:
+                p.update(handling="vindu", settpunkt=round(h.num("ki_vindu_temp", 12), 1),
+                         forklaring=f"{last['vindu_navn']} er åpent — varmen holdes på "
+                                    f"{h.num('ki_vindu_temp', 12):.0f} °C til det lukkes")
             elif not last["trenger"]:
                 sol = f", solen bidrar med ca. {last['sol_trekk']} °C" if last["sol_trekk"] else ""
                 p.update(handling="normal", settpunkt=last["mal"],
@@ -613,7 +693,7 @@ class KiEngine:
         endringer = []
         if not skygge:
             for p in plan:
-                if p.get("handling") in ("normal", "senket") and p.get("settpunkt") is not None:
+                if p.get("handling") in ("normal", "senket", "vindu") and p.get("settpunkt") is not None:
                     if await self.skriv_settpunkt(p["key"], p["climate"], p["settpunkt"]):
                         endringer.append(f"{p['navn']} → {p['settpunkt']} °C")
 
@@ -671,6 +751,10 @@ class KiEngine:
         ]
         if vvb_kw > 0 or vvb_ma:
             tanker.append(f"Varmtvann: {vvb_grunn} — reserverer {vvb_kw:.2f} kW" + (" og går foran varmen." if vvb_ma else "."))
+        vinduer = [p for p in plan if p.get("handling") == "vindu"]
+        if vinduer:
+            tanker.append("Vindu åpent: " + ", ".join(f"{p['navn']} ({p.get('vindu_navn')})" for p in vinduer)
+                          + f" — holder {h.num('ki_vindu_temp', 12):.0f} °C der til det lukkes.")
         if senket:
             tanker.append("Senker nå: " + ", ".join(
                 f"{p['navn']} til {p.get('settpunkt')} °C" for p in senket) + ".")
@@ -707,7 +791,8 @@ class KiEngine:
             handling=p.get("handling"), mal=p.get("mal"), settpunkt=p.get("settpunkt"),
             naa=p.get("naa"), effekt=p.get("effekt"), forklaring=p.get("forklaring"),
             overstyrt=bool(self.overstyring(p["key"])), helpere=p.get("helpere"), styr=p.get("styr"),
-            entiteter=p.get("entiteter"))
+            entiteter=p.get("entiteter"), vindu=p.get("vindu", False), vindu_navn=p.get("vindu_navn", ""),
+            leggetid=bool(self.leggetid_aktiv(p["key"])), profil=p.get("profil"))
             for p in plan]
         if h.vvb is not None:
             lastliste.append(dict(

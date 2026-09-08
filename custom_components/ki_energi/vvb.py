@@ -331,8 +331,11 @@ class KiVvb:
         n = int(h.num("vvb_billigste_timer_dogn", 6))
         if not nordpool:
             self.billige_timer = []
-            metode = "Ikke i bruk. Berederen følger vinduet, ikke enkelttimer."
+            metode = ("Norgespris er aktiv — energiprisen er lik hele døgnet, så spotpris trengs ikke. "
+                      "Berederen følger vinduet (billigste nettleie)." if h.pa(h.cfg(CONF_NORGESPRIS_AKTIV))
+                      else "Ingen spotprissensor valgt. Berederen følger vinduet, ikke enkelttimer.")
             h.sett_sensor("ki_vvb_billige_timer", n, {"timer": [], "metode": metode, "antall_kandidater": 0,
+                                                        "norgespris": bool(h.pa(h.cfg(CONF_NORGESPRIS_AKTIV))), "har_priser": False,
                                                         "doegn": self._doegn([], dt_util.now().replace(minute=0, second=0, microsecond=0))})
             return
         naa = dt_util.now().replace(minute=0, second=0, microsecond=0)
@@ -368,6 +371,8 @@ class KiVvb:
             metode = "De billigste timene etter spotpris fram til fristen."
         h.sett_sensor("ki_vvb_billige_timer", n, {"timer": self.billige_timer, "metode": metode,
                                                     "antall_kandidater": len(rt) + len(rm),
+                                                    "norgespris": bool(h.pa(h.cfg(CONF_NORGESPRIS_AKTIV))),
+                                                    "har_priser": bool(rt or rm),
                                                     "doegn": self._doegn(list(rt) + list(rm), naa)})
 
     def status_tekst(self) -> str:

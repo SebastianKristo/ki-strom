@@ -35,9 +35,10 @@ rett inn i KI Energi:
 | Norgespris aktiv / prisforskjell | *Måling → Norgespris aktiv* |
 | Totalpris inkl. avgifter | *Nettleie → Strømpris* (til besparelsesestimatet) |
 
-Timeprisene til prisstyringen av berederen hentes fortsatt fra den offisielle
-[Nord Pool-integrasjonen](https://www.home-assistant.io/integrations/nordpool/) (`raw_today` /
-`raw_tomorrow`).
+Har du **Norgespris**, trenger du ingen spotprissensor: energiprisen er lik hele døgnet, så
+berederen legges i vinduet med billigste nettleie. Uten Norgespris kan timeprisene hentes fra den
+offisielle [Nord Pool-integrasjonen](https://www.home-assistant.io/integrations/nordpool/)
+(`raw_today` / `raw_tomorrow`), og berederen velger de billigste enkelttimene.
 
 ---
 
@@ -206,7 +207,35 @@ Hver sone får `switch.ki_styr_<sone>` (skal motoren styre denne?) og
 
 ---
 
+### Leggetid og prioritet fra kortet
+
+Øverst på *Oversikt* ligger **Leggetid**: én knapp per soverom. Trykker du «Sebastian» når han
+legger seg, senkes rommet til natt-temperatur med én gang og varmes opp igjen til hans vanlige
+vekketid (tjeneste `ki_energi.leggetid`). Under *Soner → Vurdering per sone* kan du flytte soner
+opp og ned i prioritet med pilene (`ki_energi.sett_prio`); endringen lagres i minnet og overstyrer
+konfigurasjonen.
+
+Alle blokker på fanene utenom Oversikt kan legges sammen ved å trykke på overskriften — kortet
+husker hva som er åpent og lukket. Tider vises også som en døgnlinje, og sesonger (sommer, gardiner)
+som en månedsstripe.
+
+### Vinduer og dører
+
+Hver sone kan få én eller flere vindu-/dørsensorer (*Konfigurer → Soner → sonen → Vindu-/dørsensorer*).
+Står et vindu åpent lenger enn forsinkelsen (standard 3 min, så en rask lufting ikke trigger), settes
+ovnen i den sonen ned til «vindu-temperaturen» (standard 12 °C) og effekten tas ut av prognosen.
+Når vinduet lukkes, går sonen tilbake til normal styring. Begge verdiene og hovedbryteren
+(`switch.ki_vindu_stopp`) ligger under *Oppsett*. Sonen vises med merket **Vindu åpent** i kortet
+og i «Slik tenker motoren nå».
+
 ## Moduser: helg, hjemkomst, sommer
+
+**Slik fungerer en hyttehelg:** Torsdag kl. 16 (og fredag kl. 10 hvis dere ikke svarte) spør
+KI Energi *«Skal dere bort i helgen?»* — bare hvis dere fortsatt er hjemme. Svarer dere
+*«Ja, vi drar»*, skjer ingenting før siste person har gått ut døra; da settes helgemodus
+automatisk. Drar dere uten å svare, aktiveres helgemodus av seg selv etter 6 timers fravær
+(torsdag/fredag). Søndag morgen spør den *«Skal dere hjem i dag?»* og varmer opp huset til
+avtalt tid — og når noen faktisk kommer hjem, avsluttes helgemodus uansett.
 
 `sensor.ki_klima_status` viser gjeldende modus: **AUTO · MANUELL · HELG · SOMMER · HJEMKOMST ·
 EFFEKTBEGRENSNING · SKYGGE**.

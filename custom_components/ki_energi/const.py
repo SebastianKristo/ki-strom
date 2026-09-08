@@ -51,6 +51,7 @@ Z_CLIMATE = "climate"
 Z_EFFEKT = "effekt"
 Z_DUTY = "duty"
 Z_TEMP = "temp"
+Z_VINDU = "vindu"        # liste av binary_sensor (vindu/dør) — åpent = varmen settes ned
 Z_TYPE = "type"          # panel | gulv
 Z_PRIO = "prio"
 Z_NOMINELL = "nominell"  # kW
@@ -194,6 +195,7 @@ SWITCHES = [
     ("ki_prediktiv_forvarming", "KI Prediktiv Forvarming", True, "mdi:thermometer-chevron-up"),
     ("ki_laering_tau", "KI Lær Tidskonstanter", True, "mdi:school"),
     ("ki_solkompensasjon", "KI Solkompensasjon", True, "mdi:weather-sunny"),
+    ("ki_vindu_stopp", "KI Vindu Åpent Stopper Varme", True, "mdi:window-open-variant"),
     ("ki_nattsenk_aktiv", "KI Nattsenking Aktiv", True, "mdi:weather-night"),
     ("ki_nattsenk_okonomi", "KI Økonomisk Nattsenking", True, "mdi:cash-check"),
     ("ki_energi_varsler", "KI Energivarsler", True, "mdi:bell-outline"),
@@ -256,6 +258,8 @@ NUMBERS = [
     ("ki_sone_rod", "KI Sonegrense Rød", 70, 110, 1, "%", 97, "mdi:circle"),
     ("ki_shed_gulv_maks", "KI Maks Senking Gulvvarme", 0, 6, 0.5, "°C", 3.0, "mdi:heating-coil"),
     ("ki_shed_panel_maks", "KI Maks Senking Panelovn", 0, 6, 0.5, "°C", 2.0, "mdi:radiator"),
+    ("ki_vindu_forsinkelse_min", "KI Vindu Forsinkelse", 0, 30, 1, "min", 3, "mdi:timer-outline"),
+    ("ki_vindu_temp", "KI Vindu Åpent Temperatur", 5, 18, 0.5, "°C", 12, "mdi:snowflake-thermometer"),
     ("ki_komfort_vekt", "KI Komfortvekt", 10, 200, 5, "", 60, "mdi:sofa"),
     ("ki_trinn_kostnad_diff", "KI Kostnad Neste Kapasitetstrinn", 0, 500, 5, "kr", 80, "mdi:cash"),
     ("ki_stat_unngatte_topper", "KI Unngåtte Topper", 0, 9999, 1, "", 0, "mdi:shield-check"),
@@ -278,6 +282,7 @@ TIMES = [
     ("ki_sebastian_vekking_helg", "KI Sebastian Vekking Helg/Ferie", "09:30", "mdi:alarm"),
     ("ki_helg_varsel_tid", "KI Helg Spørsmål Fredag", "10:00", "mdi:bell"),
     ("ki_helg_sporsmal_tid", "KI Helg Spørsmål Søndag", "08:00", "mdi:bell"),
+    ("ki_helg_varsel_tid_torsdag", "KI Helg Spørsmål Torsdag", "16:00", "mdi:bell-outline"),
     ("ki_helg_frist_tid", "KI Helg Svarfrist Søndag", "10:00", "mdi:bell-alert"),
     ("ki_hjemkomst_tid", "KI Forventet Hjemkomst Søndag", "13:00", "mdi:home-clock"),
     ("ki_frokost_start", "KI Frokostvindu Start", "06:30", "mdi:toaster"),
@@ -349,6 +354,7 @@ BINARY_SENSORS = [
 # Varselhandlinger (mobile_app_notification_action)
 AKSJON_HELG_JA = "KI_HELG_JA"
 AKSJON_HELG_NEI = "KI_HELG_NEI"
+AKSJON_HELG_NAA = "KI_HELG_NAA"
 AKSJON_HJEM_JA = "KI_HJEM_JA"
 AKSJON_HJEM_NEI = "KI_HJEM_NEI"
 AKSJON_HJEM_SENERE = "KI_HJEM_SENERE"

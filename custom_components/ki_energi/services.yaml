@@ -86,3 +86,36 @@ sett_standardverdier:
 tick:
   name: Kjør motoren nå
   description: Tvinger en beregning umiddelbart.
+
+leggetid:
+  name: Leggetid
+  description: Start kveldssenking i en sone nå. Varer til sonens vekketid.
+  fields:
+    sone:
+      name: Sone
+      required: true
+      example: sebastian_panelovn
+      selector:
+        text:
+    avbryt:
+      name: Avbryt
+      description: Avbryt en aktiv leggetid i stedet
+      default: false
+      selector:
+        boolean:
+sett_prio:
+  name: Sett prioritet
+  description: Flytt en sone i prioritetsrekkefølgen (1 = viktigst, 5 = senkes først).
+  fields:
+    sone:
+      name: Sone
+      required: true
+      selector:
+        text:
+    prio:
+      name: Prioritet
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 5

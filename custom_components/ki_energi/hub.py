@@ -69,6 +69,10 @@ class KiHub:
             s.setdefault("rom", key)
             s.setdefault("type", "panel")
             s.setdefault("prio", 3)
+            # prioritet kan flyttes fra kortet — lagres i minnet, ikke i konfigurasjonen
+            p_ov = (self.minne.get("state") or {}).get("prio_overstyring", {}).get(key)
+            if p_ov is not None:
+                s["prio"] = int(p_ov)
             s.setdefault("nominell", 1.0)
             s.setdefault("sol", False)
             s.setdefault(Z_PROFIL, "fellesrom")

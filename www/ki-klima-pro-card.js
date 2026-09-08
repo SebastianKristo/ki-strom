@@ -88,6 +88,7 @@ const SONE_TEKST = {
 const HANDLING = {
   normal: { tekst: "Normal", k: "ok" },
   senket: { tekst: "Senket", k: "advarsel" },
+  vindu: { tekst: "Vindu åpent", k: "feil" },
   manuell: { tekst: "Manuell", k: "noytral" },
   utilgjengelig: { tekst: "Utilgjengelig", k: "feil" },
   utsatt: { tekst: "Utsatt", k: "advarsel" },
@@ -154,6 +155,9 @@ const HJELP = {
   overtakelse: "Motoren er den eneste som skriver til ovnene. Bryteren er det motsatte av skyggemodus: på betyr at den faktisk setter settpunkt, av betyr at den bare regner og logger. Soner med «KI styrer» av røres aldri uansett.",
   lagring: "Innlærte lastprofiler, tidskonstanter, overstyringer og beslutningslogg lagres i Home Assistants .storage-mappe og overlever omstart og oppdatering av integrasjonen.",
   malekilde: "Forbruk denne timen måles direkte mot strømmålerens energiregister — motoren husker verdien ved timeskiftet og trekker fra. Svarer ikke registeret, brukes et anslag fra øyeblikkseffekt, som er merkbart mindre presist.",
+  handlinger: "Entiteter og husets data endres under Innstillinger → Integrasjoner → KI Energi → Konfigurer. Nullstilling av tidskonstanter betyr at motoren må lære huset på nytt, og at nattsenkingen faller tilbake på standardverdier i mellomtiden — bruk det bare hvis tallene ser åpenbart feil ut.",
+  prio: "Pilene flytter sonen opp eller ned i rekkefølgen motoren senker i. 1 = viktigst (senkes sist), 5 = senkes først. Endringen lagres i minnet og overstyrer verdien i konfigurasjonen.",
+  leggetid: "Starter kveldssenkingen i rommet med én gang, i stedet for å vente til fast leggetid. Rommet varmes opp igjen til vanlig vekketid. Trykk igjen for å avbryte.",
   standardverdier: "Setter alle innstillinger tilbake til de anbefalte utgangsverdiene. Entiteter og husets data ligger i integrasjonens konfigurasjon og røres ikke.",
 };
 
@@ -174,6 +178,7 @@ class KiKlimaProCard extends HTMLElement {
     this._hist = null;
     this._histTid = 0;
     this._hjelpApen = new Set();
+    this._kollaps = this._lesKollaps();
     this._ov = {};
   }
 
@@ -190,6 +195,49 @@ class KiKlimaProCard extends HTMLElement {
     if (this._config && this._config.remember_tab === false) return null;
     try { return window.localStorage.getItem("ki-klima-pro:fane"); } catch (e) { return null; }
   }
+  _lesKollaps() {
+    try { return JSON.parse(window.localStorage.getItem("ki-klima-pro:kollaps") || "{}"); } catch (e) { return {}; }
+  }
+  _lagreKollaps() {
+    try { window.localStorage.setItem("ki-klima-pro:kollaps", JSON.stringify(this._kollaps || {})); } catch (e) { /* ignorer */ }
+  }
+
+  // 24-timers linje med markører for klokkeslett-entiteter. [[id, etikett, klasse?], ...]
+  _tidslinje(punkter, spenn = []) {
+    const min = (id) => {
+      const st = this._st(id); if (!st) return null;
+      const m = /^(\d{1,2}):(\d{2})/.exec(st.state); return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+    };
+    const naa = new Date(); const naaMin = naa.getHours() * 60 + naa.getMinutes();
+    const pct = (m) => (m / 1440 * 100).toFixed(2);
+    const sp = spenn.map(([fraId, tilId, kl]) => {
+      const a = min(fraId), b = min(tilId); if (a == null || b == null) return "";
+      if (b >= a) return `<div class="tl-spenn ${kl || ""}" style="left:${pct(a)}%;width:${pct(b - a)}%"></div>`;
+      return `<div class="tl-spenn ${kl || ""}" style="left:${pct(a)}%;width:${pct(1440 - a)}%"></div>
+              <div class="tl-spenn ${kl || ""}" style="left:0;width:${pct(b)}%"></div>`;
+    }).join("");
+    const mk = punkter.map(([id, etikett, kl], i) => {
+      const m = min(id); if (m == null) return "";
+      return `<div class="tl-mark ${kl || ""}" style="left:${pct(m)}%" title="${esc(etikett)} ${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}">
+        <i></i><span class="${i % 2 ? "under" : ""}">${esc(etikett)}</span></div>`;
+    }).join("");
+    return `<div class="tidslinje">
+      <div class="tl-spor">${sp}${mk}<div class="tl-naa" style="left:${pct(naaMin)}%"></div></div>
+      <div class="tl-akse"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div>
+    </div>`;
+  }
+
+  // 12-månedersstripe der [fra .. til] er markert (kan gå over nyttår).
+  _manedStripe(fraId, tilId, etikett) {
+    const fra = Math.round(this._n(fraId)), til = Math.round(this._n(tilId));
+    const naa = new Date().getMonth() + 1;
+    const inne = (m) => isFinite(fra) && isFinite(til) && (fra <= til ? (m >= fra && m <= til) : (m >= fra || m <= til));
+    return `<div class="mstripe">
+      ${["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"].map((b, i) =>
+        `<div class="mnd ${inne(i + 1) ? "inne" : ""} ${i + 1 === naa ? "naa" : ""}"><span>${b}</span></div>`).join("")}
+    </div>${etikett ? `<div class="stripeforklaring"><span><i class="s-valgt"></i>${esc(etikett)}</span><span>Ramme = denne måneden</span></div>` : ""}`;
+  }
+
   _lagreFane(v) {
     if (this._config.remember_tab === false) return;
     try { window.localStorage.setItem("ki-klima-pro:fane", v); } catch (e) { /* ignorer */ }
@@ -295,6 +343,8 @@ class KiKlimaProCard extends HTMLElement {
       "input_number.ki_stue_reduksjon", "input_number.ki_stat_unngatte_topper",
       "input_number.ki_stat_shed_hendelser", "input_number.ki_stat_flyttet_kwh",
       "sensor.ki_bereder", "sensor.ki_hanklevarmer", "sensor.ki_gardiner", "sensor.ki_vvb_billige_timer",
+      "input_number.ki_gardin_slutt_maned", "input_datetime.ki_gardin_apne_tidligst", "input_datetime.ki_gardin_lukk_senest",
+      "input_boolean.ki_vindu_stopp", "input_number.ki_vindu_forsinkelse_min", "input_number.ki_vindu_temp",
       "input_boolean.ki_varsel_effekt", "input_boolean.ki_varsel_helg", "input_boolean.ki_varsel_hjemkomst",
       "input_boolean.ki_varsel_sommer", "input_boolean.ki_varsel_vvb", "input_boolean.ki_varsel_hanklevarmer",
       "input_datetime.ki_tid_dag_start", "input_datetime.ki_tid_natt_start",
@@ -314,7 +364,7 @@ class KiKlimaProCard extends HTMLElement {
       "input_number.ki_temp_sommer",
       "input_datetime.ki_frokost_start", "input_datetime.ki_frokost_slutt",
       "input_datetime.ki_middag_start", "input_datetime.ki_middag_slutt",
-      "input_datetime.ki_helg_varsel_tid", "input_datetime.ki_helg_sporsmal_tid",
+      "input_datetime.ki_helg_varsel_tid", "input_datetime.ki_helg_varsel_tid_torsdag", "input_datetime.ki_helg_sporsmal_tid",
       "input_datetime.ki_helg_frist_tid",
       "input_datetime.ki_hanklevarmer_morgen_start", "input_datetime.ki_hanklevarmer_morgen_slutt",
       "input_datetime.ki_hanklevarmer_kveld_start", "input_datetime.ki_hanklevarmer_kveld_slutt",
@@ -361,6 +411,18 @@ class KiKlimaProCard extends HTMLElement {
       const ikon = HODE_IKON[tittel];
       if (ikon) sp.insertAdjacentHTML("afterbegin", `<ha-icon class="hodeikon" icon="${ikon}"></ha-icon>`);
     });
+    // Sammenleggbare blokker: alle faner unntatt Oversikt. Husker posisjonen per overskrift.
+    if (this._fane !== "oversikt") {
+      this._rot.querySelectorAll("#innhold .blokk").forEach((bl) => {
+        const hode = bl.querySelector(":scope > .hode");
+        if (!hode || hode.dataset.handling) return;
+        const sp = hode.querySelector("span:first-child");
+        const id = this._fane + ":" + ((sp && sp.textContent) || "").replace(/\?/g, "").trim();
+        hode.dataset.handling = "kollaps"; hode.dataset.id = id;
+        hode.insertAdjacentHTML("beforeend", `<ha-icon class="kollapsikon" icon="mdi:chevron-down"></ha-icon>`);
+        if (this._kollaps[id] === false) bl.classList.add("lukket");
+      });
+    }
     if (["oversikt", "energi"].includes(this._fane)) this._hentHistorikk();
   }
 
@@ -394,8 +456,26 @@ class KiKlimaProCard extends HTMLElement {
             ${isFinite(ute) ? `<span><ha-icon icon="mdi:thermometer"></ha-icon>${nf(ute, 1)}°</span>` : ""}
           </div>
         </div>
-        <div class="heroknapp" data-handling="hero"><ha-icon icon="${this._heroApen ? "mdi:chevron-up" : "mdi:chevron-down"}"></ha-icon></div>
+        <div class="heroknapp" data-handling="hero" title="${this._heroApen ? "Skjul" : "Slik tenker motoren"}"><ha-icon icon="${this._heroApen ? "mdi:chevron-up" : "mdi:chevron-down"}"></ha-icon></div>
         ${this._heroApen ? this._heroDetaljer() : ""}
+      </div>`;
+  }
+
+  // Hurtigknapper: «leggetid» per soverom. Sover-profiler først, så resten.
+  _leggetidBlokk() {
+    const laster = (this._a("sensor.ki_laster", "laster", []) || []).filter((l) => l.key !== "vvb" && l.type !== "gulv");
+    if (!laster.length) return "";
+    const rang = (l) => (l.profil === "sebastian" || l.profil === "cybele") ? 0 : 1;
+    const sortert = [...laster].sort((x, y) => rang(x) - rang(y) || String(x.navn).localeCompare(String(y.navn)));
+    const aktive = sortert.filter((l) => l.leggetid);
+    return `
+      <div class="blokk">
+        <div class="hode"><span>Leggetid${this._hj("leggetid")}</span><span class="sub">${aktive.length ? aktive.map((l) => esc(l.navn)).join(", ") + " senket" : "Trykk når noen legger seg"}</span></div>
+        ${this._hjTekst("leggetid")}
+        <div class="hurtig">
+          ${sortert.map((l) => `<div class="mini ${l.leggetid ? "aktiv" : ""}" data-handling="leggetid" data-key="${esc(l.key)}" data-avbryt="${l.leggetid ? 1 : 0}">
+            <ha-icon icon="${l.leggetid ? "mdi:weather-sunny" : "mdi:bed"}"></ha-icon>${esc(l.navn)}${l.leggetid ? " · avbryt" : ""}</div>`).join("")}
+        </div>
       </div>`;
   }
 
@@ -426,6 +506,7 @@ class KiKlimaProCard extends HTMLElement {
           <span><ha-icon icon="mdi:flash"></ha-icon>${nf(Number(a("forbrukt_kwh", NaN)), 2)} / ${nf(Number(a("grense_kwh", NaN)), 2)} kWh</span>
           <span><ha-icon icon="mdi:chart-timeline-variant"></ha-icon>${prog("om_15_min_kw")} → ${prog("om_60_min_kw")} kW</span>
           <span><ha-icon icon="mdi:home-thermometer"></ha-icon>${senket.length ? senket.length + " sone" + (senket.length > 1 ? "r" : "") + " senket" : "ingen senket"}</span>
+          ${laster.filter((l) => l.handling === "vindu").map((l) => `<span class="badge b-feil"><ha-icon icon="mdi:window-open-variant"></ha-icon>${esc(l.navn)}: ${esc(l.vindu_navn || "vindu åpent")}</span>`).join("")}
           ${ov.length ? `<span><ha-icon icon="mdi:hand-back-right"></ha-icon>${ov.length} overstyrt</span>` : ""}
           <span><ha-icon icon="mdi:water-boiler"></ha-icon>${esc(vvb)}</span>
           ${hank ? `<span><ha-icon icon="mdi:radiator"></ha-icon>Håndklevarmer ${hank === "pa" ? "på" : "av"}</span>` : ""}
@@ -454,6 +535,7 @@ class KiKlimaProCard extends HTMLElement {
 
     return `
       ${this._overtakelse(true)}
+      ${this._leggetidBlokk()}
       ${this._budsjettBlokk(a)}
       <div class="blokk">
         <div class="hode"><span>Forventet effekt</span><span class="sub">Uregulert + varmtvann + planlagt varme</span></div>
@@ -652,10 +734,16 @@ class KiKlimaProCard extends HTMLElement {
     const mal = this._n("input_number.ki_mal_snitt_kwh");
     const grunn = this._a("sensor.ki_energi_status", "grense_grunn", "");
     const grense = Number(this._a("sensor.ki_energi_status", "grense_kwh", NaN));
+    // Kapasitetstrinn: sensoren gir kr/mnd for trinnet du ligger i. Neste trinn regnes av snittet.
+    const trinnKr = Number(this._s("sensor.nettleie_elvia_kapasitetstrinn", NaN));
+    const TRINN = [2, 5, 10, 15, 20, 25, 50, 75, 100];
+    const nesteGrense = isFinite(snitt) ? TRINN.find((g) => snitt < g) : null;
+    const trinnTekst = (isFinite(trinnKr) ? `${nf(trinnKr, 0)} kr/mnd` : esc(this._s("sensor.nettleie_elvia_kapasitetstrinn", "")))
+      + (nesteGrense ? ` · neste trinn ved ${nesteGrense} kW` : "");
 
     return `
       <div class="blokk">
-        <div class="hode"><span>Dynamisk grense${this._hj("dynamisk_grense")}</span><span class="sub">${esc(this._s("sensor.nettleie_elvia_kapasitetstrinn"))}</span></div>
+        <div class="hode"><span>Dynamisk grense${this._hj("dynamisk_grense")}</span><span class="sub">${trinnTekst}</span></div>
         ${this._hjTekst("dynamisk_grense")}
         <div class="stor">${nf(grense, 2)} <small>kWh denne timen</small></div>
         <div class="notat">${esc(grunn)}</div>
@@ -663,7 +751,7 @@ class KiKlimaProCard extends HTMLElement {
           ${t.map((v, i) => `<div class="tall"><b>${nf(v, 2)}</b><span>topp ${i + 1}</span></div>`).join("")}
         </div>
         <div class="under"><span>Snitt ${nf(snitt, 2)} kWh — dette faktureres</span>
-          <span>Mål ${nf(mal, 2)} kWh</span></div>
+          <span>Mål ${nf(mal, 2)} kWh${nesteGrense ? ` · ${nf(nesteGrense - snitt, 2)} kWh til neste trinn` : ""}</span></div>
         <div class="spor2" style="margin-top:8px">
           <div class="fyll2" style="width:${isFinite(snitt) && isFinite(mal) && mal > 0 ? Math.min(100, (snitt / mal) * 100) : 0}%"></div>
         </div>
@@ -673,6 +761,8 @@ class KiKlimaProCard extends HTMLElement {
         <div id="graf-effekt" class="graf">${this._grafPlassholder()}</div>
         <div class="tegnforklaring">
           <span><i class="l1"></i>Uregulert</span><span><i class="l2"></i>Styrt varme</span>
+          <span class="live"><i class="pulser"></i>Nå ${nf(this._n("sensor.ki_uregulert_effekt") / 1000, 2)} + ${nf(this._n("sensor.ki_styrt_effekt") / 1000, 2)} kW</span>
+          <span class="grafles">Dra over grafen for å lese av</span>
         </div>
       </div>
       <div class="blokk">
@@ -762,6 +852,9 @@ class KiKlimaProCard extends HTMLElement {
         ${this._tidRad("input_datetime.ki_gardin_apne_tidligst", "Åpne tidligst")}
         ${this._tidRad("input_datetime.ki_gardin_lukk_senest", "Lukk senest")}
         <div class="undertittel" style="padding-top:10px">Sesong</div>
+        ${this._manedStripe("input_number.ki_gardin_start_maned", "input_number.ki_gardin_slutt_maned", "Gardinsesong")}
+        ${this._tidslinje([["input_datetime.ki_gardin_apne_tidligst", "Åpne tidligst", "ok"], ["input_datetime.ki_gardin_lukk_senest", "Lukk senest", "noytral"]],
+          [["input_datetime.ki_gardin_apne_tidligst", "input_datetime.ki_gardin_lukk_senest", "dag"]])}
         ${this._stepperRad("input_number.ki_gardin_start_maned", "Fra måned", 0, "")}
         ${this._stepperRad("input_number.ki_gardin_slutt_maned", "Til og med måned", 0, "")}
         ${this._stepperRad("input_number.ki_gardin_ute_grense", "Hold lukket på dagen under", 0, " °C")}
@@ -982,12 +1075,16 @@ class KiKlimaProCard extends HTMLElement {
           <div class="bryter ${this._pa("input_boolean.ki_vvb_prisstyring") ? "on" : ""}"
                data-handling="veksle" data-entity="input_boolean.ki_vvb_prisstyring"><span></span></div>
         </div>
+        ${this._a("sensor.ki_vvb_billige_timer", "norgespris", false) ? `
+        <div class="rad rad-les"><div class="prikk p-ok"></div>
+          <div class="radtekst"><div class="radnavn">Norgespris aktiv</div>
+            <div class="radsub">Strømprisen er lik hele døgnet. Berederen legges i vinduet med billigste nettleie (natt/helg) — spotpris trengs ikke.</div></div></div>` : `
         <div class="rad">
           <div class="radtekst"><div class="radnavn">Følg spotpris</div>
-            <div class="radsub">Bare aktuelt uten Norgespris. Ellers brukes vinduet.</div></div>
+            <div class="radsub">${this._a("sensor.ki_vvb_billige_timer", "har_priser", false) ? "Velger de billigste enkelttimene fram til fristen" : "Ingen prisdata — velg spotprissensor under Konfigurer, ellers brukes vinduet"}</div></div>
           <div class="bryter ${this._pa("input_boolean.ki_vvb_folg_spotpris") ? "on" : ""}"
                data-handling="veksle" data-entity="input_boolean.ki_vvb_folg_spotpris"><span></span></div>
-        </div>
+        </div>`}
         <div class="rad">
           <div class="radtekst"><div class="radnavn">Alltid på</div>
             <div class="radsub">Overstyrer automatikken helt</div></div>
@@ -1042,13 +1139,20 @@ class KiKlimaProCard extends HTMLElement {
           </div>`).join("")}
       </div>
       <div class="blokk">
-        <div class="hode"><span>Vurdering per sone</span><span class="sub">Sortert som motoren prioriterer</span></div>
+        <div class="hode"><span>Vurdering per sone${this._hj("prio")}</span><span class="sub">Sortert som motoren prioriterer</span></div>
+        ${this._hjTekst("prio")}
         ${laster.map((l) => {
           const h = HANDLING[l.handling] || { tekst: l.handling, k: "noytral" };
+          const kanPrio = l.key !== "vvb" && l.prio != null;
           return `<div class="rad rad-les">
             <div class="prikk p-${h.k}"></div>
-            <div class="radtekst"><div class="radnavn">${esc(l.navn)} <span class="badge b-${h.k}">${esc(h.tekst)}</span></div>
+            <div class="radtekst"><div class="radnavn">${esc(l.navn)} <span class="badge b-${h.k}">${esc(h.tekst)}</span>${l.leggetid ? ' <span class="badge b-noytral">leggetid</span>' : ""}</div>
               <div class="radsub">${esc(l.forklaring || "")}</div></div>
+            ${kanPrio ? `<div class="prioknapper">
+              <div class="pil ${l.prio <= 1 ? "av" : ""}" data-handling="prio" data-key="${esc(l.key)}" data-prio="${l.prio - 1}" title="Viktigere"><ha-icon icon="mdi:chevron-up"></ha-icon></div>
+              <span>P${l.prio}</span>
+              <div class="pil ${l.prio >= 5 ? "av" : ""}" data-handling="prio" data-key="${esc(l.key)}" data-prio="${l.prio + 1}" title="Senkes før"><ha-icon icon="mdi:chevron-down"></ha-icon></div>
+            </div>` : ""}
             <div class="radverdi">${nf(l.effekt, 2)} kW</div></div>`;
         }).join("")}
       </div>
@@ -1095,6 +1199,7 @@ class KiKlimaProCard extends HTMLElement {
       ["Varme og komfort", [
         ["input_boolean.ki_prediktiv_forvarming", "Prediktiv forvarming", "Starter ut fra målt oppvarmingsrate"],
         ["input_boolean.ki_solkompensasjon", "Solkompensasjon", "Trekker fra solvarme i stua"],
+        ["input_boolean.ki_vindu_stopp", "Vindu åpent stopper varme", "Sonen settes ned når et vindu/dør står åpent"],
         ["input_boolean.ki_nattsenk_aktiv", "Nattsenking", "Av = ingen soner senkes om natten"],
         ["input_boolean.ki_nattsenk_okonomi", "Økonomisk nattsenking", "Senker bare når sparingen slår gjenoppvarmingen"],
         ["input_boolean.ki_styr_gardiner", "Styr gardiner", "Se egen blokk lenger ned"],
@@ -1149,17 +1254,21 @@ class KiKlimaProCard extends HTMLElement {
         ${liste.map(bryterRad).join("")}
       </div>`).join("")}
       <div class="blokk">
-        <div class="hode"><span>Varslinger</span><span class="sub">${varslerPa ? "På" : "Alle av"}</span></div>
-        <div class="rad">
-          <div class="radtekst"><div class="radnavn">Send varsler</div>
-            <div class="radsub">Hovedbryter. Mottakere velges under Konfigurer → Hus og varsler</div></div>
-          <div class="bryter ${varslerPa ? "on" : ""}" data-handling="veksle" data-entity="input_boolean.ki_energi_varsler"><span></span></div>
-        </div>
+        <div class="hode"><span>Varslinger</span>
+          <span class="sub"><div class="bryter ${varslerPa ? "on" : ""}" data-handling="veksle" data-entity="input_boolean.ki_energi_varsler"><span></span></div></span></div>
+        <div class="notat" style="padding-top:0">Hovedbryteren over slår alt av. Mottakere velges under Konfigurer → Hus og varsler.</div>
         <div class="${varslerPa ? "" : "dempet"}">${varsler.map(bryterRad).join("")}</div>
         <div class="notat">Kritiske feil (berederen svarer ikke, legionellafrist passert) sendes uansett.</div>
       </div>
       <div class="blokk">
         <div class="hode"><span>Tider</span></div>
+        ${this._tidslinje([
+          ["input_datetime.ki_tid_dag_start", "Dag", "ok"], ["input_datetime.ki_tid_natt_start", "Natt", "noytral"],
+          ["input_datetime.ki_cybele_dag", "C opp", "c"], ["input_datetime.ki_cybele_natt", "C legg", "c"],
+          ["input_datetime.ki_sebastian_vekking", "S opp", "s"], ["input_datetime.ki_sebastian_natt", "S legg", "s"],
+        ], [["input_datetime.ki_tid_dag_start", "input_datetime.ki_tid_natt_start", "dag"],
+            ["input_datetime.ki_cybele_borte_fra", "input_datetime.ki_cybele_borte_til", "borte"]])}
+        <div class="stripeforklaring"><span><i class="s-dag"></i>Dag</span><span><i class="s-borte"></i>Cybele borte</span><span>Strek = nå</span></div>
         ${this._tidRad("input_datetime.ki_tid_dag_start", "Dag starter")}
         ${this._tidRad("input_datetime.ki_tid_natt_start", "Natt starter")}
         ${this._tidRad("input_datetime.ki_cybele_dag", "Cybele dag")}
@@ -1172,6 +1281,8 @@ class KiKlimaProCard extends HTMLElement {
         ${this._tidRad("input_datetime.ki_stue_reduksjon_fra", "Stue reduksjon fra")}
         ${this._stepperRad("input_number.ki_natt_senk_ute_grense", "Nattsenk kun under", 0, " °C")}
         ${this._stepperRad("input_number.ki_stue_reduksjon", "Stue reduksjon", 1, " °C")}
+        ${this._stepperRad("input_number.ki_vindu_forsinkelse_min", "Vindu: vent før senking", 0, " min")}
+        ${this._stepperRad("input_number.ki_vindu_temp", "Vindu: hold temperatur", 1, " °C")}
       </div>
       <div class="blokk">
         <div class="hode"><span>Diagnostikk</span><span class="sub">Rå tilstand</span></div>
@@ -1250,6 +1361,7 @@ class KiKlimaProCard extends HTMLElement {
         ${this._stepperRad("input_number.ki_reserve_frokost_kwh", "Reserve frokost", 1, " kW")}
         ${this._stepperRad("input_number.ki_reserve_middag_kwh", "Reserve middag", 1, " kW")}
         <div class="undertittel" style="padding-top:10px">Måltidsvinduer</div>
+        ${this._tidslinje([], [["input_datetime.ki_frokost_start", "input_datetime.ki_frokost_slutt", "dag"], ["input_datetime.ki_middag_start", "input_datetime.ki_middag_slutt", "dag"]])}
         ${this._tidRad("input_datetime.ki_frokost_start", "Frokost fra")}
         ${this._tidRad("input_datetime.ki_frokost_slutt", "Frokost til")}
         ${this._tidRad("input_datetime.ki_middag_start", "Middag fra")}
@@ -1264,6 +1376,7 @@ class KiKlimaProCard extends HTMLElement {
         ${this._stepperRad("input_number.ki_temp_helg_gulvvarme", "Helg gulvvarme", 1, " °C")}
         ${this._stepperRad("input_number.ki_temp_helg_bad", "Helg bad", 1, " °C")}
         ${this._stepperRad("input_number.ki_temp_sommer", "Sommertemperatur", 1, " °C")}
+        ${this._manedStripe("input_number.ki_sommer_start_maned", "input_number.ki_sommer_slutt_maned", "Sommermodus")}
         ${this._stepperRad("input_number.ki_sommer_start_maned", "Sommer fra måned", 0, "")}
         ${this._stepperRad("input_number.ki_sommer_slutt_maned", "Sommer til måned", 0, "")}
         ${this._stepperRad("input_number.ki_sommer_ute_grense", "Sommer når ute over", 0, " °C")}
@@ -1274,7 +1387,11 @@ class KiKlimaProCard extends HTMLElement {
       </div>
 
       <div class="blokk">
-        <div class="hode"><span>Helgevarsler</span><span class="sub">Fredag og søndag</span></div>
+        <div class="hode"><span>Helgevarsler</span><span class="sub">Torsdag, fredag og søndag</span></div>
+        <div class="notat" style="padding-top:0">«Skal dere bort i helgen?» sendes torsdag og fredag, bare hvis dere er hjemme. Svarer dere ja, settes sparemodus i det siste person drar.</div>
+        ${this._tidslinje([["input_datetime.ki_helg_varsel_tid_torsdag", "Tors", "noytral"], ["input_datetime.ki_helg_varsel_tid", "Fre", "noytral"],
+          ["input_datetime.ki_helg_sporsmal_tid", "Søn spør", "ok"], ["input_datetime.ki_helg_frist_tid", "Frist", "advarsel"], ["input_datetime.ki_hjemkomst_tid", "Hjem", "ok"]])}
+        ${this._tidRad("input_datetime.ki_helg_varsel_tid_torsdag", "Spørsmål torsdag")}
         ${this._tidRad("input_datetime.ki_helg_varsel_tid", "Spørsmål fredag")}
         ${this._tidRad("input_datetime.ki_helg_sporsmal_tid", "Spørsmål søndag")}
         ${this._tidRad("input_datetime.ki_helg_frist_tid", "Svarfrist søndag")}
@@ -1345,7 +1462,8 @@ class KiKlimaProCard extends HTMLElement {
       </div>
 
       <div class="blokk">
-        <div class="hode"><span>Handlinger</span></div>
+        <div class="hode"><span>Handlinger${this._hj("handlinger")}</span></div>
+        ${this._hjTekst("handlinger")}
         <div class="hurtig">
           <div class="mini" data-handling="tjeneste" data-domene="ki_energi"
                data-tjeneste="tick">Kjør motoren nå</div>
@@ -1356,11 +1474,7 @@ class KiKlimaProCard extends HTMLElement {
           <div class="mini" data-handling="tjeneste" data-domene="ki_energi"
                data-tjeneste="sett_standardverdier">Sett standardverdier${this._hj("standardverdier")}</div>
         </div>
-        <div class="notat">Entiteter og husets data endres under Innstillinger → Integrasjoner → KI Energi → Konfigurer.</div>
         ${this._hjTekst("standardverdier")}
-        <div class="notat">Nullstilling av tidskonstanter betyr at motoren må lære huset
-          på nytt, og at nattsenkingen faller tilbake på standardverdier i mellomtiden.
-          Bruk det bare hvis tallene ser åpenbart feil ut.</div>
       </div>`;
   }
 
@@ -1423,12 +1537,43 @@ class KiKlimaProCard extends HTMLElement {
     }
     const effGraf = this._rot.getElementById("graf-effekt");
     if (effGraf) {
-      const a = this._serie("sensor.ki_uregulert_effekt", 6).map((p) => ({ t: p.t, v: p.v / 1000 }));
-      const b = this._serie("sensor.ki_styrt_effekt", 6).map((p) => ({ t: p.t, v: p.v / 1000 }));
+      const naa = Date.now() / 1000;
+      const live = (id, s) => { const v = this._n(id); if (isFinite(v)) s.push({ t: naa, v: v / 1000 }); return s; };
+      const a = live("sensor.ki_uregulert_effekt", this._serie("sensor.ki_uregulert_effekt", 6).map((p) => ({ t: p.t, v: p.v / 1000 })));
+      const b = live("sensor.ki_styrt_effekt", this._serie("sensor.ki_styrt_effekt", 6).map((p) => ({ t: p.t, v: p.v / 1000 })));
       effGraf.innerHTML = (a.length || b.length)
-        ? this._svg([{ punkter: a, klasse: "l1" }, { punkter: b, klasse: "l2" }], { enhet: " kW" })
+        ? this._svg([{ punkter: a, klasse: "l1", navn: "Uregulert" }, { punkter: b, klasse: "l2", navn: "Styrt" }], { enhet: " kW" })
+          + `<div class="skrubb" hidden><div class="skrubblinje"></div><div class="skrubbtekst"></div></div>`
         : `<div class="grafvent">Ingen historikk ennå — sensorene er nye</div>`;
+      this._monterSkrubb(effGraf, [{ punkter: a, navn: "Uregulert" }, { punkter: b, navn: "Styrt" }], " kW");
     }
+  }
+
+  // Avlesing med finger/mus: viser tid og verdi der man peker.
+  _monterSkrubb(el, serier, enhet) {
+    const alle = serier.flatMap((s) => s.punkter);
+    if (!alle.length) return;
+    const t0 = Math.min(...alle.map((p) => p.t)), t1 = Math.max(...alle.map((p) => p.t));
+    const boks = el.querySelector(".skrubb"), linje = el.querySelector(".skrubblinje"), tekst = el.querySelector(".skrubbtekst");
+    if (!boks) return;
+    const verdiVed = (s, t) => { let v = null; for (const p of s.punkter) { if (p.t <= t) v = p.v; else break; } return v; };
+    const vis = (ev) => {
+      const r = el.getBoundingClientRect();
+      const f = Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width));
+      const t = t0 + f * (t1 - t0);
+      const d = new Date(t * 1000);
+      const deler = serier.map((s) => { const v = verdiVed(s, t); return v == null ? "" : `${s.navn} ${nf(v, 2)}${enhet}`; }).filter(Boolean);
+      boks.hidden = false;
+      linje.style.left = `${(f * 100).toFixed(1)}%`;
+      tekst.style.left = f > 0.6 ? "auto" : `calc(${(f * 100).toFixed(1)}% + 6px)`;
+      tekst.style.right = f > 0.6 ? `calc(${((1 - f) * 100).toFixed(1)}% + 6px)` : "auto";
+      tekst.textContent = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")} · ${deler.join(" · ")}`;
+      ev.preventDefault();
+    };
+    el.addEventListener("pointerdown", (ev) => { el.setPointerCapture(ev.pointerId); vis(ev); });
+    el.addEventListener("pointermove", (ev) => { if (ev.buttons || ev.pointerType === "touch") vis(ev); });
+    const skjul = () => { boks.hidden = true; };
+    el.addEventListener("pointerup", skjul); el.addEventListener("pointercancel", skjul); el.addEventListener("pointerleave", skjul);
   }
 
   _svg(serier, opt = {}) {
@@ -1470,6 +1615,15 @@ class KiKlimaProCard extends HTMLElement {
     } else if (h === "hero") {
       this._heroApen = !this._heroApen;
       this._tegnHero();
+    } else if (h === "kollaps") {
+      const bl = el.closest(".blokk");
+      const lukket = bl && bl.classList.toggle("lukket");
+      this._kollaps[el.dataset.id] = !lukket;
+      this._lagreKollaps();
+    } else if (h === "prio") {
+      this._kall("ki_energi", "sett_prio", { sone: el.dataset.key, prio: Number(el.dataset.prio) });
+    } else if (h === "leggetid") {
+      this._kall("ki_energi", "leggetid", { sone: el.dataset.key, avbryt: el.dataset.avbryt === "1" });
     } else if (h === "mer") {
       this.dispatchEvent(new CustomEvent("hass-more-info", {
         detail: { entityId: el.dataset.entity }, bubbles: true, composed: true }));
@@ -1602,8 +1756,52 @@ class KiKlimaProCard extends HTMLElement {
       .sub { font-weight:500; text-align:right; font-size:12.5px; flex:0 1 auto; min-width:0;
         overflow-wrap:anywhere; max-width:60%; }
       .dempet { opacity:.4; pointer-events:none; }
-      .heroknapp { grid-column:1 / -1; display:flex; justify-content:center; margin-top:-4px; cursor:pointer; opacity:.5; }
-      .heroknapp ha-icon { --mdc-icon-size:22px; }
+      .hero { position:relative; }
+      .heroknapp { position:absolute; top:10px; right:10px; cursor:pointer; opacity:.5; width:28px; height:28px;
+        display:flex; align-items:center; justify-content:center; border-radius:50%; background: rgba(128,128,128,.14); }
+      .heroknapp ha-icon { --mdc-icon-size:20px; }
+      .herotekst { padding-right:26px; }
+      .kollapsikon { --mdc-icon-size:20px; opacity:.6; transition: transform .2s; flex:0 0 auto; }
+      .hode[data-handling="kollaps"] { cursor:pointer; user-select:none; }
+      .blokk.lukket > *:not(.hode) { display:none; }
+      .blokk.lukket .kollapsikon { transform: rotate(-90deg); }
+      .blokk.lukket { padding-bottom:8px; }
+      .hode .sub .bryter { margin:0; }
+      .prioknapper { display:flex; flex-direction:column; align-items:center; gap:0; flex:0 0 auto; font-size:10px; opacity:.8; }
+      .pil { cursor:pointer; width:26px; height:20px; display:flex; align-items:center; justify-content:center; border-radius:8px; }
+      .pil:hover { background: rgba(128,128,128,.18); }
+      .pil.av { opacity:.2; pointer-events:none; }
+      .pil ha-icon { --mdc-icon-size:18px; }
+      .mini.aktiv { background: rgba(76,175,80,.25); }
+      .mini ha-icon { --mdc-icon-size:15px; vertical-align:-3px; margin-right:4px; }
+      .tidslinje { padding:12px 0 4px; }
+      .tl-spor { position:relative; height:34px; border-radius:6px; background: rgba(128,128,128,.14); overflow:visible; }
+      .tl-spenn { position:absolute; top:10px; height:14px; border-radius:4px; background: rgba(128,128,128,.28); }
+      .tl-spenn.dag { background: rgba(242,201,76,.35); }
+      .tl-spenn.borte { background: rgba(128,128,128,.4); top:14px; height:6px; }
+      .tl-mark { position:absolute; top:0; height:34px; width:0; }
+      .tl-mark i { position:absolute; left:-1px; top:6px; width:2px; height:22px; background: currentColor; border-radius:2px; opacity:.85; }
+      .tl-mark span { position:absolute; left:3px; top:-12px; font-size:9.5px; white-space:nowrap; opacity:.75; }
+      .tl-mark span.under { top:auto; bottom:-12px; }
+      .tl-mark.ok { color: var(--green, #4caf50); } .tl-mark.noytral { color: rgba(128,128,128,.9); }
+      .tl-mark.advarsel { color: var(--orange, #fc6d09); } .tl-mark.c { color: var(--purple, #9c27b0); } .tl-mark.s { color: var(--active-big, var(--primary-color)); }
+      .tl-naa { position:absolute; top:0; bottom:0; width:2px; margin-left:-1px; background: var(--primary-text-color); opacity:.5; }
+      .tl-akse { display:flex; justify-content:space-between; font-size:9.5px; opacity:.5; padding-top:14px; font-variant-numeric:tabular-nums; }
+      .s-dag { background: rgba(242,201,76,.5); } .s-borte { background: rgba(128,128,128,.4); }
+      .mstripe { display:grid; grid-template-columns:repeat(12,1fr); gap:3px; padding:8px 0 2px; }
+      .mnd { height:26px; border-radius:6px; background: rgba(128,128,128,.14); display:flex; align-items:center; justify-content:center; font-size:10.5px; opacity:.85; }
+      .mnd.inne { background: var(--green, #4caf50); color:#fff; }
+      .mnd.naa { outline:2px solid var(--primary-text-color); outline-offset:-2px; }
+      .skrubb { position:absolute; inset:0; pointer-events:none; }
+      .skrubblinje { position:absolute; top:0; bottom:6px; width:1px; background: var(--primary-text-color); opacity:.6; }
+      .skrubbtekst { position:absolute; top:4px; font-size:11px; padding:3px 7px; border-radius:8px; white-space:nowrap;
+        background: var(--card-background-color, #fff); box-shadow:0 1px 4px rgba(0,0,0,.2); font-variant-numeric:tabular-nums; }
+      .graf { touch-action:none; cursor:crosshair; }
+      .tegnforklaring .live { margin-left:auto; font-variant-numeric:tabular-nums; }
+      .tegnforklaring .grafles { flex-basis:100%; opacity:.5; font-size:11px; }
+      .pulser { display:inline-block; width:8px; height:8px; border-radius:50%; background: var(--green, #4caf50); margin-right:4px;
+        animation: kipuls 1.6s ease-in-out infinite; }
+      @keyframes kipuls { 0%,100% { opacity:1; } 50% { opacity:.3; } }
       .herodetaljer { grid-column:1 / -1; border-top:1px solid rgba(128,128,128,.18); padding-top:10px; }
       .tanke { font-size:13.5px; line-height:1.5; padding:3px 0 3px 12px; position:relative; overflow-wrap:anywhere; }
       .tanke::before { content:""; position:absolute; left:0; top:11px; width:5px; height:5px; border-radius:50%;
@@ -1741,7 +1939,7 @@ class KiKlimaProCard extends HTMLElement {
       .grafvent { display:flex; align-items:center; justify-content:center; height:90px;
         font-size:12.5px; opacity:.5; text-align:center; padding:0 12px;
         overflow-wrap:anywhere; line-height:1.4; }
-      .tegnforklaring { display:flex; gap:14px; font-size:12px; opacity:.6; padding-top:4px; }
+      .tegnforklaring { display:flex; flex-wrap:wrap; gap:6px 14px; font-size:12px; opacity:.6; padding-top:4px; }
       .tegnforklaring i { display:inline-block; width:12px; height:3px; border-radius:2px;
         margin-right:5px; vertical-align:middle; }
       .tegnforklaring .l1 { background: var(--active-big, var(--primary-color)); }
