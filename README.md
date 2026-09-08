@@ -58,7 +58,7 @@ offisielle [Nord Pool-integrasjonen](https://www.home-assistant.io/integrations/
 - [Entiteter](#entiteter)
 - [Nettleie etter døgnmaks](#nettleie-etter-døgnmaks)
 - [Tjenester](#tjenester)
-- [Oppgradering til 2.8.0](#oppgradering-til-280)
+- [Oppgradering til 2.9.0](#oppgradering-til-290)
 - [Migrering fra pakke + pyscript](#migrering-fra-pakke--pyscript)
 - [Feilsøking og FAQ](#feilsøking-og-faq)
 
@@ -73,7 +73,7 @@ offisielle [Nord Pool-integrasjonen](https://www.home-assistant.io/integrations/
 | **Prediktiv oppvarming** | Lærer tidskonstanten (τ) for hvert rom og starter oppvarmingen akkurat tidsnok til vekking, hjemkomst eller søndagsretur. Gulvvarme får alltid minst 45 min forvarming. |
 | **Nattsenking bare når det lønner seg** | Regner på om senkingen faktisk sparer penger med dagens pris, nettleie og rommets τ — ellers holdes temperaturen. |
 | **Solkompensasjon** | Stue med stor glassflate får lavere settpunkt når sola står på; skaleres etter glass-m² du oppgir. |
-| **Måltidsreserver** | Holder av effekt til frokost/middag så komfyr + ovn + oppvaskmaskin ikke sprenger timen. |
+| **Måltidsreserver og hvitevarer** | Holder av effekt til frokost/middag. Hvitevarer klassifiseres på navn: komfyr/oppvask/vask/tørk (lang last), mikro/vannkoker (kort — teller bare noen minutter), kjøleskap/fryser (grunnlast, ingen hendelse). |
 | **Helg / hytte** | Fredagsspørsmål på mobilen, automatisk helgemodus ved lengre fravær, søndagsspørsmål med «Ja / Spør igjen / Forleng / Kommer nå», og automatisk fallback hvis ingen svarer. |
 | **Varmtvann** | Kjører berederen i billigste timer innenfor vinduet, oppdager metning, og har en legionella-syklus med **hard fail-safe**: mangler effektmåling, faller den tilbake til termostat + vindu. |
 | **Skyggemodus** | Motoren regner og forklarer, men rører ingenting. Perfekt de første ukene. |
@@ -101,7 +101,7 @@ nytt og legg til integrasjonen som over.
 
 HACS-kategorien *Integration* installerer bare selve integrasjonen. Kopier
 `www/ki-klima-pro-card.js` til `/config/www/` og legg til ressursen
-`/local/ki-klima-pro-card.js?v=2.8.0` under Innstillinger → Dashboard → ⋮ → Ressurser
+`/local/ki-klima-pro-card.js?v=2.9.0` under Innstillinger → Dashboard → ⋮ → Ressurser
 (type *JavaScript-modul*). Tøm nettleser-cache.
 
 ---
@@ -116,7 +116,7 @@ Home Assistant (device_class, enhet, navn), og du bytter bare det som er feil.
 | **1 Velg hus** | Bolig i Oslo, hytta på Toten, eller tomt oppsett | — |
 | **2 Måling** | Effektmåler (W) og energiregister (kWh) | Finner hovedmåleren (høyest effekt, «ams/meter/måler» i navnet) og det akkumulerte importregisteret. Avviser dagsforbruk-sensorer med forklaring. |
 | **3 Utstyr** | Bereder, håndklevarmer, gardiner, hvitevarer — alt valgfritt | Gjenkjenner bereder/håndklevarmer på navn. Velgerne viser bare effektsensorer der det trengs. |
-| **4 Personer** | Tilstedeværelse per person | Finner `person.*` eller hjemme/borte-brytere med navnet i. |
+| **4 Personer** | Navn, type og tilstedeværelse per person (inntil fire her, flere under Konfigurer) | Finner `person.*` eller hjemme/borte-brytere med navnet i. |
 | **5 Nettleie** | Toppsensorer, energiledd, Norgespris, Nord Pool — alt valgfritt | Finner Strømkalkulator-/Elvia-sensorer og Nord Pool (`raw_today`). |
 | **6 Hus og varsler** | Hustype, areal, byggeår, glass, telefoner | Telefoner fra `notify.mobile_app_*`. |
 | **7 Soner** | **Lag soner fra områdene mine** | Ett rom per HA-område med termostat: alle termostater i området i samme sone, effektsensorer summert, vindussensorer koblet på. Type (panel/gulv/varmepumpe) og profil (stue, bad = konstant, Cybele, Sebastian, gang = sjelden) gjettes fra navnet. |
@@ -144,7 +144,7 @@ Les `sensor.ki_beslutningslogg` noen dager. Ser resonnementet fornuftig ut, slå
 Ett kort med faner: **Oversikt · Soner · Energi · Vann og bad · Tanker · Oppsett · Avansert**.
 «Vann og bad» har underfaner for **Bereder** (status, legionella med sist sikret / neste frist,
 prisstyring med døgnstripe som viser hvilke timer berederen kjører) og **Håndklevarmer**
-(dusjvinduer, sikkerhetsavstenging). Gardinstyringen ligger under *Oppsett*.
+(dusjvinduer, sikkerhetsavstenging). Gardinstyringen ligger under *Oppsett* (vises bare når en gardin er valgt; det samme gjelder håndklevarmer og bereder-bryter).
 
 Statuskortet øverst kan utvides (pilen nederst): da vises **«Slik tenker motoren nå»** — budsjett,
 prognose, hva som senkes og hvorfor — og et sammendrag av hele systemet akkurat nå
@@ -185,11 +185,25 @@ hash: "#klima"
 
 ---
 
+## Personer
+
+Husets folk legges inn med navn og type under *Konfigurer → Personer* (legg til, endre navn, slett):
+
+| Type | Hjelpere som lages | Brukes til |
+|---|---|---|
+| **Barn** | `time.ki_<navn>_dag`, `_natt`, `_borte_fra`, `_borte_til` | Rommet holdes varmt fra opp til legg, senkes når barnet normalt er borte (barnehage/skole) eller sover. |
+| **Ungdom** | `time.ki_<navn>_vekking`, `_vekking_helg`, `_natt`, `switch.ki_<navn>_ferie` | Kaldt om natten, varmt til vekking — egen tid i helg og ferie. |
+| **Voksen** | ingen | Tilstedeværelse: stua reduseres når ingen voksne er hjemme, «alle borte» for helg/hytte. |
+
+En sone knyttes til en person ved å velge profilen «<navn>s rom». Kortet (Tider, døgnplan,
+Leggetid) følger personlisten. Eksisterende oppsett med Cybele/Sebastian/Rune fortsetter uendret —
+samme entitets-ID-er. Nye oppsett fra «Tomt oppsett» har ingen personer før du legger dem inn.
+
 ## Soner og profiler
 
 **En sone er et rom, ikke en ovn.** Under *Konfigurer → Soner* velger du én eller flere termostater
 og én effektsensor per ovn for rommet; motoren skriver samme settpunkt til alle og summerer
-effekten. Ved oppgradering til 2.8.0 slås soner med samme rom, type og profil sammen automatisk
+effekten. Ved oppgradering til 2.9.0 slås soner med samme rom, type og profil sammen automatisk
 (f.eks. «Stue panelovn» + «Stue oljefyr» → «Stue» med nøkkel `stue`); det logges, og
 `switch.ki_styr_<gammel nøkkel>` erstattes av `switch.ki_styr_stue`. Temperaturhjelperne
 (`number.ki_temp_stue_dag/natt`) beholdes.
@@ -242,6 +256,9 @@ graf for siste seks timer.
 
 ### Vinduer og dører
 
+Unntak: er forvarmingen mot vekking eller hjemkomst i gang, ignoreres et åpent vindu — rommet
+skal være riktig når det tas i bruk, og vinduet får heller lufte imens.
+
 Hver sone kan få én eller flere vindu-/dørsensorer (*Konfigurer → Soner → sonen → Vindu-/dørsensorer*).
 Står et vindu åpent lenger enn forsinkelsen (standard 3 min, så en rask lufting ikke trigger), settes
 ovnen i den sonen ned til «vindu-temperaturen» (standard 12 °C) og effekten tas ut av prognosen.
@@ -281,8 +298,11 @@ etterpå. Hustypen kan byttes senere under *Konfigurer → Hus og varsler*.
 * Kommer noen (person-entiteter «home» i hyttas Home Assistant), avsluttes ankomst og vanlige
   dag/natt-temperaturer gjelder. Sebastian og Cybele har samme profiler som hjemme (kaldt om
   natten, varmt til vekking).
-* **Bereder uten bryter** regnes som uregulert last og læres inn i lastprofilen. Prisstyring og
-  legionella slås på av seg selv den dagen du legger inn et relé under *Konfigurer → Utstyr*.
+* **Bereder uten bryter** regnes som uregulert last og læres inn i lastprofilen. Legionella
+  bekreftes likevel: når effektmålingen viser en sammenhengende oppvarming på minst
+  `number.ki_vvb_min_syklus_min` (25 min) etterfulgt av stillhet, har termostaten nådd settpunktet
+  og datoen for siste sikring settes. Passerer fristen uten en slik syklus, varsles du (kan ikke
+  tvinges uten relé). Prisstyring slås på av seg selv den dagen du legger inn et relé.
 * **Elbil** (`switch.ki_elbil_natt`, `number.ki_elbil_effekt_kw`, `time.ki_elbil_fra/til`):
   motoren holder av ladeeffekten i ladevinduet når den planlegger varme, så bil + forvarming ikke
   havner i samme time. Når profilen har lært natten, teller halvparten.
@@ -466,7 +486,7 @@ integrasjonen via `mobile_app_notification_action`; ingen egne automasjoner tren
 
 ## Nettleie etter døgnmaks
 
-Fra 2.8.0 følger motoren Elvias faktiske modell i stedet for en fast timegrense.
+Fra 2.9.0 følger motoren Elvias faktiske modell i stedet for en fast timegrense.
 
 ### Måling av hele klokketimer
 
@@ -552,7 +572,7 @@ Innlærte profiler, τ, overstyringer, logg og VVB-tilstand lagres i
 
 ---
 
-## Oppgradering til 2.8.0
+## Oppgradering til 2.9.0
 
 * `number.ki_maks_time_kwh` betyr nå **absolutt** timegrense (anlegg/komfort), ikke økonomi.
   Sto den på den gamle standardverdien 4,90, løftes den automatisk til 6,00 én gang ved første

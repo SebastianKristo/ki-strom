@@ -35,6 +35,10 @@ class KiSwitch(KiHelper, SwitchEntity):
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     hub = hass.data[DOMAIN][entry.entry_id]
     entiteter = [KiSwitch(hub, *s) for s in SWITCHES]
+    from .const import PERSON_BRYTERE  # noqa: PLC0415
+    for p in hub.personer():
+        for suffiks, navn, std, ikon in PERSON_BRYTERE.get(p["type"], []):
+            entiteter.append(KiSwitch(hub, f"ki_{p['key']}_{suffiks}", f"KI {p['navn']} {navn}", std, ikon))
     # Én "KI styrer"-bryter per sone
     for key, konf in hub.soner().items():
         entiteter.append(KiSwitch(hub, f"ki_styr_{key}", f"KI Styrer {konf['navn']}", True, "mdi:robot"))

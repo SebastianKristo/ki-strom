@@ -15,8 +15,8 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     AKSJON_HELG_JA, AKSJON_HELG_NAA, AKSJON_HELG_NEI, AKSJON_HJEM_FORLENG, AKSJON_HJEM_JA, AKSJON_HJEM_NAA,
-    AKSJON_HJEM_NEI, AKSJON_HJEM_SENERE, AKSJON_HYTTE_BLIR, AKSJON_HYTTE_DRAR, CONF_GARDINER, CONF_HANKLEVARMER, CONF_HANKLEVARMER_EFFEKT, CONF_TILSTEDE_CYBELE,
-    CONF_TILSTEDE_RUNE, CONF_TILSTEDE_SEBASTIAN, CONF_UTE_TEMP, CONF_VAER,
+    AKSJON_HJEM_NEI, AKSJON_HJEM_SENERE, AKSJON_HYTTE_BLIR, AKSJON_HYTTE_DRAR, CONF_GARDINER, CONF_HANKLEVARMER, CONF_HANKLEVARMER_EFFEKT,
+    CONF_UTE_TEMP, CONF_VAER,
 )
 from .hub import KiHub
 
@@ -38,8 +38,8 @@ class KiModuser:
     def alle_borte(self) -> bool | None:
         h = self.hub
         kjent = []
-        for k in (CONF_TILSTEDE_CYBELE, CONF_TILSTEDE_SEBASTIAN, CONF_TILSTEDE_RUNE):
-            v = h.hjemme(h.cfg(k))
+        for p in h.personer():
+            v = h.hjemme(p["entity"]) if p["entity"] else None
             if v is not None:
                 kjent.append(v)
         if not kjent:

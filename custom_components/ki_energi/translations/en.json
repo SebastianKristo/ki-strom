@@ -22,11 +22,20 @@
       },
       "personer": {
         "title": "Personer",
-        "description": "Tilstedeværelse per person (person-entitet, device_tracker eller en bryter). Brukes til helg/hjemkomst og til å vite når rom er i bruk. Tomt felt = ukjent, aldri «borte».",
+        "description": "Hvem bor her? Navn brukes i kortet og på hjelperne (f.eks. time.ki_<navn>_vekking). Barn: fast opp/legg og borte på dagtid. Ungdom: vekking hverdag/helg og feriebryter. Voksen: bare tilstedeværelse. La navn stå tomt for å hoppe over. Flere kan legges til senere.",
         "data": {
-          "tilstede_cybele": "Tilstedeværelse Cybele (on/home = hjemme)",
-          "tilstede_sebastian": "Tilstedeværelse Sebastian",
-          "tilstede_rune": "Tilstedeværelse Rune"
+          "navn_1": "Person 1 – navn",
+          "type_1": "Person 1 – type",
+          "tilstede_1": "Person 1 – tilstedeværelse",
+          "navn_2": "Person 2 – navn",
+          "type_2": "Person 2 – type",
+          "tilstede_2": "Person 2 – tilstedeværelse",
+          "navn_3": "Person 3 – navn",
+          "type_3": "Person 3 – type",
+          "tilstede_3": "Person 3 – tilstedeværelse",
+          "navn_4": "Person 4 – navn",
+          "type_4": "Person 4 – type",
+          "tilstede_4": "Person 4 – tilstedeværelse"
         }
       },
       "nettleie": {
@@ -123,11 +132,9 @@
       },
       "personer": {
         "title": "Personer",
-        "description": "Hvem som er hjemme. Brukes til Cybeles dagsenking, stuas ettermiddagsreduksjon, helgemodus og hjemkomst.",
+        "description": "Velg en person å endre, eller legg til en ny.",
         "data": {
-          "tilstede_cybele": "Tilstedeværelse Cybele (on/home = hjemme)",
-          "tilstede_sebastian": "Tilstedeværelse Sebastian",
-          "tilstede_rune": "Tilstedeværelse Rune"
+          "person": "Person"
         }
       },
       "nettleie": {
@@ -198,6 +205,24 @@
         "data": {
           "soner": "Områder",
           "overskriv": "Overskriv innstillinger i soner som alt finnes"
+        }
+      },
+      "ny_person": {
+        "title": "Ny person",
+        "data": {
+          "navn": "Navn",
+          "type": "Type",
+          "tilstede": "Tilstedeværelse (person, device_tracker eller bryter)"
+        }
+      },
+      "person": {
+        "title": "{navn}",
+        "description": "Nøkkel: {key}. Hjelperne heter time.ki_{key}_… og lages/fjernes ved omstart når typen endres.",
+        "data": {
+          "navn": "Navn",
+          "type": "Type",
+          "tilstede": "Tilstedeværelse",
+          "slett": "Slett personen"
         }
       }
     },

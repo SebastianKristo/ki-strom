@@ -13,7 +13,7 @@ from . import oppdag
 from .const import (
     CONF_AREAL, CONF_BYGGEAR, CONF_ENERGILEDD_DAG, CONF_ENERGILEDD_NATT, CONF_GARDINER,
     CONF_GLASS_M2, CONF_HANKLEVARMER, CONF_HANKLEVARMER_EFFEKT, CONF_HVITEVARER,
-    CONF_HUSTYPE, CONF_PRESET, PRESETS,
+    CONF_HUSTYPE, CONF_PERSONER, CONF_PRESET, DEFAULT_PERSONER, PERSONTYPER, PRESETS, PROFIL_LEGACY,
     CONF_IMPORTERT_ENERGI, CONF_KAPASITETSTRINN, CONF_NORDPOOL, CONF_NORGESPRIS_AKTIV, CONF_SONER,
     CONF_STROMPRIS, CONF_STUE_AREAL, CONF_TILSTEDE_CYBELE, CONF_TILSTEDE_RUNE,
     CONF_TILSTEDE_SEBASTIAN, CONF_TOPP1, CONF_TOPP2, CONF_TOPP3, CONF_TOTAL_EFFEKT, CONF_UTE_TEMP,
@@ -87,6 +87,43 @@ SKJEMA_PERSONER = {
     vol.Optional(CONF_TILSTEDE_SEBASTIAN): _ent(ALLE_DOMENER),
     vol.Optional(CONF_TILSTEDE_RUNE): _ent(ALLE_DOMENER),
 }
+ANTALL_PERSONRADER = 4
+
+
+def _persontype():
+    return selector.SelectSelector(selector.SelectSelectorConfig(
+        options=[selector.SelectOptionDict(value=k, label=v) for k, v in PERSONTYPER.items()], mode="dropdown"))
+
+
+def skjema_personer_rader() -> dict:
+    """Første oppsett: inntil fire personer på én side. Flere legges til under Konfigurer."""
+    ut = {}
+    for i in range(1, ANTALL_PERSONRADER + 1):
+        ut[vol.Optional(f"navn_{i}")] = _tekst()
+        ut[vol.Optional(f"type_{i}", default="voksen")] = _persontype()
+        ut[vol.Optional(f"tilstede_{i}")] = _ent(ALLE_DOMENER)
+    return ut
+
+
+def personer_fra_rader(data: dict) -> list[dict]:
+    ut = []
+    for i in range(1, ANTALL_PERSONRADER + 1):
+        navn = (data.get(f"navn_{i}") or "").strip()
+        if not navn:
+            continue
+        key = oppdag.slug(navn)
+        if any(p["key"] == key for p in ut):
+            key = f"{key}_{i}"
+        ut.append({"key": key, "navn": navn, "type": data.get(f"type_{i}") or "voksen", "entity": data.get(f"tilstede_{i}") or ""})
+    return ut
+
+
+def profilvalg(personer: list[dict]):
+    valg = [selector.SelectOptionDict(value=p, label=PROFIL_TEKST[p]) for p in PROFILER]
+    for p in personer:
+        valg.append(selector.SelectOptionDict(value=f"person:{p['key']}",
+                                              label=f"{p['navn']}s rom ({PERSONTYPER[p['type']].split(' — ')[0].lower()})"))
+    return selector.SelectSelector(selector.SelectSelectorConfig(options=valg, mode="dropdown"))
 SKJEMA_NETTLEIE = {
     vol.Optional(CONF_TOPP1): _ent("sensor"),
     vol.Optional(CONF_TOPP2): _ent("sensor"),
@@ -191,11 +228,21 @@ class KiEnergiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             vol.Schema(SKJEMA_UTSTYR), self._forslag(CONF_VVB_BRYTER, CONF_VVB_EFFEKT, CONF_HANKLEVARMER, CONF_HANKLEVARMER_EFFEKT)))
 
     async def async_step_personer(self, user_input=None):
+        preset = PRESETS.get(self._data.get(CONF_PRESET, "oslo"), PRESETS["oslo"])
         if user_input is not None:
-            self._data.update(_rens(user_input, SKJEMA_PERSONER))
+            self._data[CONF_PERSONER] = personer_fra_rader(user_input)
             return await self.async_step_nettleie()
+        forslag = {}
+        for i, p in enumerate(preset.get("personer", [])[:ANTALL_PERSONRADER], start=1):
+            forslag[f"navn_{i}"] = p["navn"]
+            forslag[f"type_{i}"] = p["type"]
+            ent = p.get("entity") or ""
+            if ent and self.hass.states.get(ent) is None:
+                ent = oppdag.finn_person(self.hass, p["navn"]) or ""
+            if ent:
+                forslag[f"tilstede_{i}"] = ent
         return self.async_show_form(step_id="personer", data_schema=self.add_suggested_values_to_schema(
-            vol.Schema(SKJEMA_PERSONER), self._forslag(CONF_TILSTEDE_CYBELE, CONF_TILSTEDE_SEBASTIAN, CONF_TILSTEDE_RUNE)))
+            vol.Schema(skjema_personer_rader()), forslag))
 
     async def async_step_nettleie(self, user_input=None):
         if user_input is not None:
@@ -328,8 +375,64 @@ class KiEnergiOptionsFlow(config_entries.OptionsFlow):
     async def async_step_utstyr(self, user_input=None):
         return await self._enkelt_skjema("utstyr", SKJEMA_UTSTYR, user_input)
 
+    def _personer(self) -> list[dict]:
+        g = self._gjeldende()
+        liste = g.get(CONF_PERSONER)
+        if isinstance(liste, list):
+            return [dict(p) for p in liste]
+        ut = []
+        for p in DEFAULT_PERSONER:
+            if f"tilstede_{p['key']}" in g:
+                ut.append(dict(p, entity=g.get(f"tilstede_{p['key']}") or ""))
+        return ut
+
     async def async_step_personer(self, user_input=None):
-        return await self._enkelt_skjema("personer", SKJEMA_PERSONER, user_input)
+        personer = self._personer()
+        if user_input is not None:
+            valg = user_input["person"]
+            if valg == "__ny__":
+                return await self.async_step_ny_person()
+            self._person_key = valg
+            return await self.async_step_person()
+        valg = [selector.SelectOptionDict(value=p["key"], label=f"{p['navn']} — {PERSONTYPER[p['type']].split(' — ')[0]}"
+                                          + (f" — {p['entity']}" if p.get("entity") else " — ingen tilstedeværelse"))
+                for p in personer]
+        valg.append(selector.SelectOptionDict(value="__ny__", label="＋ Legg til person"))
+        return self.async_show_form(step_id="personer", data_schema=vol.Schema({
+            vol.Required("person"): selector.SelectSelector(selector.SelectSelectorConfig(options=valg, mode="list"))}))
+
+    async def async_step_ny_person(self, user_input=None):
+        if user_input is not None:
+            navn = user_input["navn"].strip()
+            key = oppdag.slug(navn)
+            personer = self._personer()
+            if any(p["key"] == key for p in personer):
+                key += "_2"
+            personer.append({"key": key, "navn": navn, "type": user_input["type"], "entity": user_input.get("tilstede") or ""})
+            return self._lagre({CONF_PERSONER: personer})
+        return self.async_show_form(step_id="ny_person", data_schema=vol.Schema({
+            vol.Required("navn"): _tekst(), vol.Required("type", default="voksen"): _persontype(),
+            vol.Optional("tilstede"): _ent(ALLE_DOMENER)}))
+
+    async def async_step_person(self, user_input=None):
+        personer = self._personer()
+        p = next((x for x in personer if x["key"] == self._person_key), None)
+        if p is None:
+            return await self.async_step_personer()
+        if user_input is not None:
+            if user_input.get("slett"):
+                personer = [x for x in personer if x["key"] != p["key"]]
+            else:
+                p.update(navn=user_input["navn"].strip(), type=user_input["type"], entity=user_input.get("tilstede") or "")
+            return self._lagre({CONF_PERSONER: personer})
+        skjema = vol.Schema({
+            vol.Required("navn", default=p["navn"]): _tekst(),
+            vol.Required("type", default=p["type"]): _persontype(),
+            vol.Optional("tilstede"): _ent(ALLE_DOMENER),
+            vol.Optional("slett", default=False): selector.BooleanSelector()})
+        return self.async_show_form(step_id="person", data_schema=self.add_suggested_values_to_schema(
+            skjema, {"tilstede": p.get("entity")} if p.get("entity") else {}),
+            description_placeholders={"navn": p["navn"], "key": p["key"]})
 
     async def async_step_nettleie(self, user_input=None):
         return await self._enkelt_skjema("nettleie", SKJEMA_NETTLEIE, user_input)
@@ -400,8 +503,8 @@ class KiEnergiOptionsFlow(config_entries.OptionsFlow):
                 options=[selector.SelectOptionDict(value="panel", label="Panelovn (rask)"),
                          selector.SelectOptionDict(value="gulv", label="Gulvvarme (treg)"),
                          selector.SelectOptionDict(value="varmepumpe", label="Varmepumpe (billigst — senkes sist)")], mode="dropdown")),
-            vol.Required("profil", default=s.get("profil", "fellesrom")): selector.SelectSelector(selector.SelectSelectorConfig(
-                options=[selector.SelectOptionDict(value=p, label=PROFIL_TEKST[p]) for p in PROFILER], mode="dropdown")),
+            vol.Required("profil", default=PROFIL_LEGACY.get(s.get("profil", "fellesrom"), s.get("profil", "fellesrom"))): selector.SelectSelector(selector.SelectSelectorConfig(
+                options=profilvalg(self._personer()).config["options"], mode="dropdown")),
             vol.Required("prio", default=int(s.get("prio", 3))): _num(1, 5, 1, mode="slider"),
             vol.Required("nominell", default=float(s.get("nominell", 1.0))): _num(0.1, 5, 0.1, "kW"),
             vol.Required("sol", default=bool(s.get("sol", False))): selector.BooleanSelector(),

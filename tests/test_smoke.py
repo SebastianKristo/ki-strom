@@ -254,10 +254,10 @@ async def test_preset_toten_fritidsbolig(hass):
     assert "ingen bryter" in hass.states.get("sensor.ki_vvb_forklaring").state
     # helg-auto: tom hytte på en tirsdag → frostsikring etter 3 t
     m = hub.moduser
-    m.m["borte_siden"] = (dt_util.now() - timedelta(hours=4)).isoformat()
-    tirsdag = dt_util.now().replace(hour=12)
+    tirsdag = dt_util.now().replace(hour=12, minute=30)
     while tirsdag.weekday() != 1:
         tirsdag += timedelta(days=1)
+    m.m["borte_siden"] = (tirsdag - timedelta(hours=4)).isoformat()
     with patch("homeassistant.util.dt.now", return_value=tirsdag):
         await m.tick(); await hass.async_block_till_done()
     assert hass.states.get("switch.ki_helgemodus").state == "on"
@@ -328,3 +328,36 @@ async def test_oppdag_soner_fra_omrader(hass):
     f = oppdag.forslag_alle(hass)
     assert f["total_effekt"] == "sensor.ams_maler_effekt"
     assert f["importert_energi"] == "sensor.ams_maler_energi_importert"
+
+
+async def test_personer_generisk_og_vindu_forvarming(hass):
+    """Egendefinerte personer: hjelpere lages per type, profil person:<key> styrer rommet.
+    Åpent vindu blokkerer ikke forvarmingen mot vekking."""
+    from custom_components.ki_energi.const import CONF_PERSONER
+    data = dict(DEFAULT_CONFIG)
+    data[CONF_PERSONER] = [{"key": "emma", "navn": "Emma", "type": "barn", "entity": "person.emma"},
+                           {"key": "ola", "navn": "Ola", "type": "ungdom", "entity": ""},
+                           {"key": "kari", "navn": "Kari", "type": "voksen", "entity": "person.kari"}]
+    data[CONF_SONER] = {"emma": dict(navn="Emma", rom="Emma", climate=["climate.emma"], effekt=[], type="panel", prio=3,
+                                     nominell=1.0, sol=False, profil="person:emma", aktiv=True, vindu=["binary_sensor.emma_vindu"])}
+    hass.states.async_set("sensor.strommaler_effekt", "1500"); hass.states.async_set("sensor.strommaler_imported_energy", "10")
+    hass.states.async_set("person.emma", "home"); hass.states.async_set("person.kari", "not_home")
+    hass.states.async_set("climate.emma", "heat", {"temperature": 21, "current_temperature": 17})
+    hass.states.async_set("binary_sensor.emma_vindu", "on")
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options={})
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    hub = hass.data[DOMAIN][entry.entry_id]
+    for eid in ("time.ki_emma_dag", "time.ki_emma_borte_til", "time.ki_ola_vekking", "time.ki_ola_vekking_helg", "switch.ki_ola_ferie"):
+        assert hass.states.get(eid) is not None, eid
+    assert hass.states.get("time.ki_kari_dag") is None            # voksen får ingen tider
+    assert hub.voksne_hjemme() is False
+    # kl. 04:30 sover Emma (05:30 opp); vinduet er åpent, men forvarmingen mot 05:30 skal gå
+    await hass.services.async_call("number", "set_value", {"entity_id": "number.ki_vindu_forsinkelse_min", "value": 0}, blocking=True)
+    kl = dt_util.now().replace(hour=4, minute=30)
+    with patch("homeassistant.util.dt.now", return_value=kl):
+        await hub.engine.tick(); await hass.async_block_till_done()
+    l = [x for x in hass.states.get("sensor.ki_laster").attributes["laster"] if x["key"] == "emma"][0]
+    assert l["person"] == "Emma" and l["person_type"] == "barn"
+    assert l["handling"] != "vindu" and l["vindu"] is False   # vinduet ignoreres under forvarming

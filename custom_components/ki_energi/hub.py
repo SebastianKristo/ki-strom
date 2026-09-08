@@ -15,7 +15,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .const import (
-    CONF_HUSTYPE, CONF_PRESET, PRESETS,
+    CONF_HUSTYPE, CONF_PERSONER, CONF_PRESET, DEFAULT_PERSONER, PRESETS,
     CONF_SONER, DEFAULT_CONFIG, DEFAULT_SONER, DOMAIN, Z_AKTIV, Z_PROFIL,
     Z_TEMP_BORTE, Z_TEMP_DAG, Z_TEMP_NATT,
 )
@@ -93,6 +93,37 @@ class KiHub:
                 s[felt] = liste[0] if liste else ""
             ut[key] = s
         return ut
+
+    def personer(self) -> list[dict]:
+        """Husets personer: [{key, navn, entity, type}]. Uten egen liste utledes de av de gamle
+        feltene tilstede_cybele/sebastian/rune, så eksisterende oppsett og entitets-ID-er beholdes."""
+        liste = self.cfg(CONF_PERSONER)
+        if isinstance(liste, list):
+            ut = []
+            for p in liste:
+                if not isinstance(p, dict) or not p.get("key"):
+                    continue
+                ut.append({"key": p["key"], "navn": p.get("navn") or p["key"].capitalize(),
+                           "entity": p.get("entity") or "", "type": p.get("type") or "voksen"})
+            return ut
+        ut = []
+        for p in DEFAULT_PERSONER:
+            ent = self.cfg(f"tilstede_{p['key']}")
+            if ent is None:
+                continue
+            ut.append(dict(p, entity=ent or ""))
+        return ut
+
+    def person(self, key: str) -> dict | None:
+        return next((p for p in self.personer() if p["key"] == key), None)
+
+    def voksne_hjemme(self) -> bool | None:
+        """True hvis minst én voksen er hjemme, False hvis alle kjente voksne er borte, None hvis ukjent."""
+        kjent = [self.hjemme(p["entity"]) for p in self.personer() if p["type"] == "voksen" and p["entity"]]
+        kjent = [v for v in kjent if v is not None]
+        if not kjent:
+            return None
+        return any(kjent)
 
     def fritidsbolig(self) -> bool:
         return self.cfg(CONF_HUSTYPE, "bolig") == "fritidsbolig"

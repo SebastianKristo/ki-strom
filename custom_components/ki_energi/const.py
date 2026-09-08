@@ -44,6 +44,28 @@ CONF_GLASS_M2 = "glass_m2"
 CONF_STUE_AREAL = "stue_areal_m2"
 CONF_SONER = "soner"
 CONF_HUSTYPE = "hustype"      # bolig | fritidsbolig
+CONF_PERSONER = "personer"    # liste av {key, navn, entity, type}; type: barn | ungdom | voksen
+PERSONTYPER = {
+    "barn": "Barn — fast opp/legg og borte på dagtid (barnehage/skole)",
+    "ungdom": "Ungdom/student — vekking hverdag og helg, egen leggetid, feriebryter",
+    "voksen": "Voksen — bare tilstedeværelse",
+}
+# Standardpersoner for presets. Nøklene cybele/sebastian/rune gir samme entitets-ID-er som før.
+DEFAULT_PERSONER = [
+    {"key": "cybele", "navn": "Cybele", "type": "barn", "entity": "switch.cybele_posisjon_hjemme_borte"},
+    {"key": "sebastian", "navn": "Sebastian", "type": "ungdom", "entity": "switch.sebastian_posisjon_hjemme_borte"},
+    {"key": "rune", "navn": "Rune", "type": "voksen", "entity": "switch.rune_posisjon_hjemme_borte"},
+]
+# Hjelpere som lages per person, etter type: (suffiks, navn, standard, ikon)
+PERSON_TIDER = {
+    "barn": [("dag", "Dag Starter", "05:30", "mdi:alarm"), ("natt", "Natt Starter", "19:00", "mdi:bed"),
+             ("borte_fra", "Normalt Borte Fra", "08:00", "mdi:home-export-outline"),
+             ("borte_til", "Normalt Hjemme Igjen", "15:00", "mdi:home-import-outline")],
+    "ungdom": [("natt", "Natt Starter", "23:00", "mdi:bed"), ("vekking", "Vekking Hverdag", "07:00", "mdi:alarm"),
+               ("vekking_helg", "Vekking Helg/Ferie", "09:30", "mdi:alarm")],
+    "voksen": [],
+}
+PERSON_BRYTERE = {"barn": [], "ungdom": [("ferie", "Ferie", False, "mdi:school-outline")], "voksen": []}
 CONF_PRESET = "preset"        # oslo | toten | tom
 
 # Sonefelt
@@ -64,7 +86,9 @@ Z_TEMP_DAG = "temp_dag"      # hjelper-nøkkel (number.<key>)
 Z_TEMP_NATT = "temp_natt"
 Z_TEMP_BORTE = "temp_borte"
 
-PROFILER = ["fellesrom", "stue", "konstant", "gulv_natt", "sjelden", "cybele", "sebastian"]
+PROFILER = ["fellesrom", "stue", "konstant", "gulv_natt", "sjelden"]
+# Gamle profilnavn → personprofil
+PROFIL_LEGACY = {"cybele": "person:cybele", "sebastian": "person:sebastian"}
 PROFIL_TEKST = {
     "fellesrom": "Fellesrom (dag/natt med økonomisk nattsenking)",
     "stue": "Stue (som fellesrom, pluss reduksjon etter formiddag og solkompensasjon)",
@@ -99,14 +123,14 @@ DEFAULT_SONER: dict[str, dict] = {
         navn="Cybele panelovn", rom="Cybele", climate="climate.cybele_panelovn",
         effekt="sensor.cybele_panelovn_current_power",
         duty="sensor.cybele_panelovn_control_signal",
-        temp="", type="panel", prio=3, nominell=1.0, sol=False, profil="cybele", aktiv=True,
+        temp="", type="panel", prio=3, nominell=1.0, sol=False, profil="person:cybele", aktiv=True,
         temp_dag="ki_temp_cybele_dag", temp_natt="ki_temp_cybele_natt",
         temp_borte="ki_temp_cybele_borte"),
     "sebastian": dict(
         navn="Sebastian panelovn", rom="Sebastian", climate="climate.sebastian_panelovn",
         effekt="sensor.sebastian_panelovn_stikkontakt_power", duty="",
         temp="sensor.panelovn_temperature", type="panel", prio=3, nominell=0.8, sol=False,
-        profil="sebastian", aktiv=True,
+        profil="person:sebastian", aktiv=True,
         temp_dag="ki_temp_sebastian_dag", temp_natt="ki_temp_sebastian_natt", temp_borte=""),
     "kjokken_gulv": dict(
         navn="Kjøkken gulvvarme", rom="Kjøkken", climate="climate.kjokken_gulvvarme",
@@ -185,11 +209,11 @@ DEFAULT_SONER_HYTTE: dict[str, dict] = {
         temp_dag="ki_temp_trappegang_dag", temp_natt="ki_temp_trappegang_natt", temp_borte=""),
     "cybele": dict(
         navn="Cybele soverom", rom="Cybele", climate=["climate.hytte_cybele_panelovn"], effekt=["sensor.hytte_cybele_panelovn_effekt"],
-        duty="", temp="", type="panel", prio=2, nominell=1.0, sol=False, profil="cybele", aktiv=True,
+        duty="", temp="", type="panel", prio=2, nominell=1.0, sol=False, profil="person:cybele", aktiv=True,
         temp_dag="ki_temp_cybele_dag", temp_natt="ki_temp_cybele_natt", temp_borte="ki_temp_cybele_borte"),
     "sebastian": dict(
         navn="Sebastian soverom", rom="Sebastian", climate=["climate.hytte_sebastian_panelovn"], effekt=["sensor.hytte_sebastian_panelovn_effekt"],
-        duty="", temp="", type="panel", prio=3, nominell=1.0, sol=False, profil="sebastian", aktiv=True,
+        duty="", temp="", type="panel", prio=3, nominell=1.0, sol=False, profil="person:sebastian", aktiv=True,
         temp_dag="ki_temp_sebastian_dag", temp_natt="ki_temp_sebastian_natt", temp_borte=""),
     "rune": dict(
         navn="Rune soverom", rom="Rune", climate=["climate.hytte_rune_panelovn"], effekt=["sensor.hytte_rune_panelovn_effekt"],
@@ -202,7 +226,7 @@ PRESETS: dict[str, dict] = {
     "oslo": {
         "navn": "Bolig — rekkehus i Oslo (standard)", "hustype": "bolig",
         "beskrivelse": "120 m² rekkehus fra 1980, panelovner og gulvvarme, bereder med relé, håndklevarmer.",
-        "config": {}, "soner": DEFAULT_SONER, "verdier": {},
+        "config": {}, "soner": DEFAULT_SONER, "verdier": {}, "personer": DEFAULT_PERSONER,
     },
     "toten": {
         "navn": "Fritidsbolig — hytta på Toten", "hustype": "fritidsbolig",
@@ -217,6 +241,7 @@ PRESETS: dict[str, dict] = {
             CONF_UTE_TEMP: "sensor.hytte_utetemperatur", CONF_VAER: "weather.forecast_home",
         },
         "soner": DEFAULT_SONER_HYTTE,
+        "personer": [dict(p, entity=f"person.{p['key']}") for p in DEFAULT_PERSONER],
         "verdier": {
             # tom hytte = frostsikring, ikke 16 °C
             "ki_temp_helg": 8.0, "ki_temp_helg_gulvvarme": 10.0, "ki_temp_helg_bad": 12.0, "ki_helg_senk_gulvvarme": True,
@@ -231,7 +256,7 @@ PRESETS: dict[str, dict] = {
             "ki_sommer_auto": True, "ki_styr_gardiner": False, "ki_styr_hanklevarmer": False,
         },
     },
-    "tom": {"navn": "Tomt oppsett (velg alt selv)", "hustype": "bolig", "beskrivelse": "", "config": {}, "soner": {}, "verdier": {}},
+    "tom": {"navn": "Tomt oppsett (velg alt selv)", "hustype": "bolig", "beskrivelse": "", "config": {}, "soner": {}, "verdier": {}, "personer": []},
 }
 
 # ---------------------------------------------------------------------------
@@ -250,7 +275,6 @@ SWITCHES = [
     ("ki_hjemkomst_aktiv", "KI Hjemkomst Pågår", False, "mdi:home-import-outline"),
     ("ki_sommermodus", "KI Sommermodus", False, "mdi:white-balance-sunny"),
     ("ki_sommer_auto", "KI Sommermodus Automatisk", False, "mdi:calendar-sync"),
-    ("ki_sebastian_ferie", "KI Sebastian Ferie", False, "mdi:school-outline"),
     ("ki_styr_gardiner", "KI Styr Gardiner", False, "mdi:curtains"),
     ("ki_gardin_folg_sol", "KI Gardiner Følg Sola", True, "mdi:weather-sunset"),
     ("ki_styr_hanklevarmer", "KI Styr Håndklevarmer", True, "mdi:radiator"),
@@ -314,6 +338,7 @@ NUMBERS = [
     ("ki_hanklevarmer_maks_pa_tid", "KI Håndklevarmer Maks På-Tid", 30, 480, 15, "min", 240, "mdi:timer-alert-outline"),
     ("ki_vvb_metning_terskel_w", "KI VVB Effektgrense Utkoblet Termostat", 20, 500, 10, "W", 150, "mdi:flash-off"),
     ("ki_vvb_metning_minutter", "KI VVB Minutter Null Effekt Før Mettet", 2, 30, 1, "min", 8, "mdi:timer-check"),
+    ("ki_vvb_min_syklus_min", "KI VVB Minste Oppvarming For Godkjent Metning", 5, 240, 5, "min", 25, "mdi:timer-sand"),
     ("ki_vvb_maks_min_uten_effekt", "KI VVB Maks Minutter Uten Effekt Etter Start", 3, 60, 1, "min", 10, "mdi:timer-alert"),
     ("ki_vvb_maks_oppvarming_min", "KI VVB Maks Sammenhengende Oppvarming", 60, 600, 15, "min", 300, "mdi:clock-alert-outline"),
     ("ki_vvb_intervall_dager", "KI VVB Ønsket Intervall Mellom Metninger", 1, 14, 1, "d", 3, "mdi:calendar-refresh"),
@@ -350,13 +375,6 @@ NUMBERS = [
 TIMES = [
     ("ki_tid_dag_start", "KI Fellesrom Dag Starter", "06:30", "mdi:weather-sunset-up"),
     ("ki_tid_natt_start", "KI Fellesrom Natt Starter", "22:30", "mdi:weather-night"),
-    ("ki_cybele_dag", "KI Cybele Dag Starter", "05:30", "mdi:alarm"),
-    ("ki_cybele_natt", "KI Cybele Natt Starter", "19:00", "mdi:bed"),
-    ("ki_cybele_borte_fra", "KI Cybele Normalt Borte Fra", "08:00", "mdi:home-export-outline"),
-    ("ki_cybele_borte_til", "KI Cybele Normalt Hjemme Igjen", "15:00", "mdi:home-import-outline"),
-    ("ki_sebastian_natt", "KI Sebastian Natt Starter", "23:00", "mdi:bed"),
-    ("ki_sebastian_vekking", "KI Sebastian Vekking Hverdag", "07:00", "mdi:alarm"),
-    ("ki_sebastian_vekking_helg", "KI Sebastian Vekking Helg/Ferie", "09:30", "mdi:alarm"),
     ("ki_helg_varsel_tid", "KI Helg Spørsmål Fredag", "10:00", "mdi:bell"),
     ("ki_helg_sporsmal_tid", "KI Helg Spørsmål Søndag", "08:00", "mdi:bell"),
     ("ki_helg_varsel_tid_torsdag", "KI Helg Spørsmål Torsdag", "16:00", "mdi:bell-outline"),

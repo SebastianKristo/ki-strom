@@ -21,7 +21,7 @@
  * Config:  type: custom:ki-klima-pro-card
  */
 
-const KI_PRO_VERSJON = "2.8.0";
+const KI_PRO_VERSJON = "2.9.0";
 
 console.info(
   `%c KI-KLIMA-PRO-CARD %c ${KI_PRO_VERSJON} `,
@@ -293,7 +293,7 @@ class KiKlimaProCard extends HTMLElement {
     this._hass = hass;
     if (!this._bygd) this._bygg();
     let sig = this._fane + "|" + (this._underfane || "") + "|";
-    for (const id of this._fulgt) sig += ((hass.states[mapId(id)] || {}).state || "-") + ",";
+    for (const id of this._fulgt.concat(this._personEntiteter())) sig += ((hass.states[mapId(id)] || {}).state || "-") + ",";
     if (sig !== this._sig) {
       this._sig = sig;
       // Står markøren i et inputfelt (klokkeslett), venter vi med å tegne på nytt til feltet
@@ -458,7 +458,7 @@ class KiKlimaProCard extends HTMLElement {
     this._rot.querySelectorAll(".hode > span:first-child").forEach((sp) => {
       if (sp.querySelector("ha-icon")) return;
       const tittel = (sp.childNodes[0] && sp.childNodes[0].textContent || "").trim();
-      const ikon = HODE_IKON[tittel];
+      const ikon = sp.dataset.ikon || HODE_IKON[tittel];
       if (ikon) sp.insertAdjacentHTML("afterbegin", `<ha-icon class="hodeikon" icon="${ikon}"></ha-icon>`);
     });
     // Sammenleggbare blokker: alle faner unntatt Oversikt. Husker posisjonen per overskrift.
@@ -477,6 +477,17 @@ class KiKlimaProCard extends HTMLElement {
   }
 
   get _hytte() { return this._a("sensor.ki_energi_status", "hustype", "bolig") === "fritidsbolig"; }
+  get _personer() { return this._a("sensor.ki_energi_status", "personer", []) || []; }
+  _har(feature) { return !!this._a("sensor.ki_energi_status", feature, true); }
+  // Følg personenes hjelpere dynamisk (de heter time.ki_<key>_… og switch.ki_<key>_ferie)
+  _personEntiteter() {
+    const ut = [];
+    this._personer.forEach((p) => {
+      if (p.type === "barn") ut.push(...["dag", "natt", "borte_fra", "borte_til"].map((x) => `input_datetime.ki_${p.key}_${x}`));
+      if (p.type === "ungdom") ut.push(`input_datetime.ki_${p.key}_vekking`, `input_datetime.ki_${p.key}_vekking_helg`, `input_datetime.ki_${p.key}_natt`, `input_boolean.ki_${p.key}_ferie`);
+    });
+    return ut;
+  }
   _l(tekst) {
     // Etiketter som betyr noe annet på hytta
     if (!this._hytte) return tekst;
@@ -491,10 +502,12 @@ class KiKlimaProCard extends HTMLElement {
     const sone = this._s("sensor.ki_energi_status", "ukjent");
     const forklaring = this._a("sensor.ki_energi_status", "forklaring", "Venter på motoren …");
     const skygge = this._a("sensor.ki_energi_status", "skyggemodus", false);
-    const forbrukt = Number(this._a("sensor.ki_energi_status", "forbrukt_kwh", NaN));
-    const grense = Number(this._a("sensor.ki_energi_status", "grense_kwh", NaN));
-    const pct = isFinite(forbrukt) && isFinite(grense) && grense > 0
-      ? Math.max(0, Math.min(100, (forbrukt / grense) * 100)) : 0;
+    // Ringen viser forventet effekt mot tillatt effekt — det samme som teksten, og det som
+    // avgjør om noe senkes. (Brukt så langt i timen står i Timebudsjett-blokken.)
+    const bruk = Number(this._a("sensor.ki_energi_status", "forventet_effekt_kw", NaN));
+    const tillatt = Number(this._a("sensor.ki_energi_status", "tillatt_effekt_kw", NaN));
+    const pct = isFinite(bruk) && isFinite(tillatt) && tillatt > 0
+      ? Math.max(0, Math.min(100, (bruk / tillatt) * 100)) : 0;
     const o = 2 * Math.PI * 43;
     const ute = this._n("sensor.outdoor_meter_temperature");
 
@@ -506,7 +519,7 @@ class KiKlimaProCard extends HTMLElement {
             <circle class="fyll" cx="50" cy="50" r="43"
               style="stroke-dasharray:${o};stroke-dashoffset:${o * (1 - pct / 100)}"></circle>
           </svg>
-          <div class="ringtall">${Math.round(pct)}<span>%</span></div>
+          <div class="ringtall" title="Forventet ${nf(bruk, 2)} kW av ${nf(tillatt, 2)} kW tillatt">${Math.round(pct)}<span>%</span></div>
         </div>
         <div class="herotekst">
           <div class="heronavn">${esc(SONE_TEKST[sone] || sone)}
@@ -524,7 +537,7 @@ class KiKlimaProCard extends HTMLElement {
 
   // Hurtigknapper: «leggetid» per soverom. Sover-profiler først, så resten.
   _leggetidBlokk() {
-    const laster = (this._a("sensor.ki_laster", "laster", []) || []).filter((l) => l.profil === "sebastian" || l.profil === "cybele");
+    const laster = (this._a("sensor.ki_laster", "laster", []) || []).filter((l) => l.person && (l.person_type === "barn" || l.person_type === "ungdom"));
     if (!laster.length) return "";
     const sortert = [...laster].sort((x, y) => String(x.navn).localeCompare(String(y.navn)));
     const aktive = sortert.filter((l) => l.leggetid);
@@ -548,7 +561,8 @@ class KiKlimaProCard extends HTMLElement {
     const moduser = [
       ["input_boolean.ki_helgemodus", "Helg"], ["input_boolean.ki_sommermodus", "Sommer"],
       ["input_boolean.ki_hjemkomst_aktiv", "Hjemkomst"], ["input_boolean.ki_skyggemodus", "Skygge"],
-      ["binary_sensor.ki_alle_borte", "Alle borte"], ["input_boolean.ki_sebastian_ferie", "Ferie"],
+      ["binary_sensor.ki_alle_borte", this._l("Alle borte")],
+      ...this._personer.filter((p) => p.type === "ungdom").map((p) => [`input_boolean.ki_${p.key}_ferie`, `${p.navn} ferie`]),
     ].filter(([id]) => this._pa(id)).map(([, n]) => n);
     const prog = (n) => nf(Number(this._a("sensor.ki_prognose", n, NaN)), 1);
     const vvb = this._s("sensor.ki_bereder", "–");
@@ -585,8 +599,8 @@ class KiKlimaProCard extends HTMLElement {
       ["input_boolean.ki_helgemodus", this._l("Helgemodus"), "mdi:bag-suitcase", true],
       ["input_boolean.ki_sommermodus", "Sommermodus", "mdi:white-balance-sunny", true],
       ["input_boolean.ki_hjemkomst_aktiv", this._l("Hjemkomst"), "mdi:home-import-outline", true],
-      ["input_boolean.ki_sebastian_ferie", "Ferie", "mdi:school-outline", true],
-      ["binary_sensor.ki_alle_borte", "Alle borte", "mdi:home-export-outline", false],
+      ...this._personer.filter((p) => p.type === "ungdom").map((p) => [`input_boolean.ki_${p.key}_ferie`, `${p.navn} ferie`, "mdi:school-outline", true]),
+      ["binary_sensor.ki_alle_borte", this._l("Alle borte"), "mdi:home-export-outline", false],
     ];
     const prog = (n) => nf(Number(this._a("sensor.ki_prognose", n, NaN)), 1);
     const progTekst = this._a("sensor.ki_prognose", "forklaring", "");
@@ -940,7 +954,9 @@ class KiKlimaProCard extends HTMLElement {
 
   _varmtvann() {
     const u = this._underfane || "bereder";
-    const faner = [["bereder", "Bereder", "mdi:water-boiler"], ["handkle", "Håndklevarmer", "mdi:radiator"]];
+    const faner = [["bereder", "Bereder", "mdi:water-boiler"]];
+    if (this._har("hanklevarmer")) faner.push(["handkle", "Håndklevarmer", "mdi:radiator"]);
+    else if (this._underfane === "handkle") this._underfane = "bereder";
     return `<div class="underfaner">${faner.map(([id, navn, ikon]) => `
         <div class="underfane ${u === id ? "aktiv" : ""}" data-handling="underfane" data-id="${id}">
           <ha-icon icon="${ikon}"></ha-icon><span>${navn}</span></div>`).join("")}</div>`
@@ -960,6 +976,7 @@ class KiKlimaProCard extends HTMLElement {
   }
 
   _gardinKort() {
+    if (!this._har("gardiner")) return "";
     const st = this._st("sensor.ki_gardiner");
     const a = (k, d) => this._a("sensor.ki_gardiner", k, d);
     const styr = this._pa("input_boolean.ki_styr_gardiner");
@@ -1220,13 +1237,14 @@ class KiKlimaProCard extends HTMLElement {
           <div class="bryter ${legAktiv ? "on" : ""}"
                data-handling="veksle" data-entity="input_boolean.ki_vvb_legionella_aktiv"><span></span></div>
         </div>
-        <div class="hurtig">
+        ${this._har("vvb_bryter") ? `<div class="hurtig">
           <div class="mini" data-handling="tjeneste" data-domene="ki_energi" data-tjeneste="vvb_tving_syklus">Kjør syklus nå</div>
           <div class="mini" data-handling="tjeneste" data-domene="ki_energi" data-tjeneste="${this._pa("binary_sensor.ki_vvb_boost_aktiv") ? "vvb_avbryt_boost" : "vvb_boost"}">${this._pa("binary_sensor.ki_vvb_boost_aktiv") ? "Avbryt boost" : "Boost varmtvann"}</div>
-        </div>`)}
+        </div>` : '<div class="notat">Berederen har ingen bryter — termostaten styrer selv. Legionella bekreftes når en full oppvarmingssyklus er observert.</div>'}`)}
       </div>`;
 
     if (kort) return hoved;
+    if (!this._har("vvb_bryter")) return hoved + leg;   // uten bryter: ingen prisstyring å vise
     const hovedOgLeg = hoved + leg;
 
     const timer = this._a("sensor.ki_vvb_billige_timer", "timer", []) || [];
@@ -1370,7 +1388,7 @@ class KiKlimaProCard extends HTMLElement {
         ["input_boolean.ki_vindu_stopp", "Vindu åpent stopper varme", "Sonen settes ned når et vindu/dør står åpent"],
         ["input_boolean.ki_nattsenk_aktiv", "Nattsenking", "Av = ingen soner senkes om natten"],
         ["input_boolean.ki_nattsenk_okonomi", "Økonomisk nattsenking", "Senker bare når sparingen slår gjenoppvarmingen"],
-        ["input_boolean.ki_styr_gardiner", "Styr gardiner", "Se egen blokk lenger ned"],
+        ...(this._har("gardiner") ? [["input_boolean.ki_styr_gardiner", "Styr gardiner", "Se egen blokk lenger ned"]] : []),
       ]],
       ["Helg og sommer", [
         ["input_boolean.ki_helg_auto", this._l("Helg automatisk ved fravær"), this._l("Torsdag/fredag etter lengre fravær")],
@@ -1381,10 +1399,10 @@ class KiKlimaProCard extends HTMLElement {
         ["input_boolean.ki_elbil_natt", "Elbil lader om natten", "Laderen er ikke smart — motoren holder av effekt i ladevinduet"],
       ]],
       ["Vann og bad", [
-        ["input_boolean.ki_vvb_prisstyring", "VVB prisstyring", "Velger de billigste timene"],
-        ["input_boolean.ki_vvb_alltid_pa", "VVB alltid på", "Kobler ut prisstyringen"],
+        ...(this._har("vvb_bryter") ? [["input_boolean.ki_vvb_prisstyring", "VVB prisstyring", "Velger de billigste timene"],
+                                      ["input_boolean.ki_vvb_alltid_pa", "VVB alltid på", "Kobler ut prisstyringen"]] : []),
         ["input_boolean.ki_vvb_legionella_aktiv", "Legionellasikring", "Kan ikke blokkeres av sparing når den er på"],
-        ["input_boolean.ki_styr_hanklevarmer", "Styr håndklevarmer", "Dusjvinduer og sikkerhetsavstenging"],
+        ...(this._har("hanklevarmer") ? [["input_boolean.ki_styr_hanklevarmer", "Styr håndklevarmer", "Dusjvinduer og sikkerhetsavstenging"]] : []),
       ]],
     ];
     const bryterRad = ([id, navn, sub, hjelp]) => {
@@ -1435,9 +1453,10 @@ class KiKlimaProCard extends HTMLElement {
         <div class="hode"><span>Tider</span><span class="sub">Døgnet i huset</span></div>
         ${this._dognplan([
           { navn: "Huset", spenn: [["input_datetime.ki_tid_dag_start", "input_datetime.ki_tid_natt_start", "dag", "Dag"]] },
-          { navn: "Cybele", spenn: [["input_datetime.ki_cybele_dag", "input_datetime.ki_cybele_natt", "c", "Våken"],
-                                    ["input_datetime.ki_cybele_borte_fra", "input_datetime.ki_cybele_borte_til", "borte", "Borte"]] },
-          { navn: "Sebastian", spenn: [["input_datetime.ki_sebastian_vekking", "input_datetime.ki_sebastian_natt", "s", "Våken"]] },
+          ...this._personer.filter((p) => p.type !== "voksen").map((p, i) => p.type === "barn"
+            ? { navn: p.navn, spenn: [[`input_datetime.ki_${p.key}_dag`, `input_datetime.ki_${p.key}_natt`, i % 2 ? "s" : "c", "Våken"],
+                                      [`input_datetime.ki_${p.key}_borte_fra`, `input_datetime.ki_${p.key}_borte_til`, "borte", "Borte"]] }
+            : { navn: p.navn, spenn: [[`input_datetime.ki_${p.key}_vekking`, `input_datetime.ki_${p.key}_natt`, i % 2 ? "s" : "c", "Våken"]] }),
           { navn: "Stue", mark: [["input_datetime.ki_stue_reduksjon_fra", "Reduksjon fra", "advarsel"]] },
         ])}
         <div class="stripeforklaring"><span>Strek = nå · varmen holdes oppe i de fargede båndene</span></div>
@@ -1447,16 +1466,21 @@ class KiKlimaProCard extends HTMLElement {
         ${this._tidPar("Dag starter", "input_datetime.ki_tid_dag_start", "Natt starter", "input_datetime.ki_tid_natt_start")}
         ${this._stepperRad("input_number.ki_natt_senk_ute_grense", "Nattsenk kun under", 0, " °C")}
       </div>
+      ${this._personer.filter((p) => p.type !== "voksen").map((p) => p.type === "barn" ? `
       <div class="blokk">
-        <div class="hode"><span>Cybele</span><span class="sub">${this._tidKort("input_datetime.ki_cybele_dag")}–${this._tidKort("input_datetime.ki_cybele_natt")}</span></div>
-        ${this._tidPar("Opp", "input_datetime.ki_cybele_dag", "Legger seg", "input_datetime.ki_cybele_natt")}
-        ${this._tidPar("Borte fra", "input_datetime.ki_cybele_borte_fra", "Hjemme igjen", "input_datetime.ki_cybele_borte_til")}
-      </div>
+        <div class="hode"><span data-ikon="mdi:account-child">${esc(p.navn)}</span><span class="sub">${this._tidKort(`input_datetime.ki_${p.key}_dag`)}–${this._tidKort(`input_datetime.ki_${p.key}_natt`)}</span></div>
+        ${this._tidPar("Opp", `input_datetime.ki_${p.key}_dag`, "Legger seg", `input_datetime.ki_${p.key}_natt`)}
+        ${this._tidPar("Borte fra", `input_datetime.ki_${p.key}_borte_fra`, "Hjemme igjen", `input_datetime.ki_${p.key}_borte_til`)}
+      </div>` : `
       <div class="blokk">
-        <div class="hode"><span>Sebastian</span><span class="sub">${this._tidKort("input_datetime.ki_sebastian_vekking")}–${this._tidKort("input_datetime.ki_sebastian_natt")}</span></div>
-        ${this._tidPar("Vekking", "input_datetime.ki_sebastian_vekking", "Vekking helg", "input_datetime.ki_sebastian_vekking_helg")}
-        ${this._tidRad("input_datetime.ki_sebastian_natt", "Legger seg")}
-      </div>
+        <div class="hode"><span data-ikon="mdi:account-school">${esc(p.navn)}</span><span class="sub">${this._tidKort(`input_datetime.ki_${p.key}_vekking`)}–${this._tidKort(`input_datetime.ki_${p.key}_natt`)}</span></div>
+        ${this._tidPar("Vekking", `input_datetime.ki_${p.key}_vekking`, "Vekking helg", `input_datetime.ki_${p.key}_vekking_helg`)}
+        ${this._tidRad(`input_datetime.ki_${p.key}_natt`, "Legger seg")}
+        <div class="rad">
+          <div class="radtekst"><div class="radnavn">Ferie</div><div class="radsub">Bruker helgevekking hver dag</div></div>
+          <div class="bryter ${this._pa(`input_boolean.ki_${p.key}_ferie`) ? "on" : ""}" data-handling="veksle" data-entity="input_boolean.ki_${p.key}_ferie"><span></span></div>
+        </div>
+      </div>`).join("")}
       <div class="blokk">
         <div class="hode"><span>Elbil</span><span class="sub">${this._tidKort("input_datetime.ki_elbil_fra")}–${this._tidKort("input_datetime.ki_elbil_til")}</span></div>
         ${this._dognplan([{ navn: "Lading", spenn: [["input_datetime.ki_elbil_fra", "input_datetime.ki_elbil_til", "s", "Elbil"]] }])}

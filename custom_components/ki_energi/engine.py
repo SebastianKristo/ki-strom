@@ -21,9 +21,11 @@ from homeassistant.core import callback
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    CONF_VVB_BRYTER, CONF_HANKLEVARMER,
+    CONF_GARDINER,
     CONF_ENERGILEDD_DAG, CONF_ENERGILEDD_NATT, CONF_GLASS_M2, CONF_HANKLEVARMER_EFFEKT,
-    CONF_HVITEVARER, CONF_IMPORTERT_ENERGI, CONF_PRESET, PRESETS, CONF_STROMPRIS, CONF_TILSTEDE_CYBELE,
-    CONF_TILSTEDE_RUNE, CONF_TOPP1, CONF_TOPP2, CONF_TOPP3, CONF_TOTAL_EFFEKT, CONF_UTE_TEMP,
+    CONF_HVITEVARER, CONF_IMPORTERT_ENERGI, CONF_PRESET, PRESETS, PROFIL_LEGACY, CONF_STROMPRIS,
+    CONF_TOPP1, CONF_TOPP2, CONF_TOPP3, CONF_TOTAL_EFFEKT, CONF_UTE_TEMP,
     CONF_VAER, CONF_VVB_EFFEKT, MAKS_LOGG_LINJER, PRIO_VEKT, TICK_SEK, Z_PROFIL, Z_TEMP_BORTE,
     Z_TEMP_DAG, Z_TEMP_NATT,
 )
@@ -193,14 +195,39 @@ class KiEngine:
         vekt = min(1.0, minutter_frem / 45.0)
         return max(0.15, naa * (1 - vekt) + profil * vekt)
 
+    @staticmethod
+    def hvitevare_type(entity_id: str) -> str:
+        """Hva slags hvitevare er dette? Bestemmer hvor lenge lasten forventes å vare.
+        lang: komfyr/stekeovn/oppvask/vask/tørk (≈ time). kort: mikro/vannkoker/kaffe (minutter).
+        base: kjøleskap/fryser (jevnt hele døgnet — inngår i grunnlasten, ikke som hendelse)."""
+        n = entity_id.lower()
+        if any(o in n for o in ("kjol", "kjøl", "fridge", "frys", "freez")):
+            return "base"
+        if any(o in n for o in ("mikro", "micro", "vannkok", "kettle", "kaffe", "coffee", "brod", "toast")):
+            return "kort"
+        return "lang"
+
+    def hvitevarer_naa(self) -> dict[str, float]:
+        """Effekt (kW) per hvitevaretype akkurat nå."""
+        h = self.hub
+        ut = {"lang": 0.0, "kort": 0.0, "base": 0.0}
+        for e in (h.cfg(CONF_HVITEVARER, []) or []):
+            v = h.f(e)
+            if v is not None and v > 0:
+                ut[self.hvitevare_type(e)] += v / 1000.0
+        return ut
+
     def kjente_hendelser(self, minutter_frem: int = 0) -> tuple[float, list[str]]:
         """Laster vi vet om som profilen ikke nødvendigvis har fanget opp."""
         h = self.hub
         ekstra, grunner = 0.0, []
-        hv = (h.sensor_state("ki_hvitevarer_effekt") or 0.0) / 1000.0
-        if hv > 0.3 and minutter_frem <= 30:
-            ekstra += hv * 0.6
-            grunner.append(f"hvitevarer går ({hv:.1f} kW)")
+        hv = self.hvitevarer_naa()
+        if hv["lang"] > 0.3 and minutter_frem <= 30:
+            ekstra += hv["lang"] * 0.6
+            grunner.append(f"hvitevarer går ({hv['lang']:.1f} kW)")
+        if hv["kort"] > 0.3 and minutter_frem <= 5:
+            ekstra += hv["kort"] * 0.2   # mikro/vannkoker: er borte om få minutter
+            grunner.append(f"kortvarig last ({hv['kort']:.1f} kW)")
         t = (h.naa_min() + minutter_frem) % (24 * 60)
         if h.mellom(h.tid_min("ki_frokost_start", "06:30"), h.tid_min("ki_frokost_slutt", "08:30"), t):
             r = h.num("ki_reserve_frokost_kwh", 0.7)
@@ -314,13 +341,20 @@ class KiEngine:
     def vekketid(self, key: str, konf: dict) -> int:
         """Når sonen normalt skal være varm igjen (minutter siden midnatt)."""
         h = self.hub
-        profil = konf.get(Z_PROFIL, "fellesrom")
-        if profil == "cybele":
-            return h.tid_min("ki_cybele_dag", "05:30")
-        if profil == "sebastian":
-            helg = (dt_util.now() + timedelta(hours=8)).weekday() >= 5 or h.on("ki_sebastian_ferie")
-            return h.tid_min("ki_sebastian_vekking_helg" if helg else "ki_sebastian_vekking", "07:00")
+        p = self.person_for(konf)
+        if p and p["type"] == "barn":
+            return h.tid_min(f"ki_{p['key']}_dag", "05:30")
+        if p and p["type"] == "ungdom":
+            helg = (dt_util.now() + timedelta(hours=8)).weekday() >= 5 or h.on(f"ki_{p['key']}_ferie")
+            return h.tid_min(f"ki_{p['key']}_vekking_helg" if helg else f"ki_{p['key']}_vekking", "07:00")
         return h.tid_min("ki_tid_dag_start", "06:30")
+
+    def person_for(self, konf: dict) -> dict | None:
+        """Personen en sone er knyttet til via profil «person:<key>» (eller gamle navn)."""
+        profil = PROFIL_LEGACY.get(konf.get(Z_PROFIL, ""), konf.get(Z_PROFIL, ""))
+        if not str(profil).startswith("person:"):
+            return None
+        return self.hub.person(profil.split(":", 1)[1])
 
     async def leggetid(self, sone: str, avbryt: bool = False) -> None:
         """Start kveldssenking i sonen nå — varer til sonens vekketid."""
@@ -443,27 +477,38 @@ class KiEngine:
         if helg:
             return t_helg, "Helgemodus", None
 
-        if profil == "cybele":
-            vekk = h.tid_min("ki_cybele_dag", "05:30")
-            legg = h.tid_min("ki_cybele_natt", "19:00")
+        person = self.person_for(konf)
+        if person and person["type"] == "barn":
+            k = person["key"]
+            vekk = h.tid_min(f"ki_{k}_dag", "05:30")
+            legg = h.tid_min(f"ki_{k}_natt", "19:00")
             if h.mellom(legg, vekk):
                 return t_natt, "Sover", vekk
-            hjemme = h.hjemme(h.cfg(CONF_TILSTEDE_CYBELE))
+            hjemme = h.hjemme(person["entity"])
             if hjemme is None:
-                hjemme = not h.mellom(h.tid_min("ki_cybele_borte_fra", "08:00"),
-                                      h.tid_min("ki_cybele_borte_til", "15:00"))
+                hjemme = not h.mellom(h.tid_min(f"ki_{k}_borte_fra", "08:00"), h.tid_min(f"ki_{k}_borte_til", "15:00"))
             if not hjemme:
                 t_borte = h.num(konf.get(Z_TEMP_BORTE) or "", t_dag - 2.0)
-                return t_borte, "Borte på dagtid", h.tid_min("ki_cybele_borte_til", "15:00")
-            return t_dag, "Hjemme", None
+                return t_borte, f"{person['navn']} er borte på dagtid", h.tid_min(f"ki_{k}_borte_til", "15:00")
+            return t_dag, f"{person['navn']} er hjemme", None
 
-        if profil == "sebastian":
-            helgevekking = dt_util.now().weekday() >= 5 or h.on("ki_sebastian_ferie")
-            vekking = h.tid_min("ki_sebastian_vekking_helg" if helgevekking else "ki_sebastian_vekking", "07:00")
-            legg = h.tid_min("ki_sebastian_natt", "23:00")
+        if person and person["type"] == "ungdom":
+            k = person["key"]
+            helgevekking = dt_util.now().weekday() >= 5 or h.on(f"ki_{k}_ferie")
+            vekking = h.tid_min(f"ki_{k}_vekking_helg" if helgevekking else f"ki_{k}_vekking", "07:00")
+            legg = h.tid_min(f"ki_{k}_natt", "23:00")
             if h.mellom(legg, vekking):
                 return t_natt, "Sover", vekking
-            return t_dag, "Student — rommet brukes på dagtid", None
+            return t_dag, f"{person['navn']} — rommet brukes på dagtid", None
+
+        if person and person["type"] == "voksen":
+            hjemme = h.hjemme(person["entity"])
+            if hjemme is False and er_dag:
+                t_borte = h.num(konf.get(Z_TEMP_BORTE) or "", t_dag - 2.0)
+                return t_borte, f"{person['navn']} er borte", None
+            if not er_dag:
+                return t_natt, "Natt", dag_start
+            return t_dag, "Dag", None
 
         if profil == "stue":
             if not er_dag:
@@ -472,8 +517,8 @@ class KiEngine:
                     return t_natt, f"Nattsenking: {grunn}", dag_start
                 return t_dag - 0.5, f"Begrenset nattsenking: {grunn}", dag_start
             red_fra = h.tid_min("ki_stue_reduksjon_fra", "12:00")
-            rune_hjemme = h.hjemme(h.cfg(CONF_TILSTEDE_RUNE))
-            if h.naa_min() >= red_fra and rune_hjemme is False:
+            voksne = h.voksne_hjemme()
+            if h.naa_min() >= red_fra and voksne is False:
                 return t_dag - h.num("ki_stue_reduksjon", 1.5), "Stua lite brukt etter formiddagen", None
             return t_dag, "Stua i bruk", None
 
@@ -553,9 +598,16 @@ class KiEngine:
                 avvik -= sol
 
             vindu, vindu_navn = self.vindu_apent(key, konf)
+            if vindu and forvarm:
+                # Vindu åpent, men forvarmingen mot vekking/hjemkomst har startet: varm opp likevel,
+                # så rommet er riktig når det skal brukes. (Vinduet får heller stå og lufte.)
+                vindu = False
+                forvarm_grunn += " — vinduet er åpent, varmer likevel fram mot fristen"
             trenger = levende and styrt and avvik > 0.1 and not vindu
+            pers = self.person_for(konf)
             laster.append(dict(
                 vindu=vindu, vindu_navn=vindu_navn, profil=konf.get(Z_PROFIL),
+                person=pers["navn"] if pers else None, person_type=pers["type"] if pers else None,
                 key=key, navn=konf["navn"], rom=konf["rom"], type=konf["type"],
                 prio=int(konf["prio"]), climate=konf["climate"], levende=levende, styrt=styrt,
                 mal=round(mal, 1), naa=round(naa, 1) if naa is not None else None,
@@ -666,7 +718,7 @@ class KiEngine:
                 "forklaring": f"Motoren krasjet: {e}", "feilspor": spor[-900:]})
 
     def _migrer_250(self) -> None:
-        """v2.8.0: ki_maks_time_kwh var økonomisk grense (4,9). Nå er den absolutt, og økonomien
+        """v2.9.0: ki_maks_time_kwh var økonomisk grense (4,9). Nå er den absolutt, og økonomien
         regnes av nettleiemodellen. Løft gammel standardverdi én gang så det nye rommet kan brukes."""
         h = self.hub
         if self.st.get("migrert_250"):
@@ -676,7 +728,7 @@ class KiEngine:
             return  # vent til hjelperen er gjenopprettet
         if abs(float(e.verdi) - 4.9) < 1e-6:
             h.sett("ki_maks_time_kwh", 6.0)
-            self.logg_hendelse("Oppgradering 2.8.0: absolutt timegrense løftet fra 4,90 til 6,00 kWh. "
+            self.logg_hendelse("Oppgradering 2.9.0: absolutt timegrense løftet fra 4,90 til 6,00 kWh. "
                                "Økonomisk grense regnes nå av nettleiemodellen (topp tre per dato).")
         self.st["migrert_250"] = True
         h.lagre()
@@ -873,6 +925,10 @@ class KiEngine:
         h.sett_sensor("ki_energi_status", farge, {
             "forklaring": hoved, "tankegang": tanker, "skyggemodus": skygge, "modus": self.modus_tekst(),
             "hustype": "fritidsbolig" if h.fritidsbolig() else "bolig",
+            "personer": [{"key": p["key"], "navn": p["navn"], "type": p["type"], "hjemme": h.hjemme(p["entity"]) if p["entity"] else None}
+                         for p in h.personer()],
+            "gardiner": bool(h.cfg(CONF_GARDINER)), "hanklevarmer": bool(h.cfg(CONF_HANKLEVARMER)),
+            "vvb_bryter": bool(h.cfg(CONF_VVB_BRYTER)), "vvb_effekt": bool(h.cfg(CONF_VVB_EFFEKT)),
             "grense_kwh": budsjett["grense"], "grense_grunn": budsjett["grense_grunn"],
             "forbrukt_kwh": budsjett["forbrukt"], "igjen_kwh": budsjett["igjen"],
             "minutter_igjen": budsjett["minutter_igjen"],
@@ -893,7 +949,8 @@ class KiEngine:
             naa=p.get("naa"), effekt=p.get("effekt"), forklaring=p.get("forklaring"),
             overstyrt=bool(self.overstyring(p["key"])), helpere=p.get("helpere"), styr=p.get("styr"),
             entiteter=p.get("entiteter"), vindu=p.get("vindu", False), vindu_navn=p.get("vindu_navn", ""),
-            leggetid=bool(self.leggetid_aktiv(p["key"])), profil=p.get("profil"))
+            leggetid=bool(self.leggetid_aktiv(p["key"])), profil=p.get("profil"),
+            person=p.get("person"), person_type=p.get("person_type"))
             for p in plan]
         if h.vvb is not None:
             lastliste.append(dict(

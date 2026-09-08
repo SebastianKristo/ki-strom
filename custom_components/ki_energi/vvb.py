@@ -52,6 +52,10 @@ class KiVvb:
     def konfigurert(self) -> bool:
         return bool(self.bryter())
 
+    def overvakes(self) -> bool:
+        """Bare effektmåling, ingen bryter: legionella bekreftes ved å se en full oppvarmingssyklus."""
+        return not self.bryter() and bool(self.hub.cfg(CONF_VVB_EFFEKT))
+
     def bryter_pa(self) -> bool:
         return self.hub.st(self.bryter()) == "on"
 
@@ -194,6 +198,9 @@ class KiVvb:
     # ------------------------------------------------------------------
     async def tick(self) -> None:
         h = self.hub
+        if self.overvakes():
+            await self._tick_overvaak(dt_util.now())
+            return
         if not self.konfigurert():
             for k in ("ki_vvb_oppvarming_aktiv", "ki_vvb_mettet", "ki_vvb_ingen_respons", "ki_vvb_i_vindu",
                       "ki_vvb_billig_time_na", "ki_vvb_boost_aktiv", "ki_vvb_ferdig_i_vinduet",
@@ -294,6 +301,70 @@ class KiVvb:
         self.var_bor_varme = bv
 
         self._publiser(bv, mettet, ingen)
+
+    async def _tick_overvaak(self, naa: datetime) -> None:
+        """Bereder uten bryter (f.eks. hytta). Termostaten styrer selv; vi ser bare effekten.
+
+        En syklus der elementet har trukket effekt sammenhengende i minst `ki_vvb_min_syklus_min`
+        og deretter er stille i `ki_vvb_metning_minutter`, betyr at termostaten nådde settpunktet
+        → legionella bekreftet (forutsatt at termostaten fysisk står på 65–70 °C). Er fristen
+        passert, kan vi ikke tvinge noe — bare si fra.
+        """
+        h = self.hub
+        if self._dt("ki_vvb_siste_godkjente_syklus") is None:
+            h.sett("ki_vvb_siste_godkjente_syklus", naa)
+        effekt = self.effekt()
+        terskel = h.num("ki_vvb_metning_terskel_w", 150)
+        if effekt is not None:
+            if effekt > terskel:
+                self.over_siden = self.over_siden or naa
+                self.under_siden = None
+            else:
+                self.under_siden = self.under_siden or naa
+                self.over_siden = None
+        aktiv = bool(self.over_siden and (naa - self.over_siden).total_seconds() >= 20)
+        if aktiv and not self.var_aktiv:
+            h.sett("ki_vvb_oppvarming_startet", naa)
+            h.sett("ki_vvb_har_trukket_effekt", True)
+            self._syklus_start = naa
+        self.var_aktiv = aktiv
+        # Full syklus? (var aktiv lenge nok, så stille lenge nok)
+        mettet = False
+        start = self._dt("ki_vvb_oppvarming_startet")
+        if (not aktiv and h.on("ki_vvb_har_trukket_effekt") and start and self.under_siden
+                and (naa - self.under_siden).total_seconds() >= h.num("ki_vvb_metning_minutter", 8) * 60):
+            varmet = (self.under_siden - start).total_seconds() / 60
+            if varmet >= h.num("ki_vvb_min_syklus_min", 25):
+                mettet = True
+                if not self.var_mettet:
+                    h.sett("ki_vvb_siste_godkjente_syklus", naa)
+                    h.sett("ki_vvb_har_trukket_effekt", False)
+                    await h.logbook("KI VVB", f"Full oppvarmingssyklus observert ({int(varmet)} min) — termostaten nådde "
+                                              "settpunktet. Legionellasikringen regnes som bekreftet.")
+                    if h.engine is not None:
+                        h.engine.logg_hendelse(f"Bereder (bare måling): full syklus på {int(varmet)} min — legionella bekreftet.")
+            else:
+                # kort dytt (etterfylling) — ikke en full syklus
+                h.sett("ki_vvb_har_trukket_effekt", False)
+        self.var_mettet = mettet
+        # Forfalt: kan ikke tvinge — varsle én gang per døgn
+        if self.forfalt():
+            sist = self.sist_tvang
+            if sist is None or (naa - sist) > timedelta(hours=24):
+                self.sist_tvang = naa
+                await h.varsle("Legionellafrist passert",
+                               f"Berederen har ikke vist en full oppvarmingssyklus på {self.dager_siden()} dager. Den har ingen bryter "
+                               "her, så sjekk at termostaten står på 65–70 °C, eller tapp varmtvann så den må varme opp.",
+                               alltid=True, kategori="vvb")
+        if self.billige_sist is None or (naa - self.billige_sist) > timedelta(minutes=15):
+            self.billige_sist = naa
+            self._beregn_billige_timer()
+        self._publiser(False, mettet, False)
+        h.sett_sensor("ki_vvb_forklaring",
+                      (f"Varmer nå ({effekt:.0f} W). " if aktiv and effekt is not None else "")
+                      + "Berederen har ingen bryter — termostaten styrer selv. Legionella bekreftes når en full "
+                        f"oppvarmingssyklus (≥ {h.num('ki_vvb_min_syklus_min', 25):.0f} min) er observert; "
+                        f"sist {self.dager_siden()} dager siden.")
 
     async def _metning(self, naa: datetime) -> None:
         h = self.hub

@@ -34,4 +34,9 @@ class KiTime(KiHelper, TimeEntity):
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     hub = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities([KiTime(hub, *t) for t in TIMES])
+    ent = [KiTime(hub, *t) for t in TIMES]
+    from .const import PERSON_TIDER  # noqa: PLC0415
+    for p in hub.personer():
+        for suffiks, navn, std, ikon in PERSON_TIDER.get(p["type"], []):
+            ent.append(KiTime(hub, f"ki_{p['key']}_{suffiks}", f"KI {p['navn']} {navn}", std, ikon))
+    async_add_entities(ent)
