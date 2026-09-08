@@ -35,6 +35,28 @@ def _tekst():
     return selector.TextSelector(selector.TextSelectorConfig())
 
 
+def _notify(hass=None):
+    """Flervalg av notify-tjenester (mobile_app_* først). Egne verdier tillatt."""
+    navn: list[str] = []
+    if hass is not None:
+        navn = sorted(hass.services.async_services().get("notify", {}).keys())
+    navn = [n for n in navn if n not in ("notify", "send_message", "persistent_notification")]
+    navn.sort(key=lambda n: (not n.startswith("mobile_app_"), n))
+    return selector.SelectSelector(selector.SelectSelectorConfig(
+        options=[selector.SelectOptionDict(value=n, label=n.replace("mobile_app_", "📱 ").replace("_", " ")) for n in navn],
+        multiple=True, custom_value=True, mode=selector.SelectSelectorMode.DROPDOWN))
+
+
+def skjema_hus(hass=None) -> dict:
+    return {
+        vol.Required(CONF_AREAL, default=120): _num(20, 1000, 1, "m²"),
+        vol.Required(CONF_BYGGEAR, default=1980): _num(1800, 2100, 1),
+        vol.Required(CONF_GLASS_M2, default=20): _num(0, 200, 1, "m²"),
+        vol.Required(CONF_STUE_AREAL, default=40): _num(5, 300, 1, "m²"),
+        vol.Optional(CONF_VARSEL_MOTTAKERE, default=[]): _notify(hass),
+    }
+
+
 ALLE_DOMENER = ["sensor", "binary_sensor", "switch", "input_boolean", "person", "device_tracker", "group"]
 
 SKJEMA_MALING = {
@@ -67,13 +89,7 @@ SKJEMA_NETTLEIE = {
     vol.Optional(CONF_NORGESPRIS_AKTIV): _ent("binary_sensor"),
     vol.Optional(CONF_NORDPOOL): _ent("sensor"),
 }
-SKJEMA_HUS = {
-    vol.Required(CONF_AREAL, default=120): _num(20, 1000, 1, "m²"),
-    vol.Required(CONF_BYGGEAR, default=1980): _num(1800, 2100, 1),
-    vol.Required(CONF_GLASS_M2, default=20): _num(0, 200, 1, "m²"),
-    vol.Required(CONF_STUE_AREAL, default=40): _num(5, 300, 1, "m²"),
-    vol.Optional(CONF_VARSEL_MOTTAKERE, default=""): _tekst(),
-}
+SKJEMA_HUS = skjema_hus()
 
 
 def _rens(data: dict, skjema: dict | None = None) -> dict:
@@ -84,6 +100,8 @@ def _rens(data: dict, skjema: dict | None = None) -> dict:
             ut[str(k)] = ""
     for k, v in data.items():
         ut[k] = v if v is not None else ""
+    if "varsel_mottakere" in ut and not isinstance(ut["varsel_mottakere"], list):
+        ut["varsel_mottakere"] = [x.strip() for x in str(ut["varsel_mottakere"]).split(",") if x.strip()]
     return ut
 
 
@@ -124,12 +142,15 @@ class KiEnergiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             vol.Schema(SKJEMA_NETTLEIE), {k: DEFAULT_CONFIG[k] for k in (CONF_TOPP1, CONF_TOPP2, CONF_TOPP3, CONF_ENERGILEDD_DAG, CONF_ENERGILEDD_NATT, CONF_STROMPRIS, CONF_KAPASITETSTRINN, CONF_NORGESPRIS_AKTIV)}))
 
     async def async_step_hus(self, user_input=None):
+        skjema = skjema_hus(self.hass)
         if user_input is not None:
-            self._data.update(_rens(user_input, SKJEMA_HUS))
+            self._data.update(_rens(user_input, skjema))
             self._data[CONF_SONER] = {k: dict(v) for k, v in DEFAULT_SONER.items()}
             return self.async_create_entry(title="KI Energi", data=self._data)
+        tilgjengelig = set(self.hass.services.async_services().get("notify", {}).keys())
+        forslag = [m for m in DEFAULT_CONFIG[CONF_VARSEL_MOTTAKERE] if m in tilgjengelig]
         return self.async_show_form(step_id="hus", data_schema=self.add_suggested_values_to_schema(
-            vol.Schema(SKJEMA_HUS), {CONF_VARSEL_MOTTAKERE: DEFAULT_CONFIG[CONF_VARSEL_MOTTAKERE]}))
+            vol.Schema(skjema), {CONF_VARSEL_MOTTAKERE: forslag}))
 
     @staticmethod
     @callback
@@ -186,7 +207,7 @@ class KiEnergiOptionsFlow(config_entries.OptionsFlow):
         return await self._enkelt_skjema("nettleie", SKJEMA_NETTLEIE, user_input)
 
     async def async_step_hus(self, user_input=None):
-        return await self._enkelt_skjema("hus", SKJEMA_HUS, user_input)
+        return await self._enkelt_skjema("hus", skjema_hus(self.hass), user_input)
 
     # -- soner -----------------------------------------------------------
     async def async_step_soner(self, user_input=None):

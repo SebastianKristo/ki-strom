@@ -72,7 +72,7 @@ nytt og legg til integrasjonen som over.
 
 HACS-kategorien *Integration* installerer bare selve integrasjonen. Kopier
 `www/ki-klima-pro-card.js` til `/config/www/` og legg til ressursen
-`/local/ki-klima-pro-card.js?v=2.0.0` under Innstillinger → Dashboard → ⋮ → Ressurser
+`/local/ki-klima-pro-card.js?v=2.1.0` under Innstillinger → Dashboard → ⋮ → Ressurser
 (type *JavaScript-modul*). Tøm nettleser-cache.
 
 ---
@@ -87,7 +87,7 @@ Veiviseren har fem steg. Alle felt har entitetsvelgere; verdiene under er eksemp
 | **2 Utstyr** | VVB-bryter og effektsensor, håndklevarmer, gardiner, hvitevarer (valgfritt) | `switch.varmtvannsbereder`, `sensor.varmtvannsbereder_power`, `cover.stue_gardin` |
 | **3 Personer** | Én hjemme/borte-entitet per person | `switch.sebastian_posisjon_hjemme_borte`, `person.cybele` |
 | **4 Nettleie og pris** | Elvia topp 1–3, energiledd dag/natt, spotpris eller Norgespris, Nord Pool (for VVB-planlegging) | `sensor.nettleie_elvia_toppforbruk`, `sensor.norgespris_total_strompris_norgespris` |
-| **5 Hus** | Areal, byggeår, glass-m² i stua, stueareal, varselmottakere | 120 m², 1980, 20 m², 40 m², `mobile_app_iphone, mobile_app_oneplus` |
+| **5 Hus og varsler** | Areal, byggeår, glass-m² i stua, stueareal, og hvilke telefoner som skal varsles (velges fra en liste over `notify.mobile_app_*`) | 120 m², 1980, 20 m², 40 m² |
 
 Etterpå: **Konfigurer** på integrasjonen gir samme meny + **Soner**.
 
@@ -105,7 +105,9 @@ Les `sensor.ki_beslutningslogg` noen dager. Ser resonnementet fornuftig ut, slå
 
 ## Kortet «KI Klima Pro»
 
-Ett kort med faner: **Oversikt · Soner · Energi · Varmtvann · Motor · Logg**. Alle innstillinger
+Ett kort med faner: **Oversikt · Soner · Energi · Vann og bad · Tanker · Oppsett · Avansert**.
+«Vann og bad» har underfaner for **Bereder** (status, legionella med sist sikret / neste frist, prisstyring)
+og **Håndklevarmer** (dusjvinduer, sikkerhetsavstenging). Gardinstyringen ligger under *Oppsett*. Alle innstillinger
 kan endres rett i kortet (stepper-rader, brytere, klokkeslett), og hver blokk har en «?»-hjelp.
 
 ```yaml
@@ -203,6 +205,13 @@ mellom `number.ki_sommer_start_maned` og `..slutt_maned` når døgnmiddel ute er
 - **Fail-safe**: mangler effektsensoren, eller svarer den ikke, følges bare vinduet og
   termostaten styrer. `binary_sensor.ki_vvb_ingen_respons` er da på, og du får varsel.
 - `ki_energi.vvb_boost` gir varmtvann utenom vinduet (gjester, badekar).
+- `sensor.ki_bereder` samler alt kortet trenger: `varmer`, `bryter_pa`, `effekt_w`, `sikret`,
+  `siste_syklus`, `neste_frist`, `vindu`.
+
+**Gardiner** (`sensor.ki_gardiner`): i sesongen (`number.ki_gardin_start_maned`–`..slutt_maned`)
+holdes de lukket utenfor `time.ki_gardin_apne_tidligst`–`time.ki_gardin_lukk_senest`, og — hvis
+`switch.ki_gardin_folg_sol` er på — også når sola er nede. Under `number.ki_gardin_ute_grense`
+holdes de lukket hele dagen. Slås av/på med `switch.ki_styr_gardiner`.
 
 ---
 

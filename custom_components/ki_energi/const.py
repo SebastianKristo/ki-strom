@@ -156,7 +156,7 @@ DEFAULT_CONFIG = {
     CONF_NORGESPRIS_AKTIV: "binary_sensor.norgespris_norgespris_aktiv_na",
     CONF_NORDPOOL: "",
     CONF_HVITEVARER: [],
-    CONF_VARSEL_MOTTAKERE: "notify.mobile_app_sebastian_iphone_17_pro, notify.mobile_app_sebastian_oneplus_15",
+    CONF_VARSEL_MOTTAKERE: ["mobile_app_sebastian_iphone_17_pro", "mobile_app_sebastian_oneplus_15"],
     CONF_AREAL: 120,
     CONF_BYGGEAR: 1980,
     CONF_GLASS_M2: 20,
@@ -181,6 +181,7 @@ SWITCHES = [
     ("ki_sommer_auto", "KI Sommermodus Automatisk", False, "mdi:calendar-sync"),
     ("ki_sebastian_ferie", "KI Sebastian Ferie", False, "mdi:school-outline"),
     ("ki_styr_gardiner", "KI Styr Gardiner", False, "mdi:curtains"),
+    ("ki_gardin_folg_sol", "KI Gardiner Følg Sola", True, "mdi:weather-sunset"),
     ("ki_styr_hanklevarmer", "KI Styr Håndklevarmer", True, "mdi:radiator"),
     ("ki_vvb_prisstyring", "KI VVB Prisstyring", True, "mdi:cash-clock"),
     ("ki_vvb_alltid_pa", "KI VVB Alltid På", False, "mdi:power"),
@@ -277,6 +278,8 @@ TIMES = [
     ("ki_frokost_slutt", "KI Frokostvindu Slutt", "08:30", "mdi:toaster"),
     ("ki_middag_start", "KI Middagsvindu Start", "15:30", "mdi:stove"),
     ("ki_middag_slutt", "KI Middagsvindu Slutt", "19:00", "mdi:stove"),
+    ("ki_gardin_apne_tidligst", "KI Gardiner Åpne Tidligst", "07:00", "mdi:curtains"),
+    ("ki_gardin_lukk_senest", "KI Gardiner Lukk Senest", "22:00", "mdi:curtains-closed"),
     ("ki_hanklevarmer_morgen_start", "KI Håndklevarmer Morgen Start", "05:30", "mdi:radiator"),
     ("ki_hanklevarmer_morgen_slutt", "KI Håndklevarmer Morgen Slutt", "08:30", "mdi:radiator"),
     ("ki_hanklevarmer_kveld_start", "KI Håndklevarmer Kveld Start", "19:00", "mdi:radiator"),
@@ -295,7 +298,6 @@ DATETIMES = [
 ]
 
 TEXTS = [
-    ("ki_varsel_mottakere", "KI Varselmottakere", "mdi:cellphone-message"),
 ]
 
 # Sensorer motoren skriver. (nøkkel, navn, ikon, enhet, device_class, state_class)
@@ -303,6 +305,8 @@ SENSORS = [
     ("ki_energi_status", "KI Energistatus", "mdi:brain", None, None, None),
     ("ki_laster", "KI Laster", "mdi:format-list-bulleted", None, None, None),
     ("ki_bereder", "KI Varmtvann", "mdi:water-boiler", None, None, None),
+    ("ki_hanklevarmer", "KI Håndklevarmer", "mdi:radiator", None, None, None),
+    ("ki_gardiner", "KI Gardiner", "mdi:curtains", None, None, None),
     ("ki_beslutningslogg", "KI Beslutningslogg", "mdi:script-text", None, None, None),
     ("ki_tidskonstanter", "KI Tidskonstanter", "mdi:school", None, None, None),
     ("ki_klima_status", "KI Klima Status", "mdi:home-thermometer-outline", None, None, None),

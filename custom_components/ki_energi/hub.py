@@ -237,10 +237,12 @@ class KiHub:
             _LOGGER.warning("ki_energi: %s.%s feilet: %s", domene, tjeneste, e)
 
     def mottakere(self) -> list[str]:
-        raa = self.tekst("ki_varsel_mottakere", "") or self.cfg("varsel_mottakere", "") or ""
+        raa = self.cfg("varsel_mottakere", []) or []
+        if isinstance(raa, str):
+            raa = raa.split(",")
         ut = []
-        for del_ in str(raa).split(","):
-            d = del_.strip()
+        for del_ in raa:
+            d = str(del_).strip()
             if not d:
                 continue
             if d.startswith("notify."):

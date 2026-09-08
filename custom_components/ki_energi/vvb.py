@@ -413,9 +413,26 @@ class KiVvb:
             "legionella_aktiv": h.on("ki_vvb_legionella_aktiv", True)})
         h.sett_sensor("ki_vvb_forklaring", self.forklaring())
         kw, grunn, _ma = self.reservasjon()
+        siste = self._dt("ki_vvb_siste_godkjente_syklus")
+        maks_d = h.num("ki_vvb_maks_dager", 7)
+        intervall = h.num("ki_vvb_intervall_dager", 3)
+        bryter = h.st(self.bryter())
+        eff = self.effekt()
+        terskel = h.num("ki_vvb_metning_terskel_w", 150)
         h.sett_sensor("ki_bereder", self.status_tekst(), {
             "reservert_kw": round(kw, 2), "forklaring": grunn,
-            "dager_siden_syklus": self.dager_siden(), "tvungen_syklus": h.on("ki_vvb_tvungen_syklus_aktiv")})
+            "dager_siden_syklus": self.dager_siden(), "tvungen_syklus": h.on("ki_vvb_tvungen_syklus_aktiv"),
+            "bryter": self.bryter(), "bryter_pa": bryter == "on",
+            "effekt_sensor": h.cfg("vvb_effekt") or "", "effekt_w": eff,
+            "varmer": bryter == "on" and eff is not None and eff > terskel,
+            "legionella_aktiv": h.on("ki_vvb_legionella_aktiv", True),
+            "sikret": self.legionella_ok(), "forfalt": self.forfalt(),
+            "siste_syklus": siste.isoformat() if siste else None,
+            "neste_frist": (siste + timedelta(days=maks_d)).isoformat() if siste else None,
+            "onsket_innen": (siste + timedelta(days=intervall)).isoformat() if siste else None,
+            "intervall_dager": intervall, "hard_frist_dager": maks_d,
+            "vindu": f"{h.tid_str('ki_vvb_vindu_start', '22:00')}–{h.tid_str('ki_vvb_klar_innen', '05:00')}",
+            "boost_til": (self._dt("ki_vvb_boost_til").isoformat() if self.boost_aktiv() else None)})
 
     # ------------------------------------------------------------------
     #  Tjenester

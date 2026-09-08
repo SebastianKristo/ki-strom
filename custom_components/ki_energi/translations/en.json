@@ -55,7 +55,7 @@
           "byggear": "Byggeår",
           "glass_m2": "Glassflate i stua (m²)",
           "stue_areal_m2": "Stuens areal (m²)",
-          "varsel_mottakere": "Varselmottakere (kommaseparert, f.eks. notify.mobile_app_xxx)"
+          "varsel_mottakere": "Notification recipients (pick one or more devices)"
         }
       }
     },
@@ -130,7 +130,7 @@
           "byggear": "Byggeår",
           "glass_m2": "Glassflate i stua (m²)",
           "stue_areal_m2": "Stuens areal (m²)",
-          "varsel_mottakere": "Varselmottakere (kommaseparert, f.eks. notify.mobile_app_xxx)"
+          "varsel_mottakere": "Notification recipients (pick one or more devices)"
         }
       },
       "soner": {

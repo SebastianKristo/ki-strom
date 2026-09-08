@@ -15,7 +15,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     AKSJON_HELG_JA, AKSJON_HELG_NEI, AKSJON_HJEM_FORLENG, AKSJON_HJEM_JA, AKSJON_HJEM_NAA,
-    AKSJON_HJEM_NEI, AKSJON_HJEM_SENERE, CONF_GARDINER, CONF_HANKLEVARMER, CONF_TILSTEDE_CYBELE,
+    AKSJON_HJEM_NEI, AKSJON_HJEM_SENERE, CONF_GARDINER, CONF_HANKLEVARMER, CONF_HANKLEVARMER_EFFEKT, CONF_TILSTEDE_CYBELE,
     CONF_TILSTEDE_RUNE, CONF_TILSTEDE_SEBASTIAN, CONF_UTE_TEMP, CONF_VAER,
 )
 from .hub import KiHub
@@ -91,6 +91,7 @@ class KiModuser:
         if forste_i_minuttet:
             await self._tidshendelser(naa, minutt)
             await self.hanklevarmer(naa)
+            self._publiser_hanklevarmer(naa)
             await self.gardiner_tick(naa)
             await self.sommer_auto(naa, ny_dag)
 
@@ -257,6 +258,38 @@ class KiModuser:
     # ------------------------------------------------------------------
     #  Håndklevarmer
     # ------------------------------------------------------------------
+    def _publiser_hanklevarmer(self, naa: datetime) -> None:
+        h = self.hub
+        ent = h.cfg(CONF_HANKLEVARMER)
+        eff = h.cfg(CONF_HANKLEVARMER_EFFEKT)
+        if not ent or not h.finnes(ent):
+            h.sett_sensor("ki_hanklevarmer", "ikke_konfigurert", {"forklaring": "Ingen håndklevarmer er valgt i integrasjonen."})
+            return
+        pa = h.st(ent) == "on"
+        minutt = naa.hour * 60 + naa.minute
+        m1 = (h.tid_min("ki_hanklevarmer_morgen_start", "05:30"), h.tid_min("ki_hanklevarmer_morgen_slutt", "08:30"))
+        k1 = (h.tid_min("ki_hanklevarmer_kveld_start", "19:00"), h.tid_min("ki_hanklevarmer_kveld_slutt", "22:00"))
+        i_vindu = h.mellom(m1[0], m1[1], minutt) or h.mellom(k1[0], k1[1], minutt)
+        styr = h.on("ki_styr_hanklevarmer", True)
+        minutter_pa = int((naa - self.hank_pa_siden).total_seconds() / 60) if (pa and self.hank_pa_siden) else 0
+        maks = h.num("ki_hanklevarmer_maks_pa_tid", 240)
+        if not styr:
+            grunn = "KI-styring er av — står på konstant."
+        elif pa and i_vindu:
+            grunn = "Varmer i dusjvinduet."
+        elif pa:
+            grunn = f"Slått på manuelt — slås av automatisk etter {int(maks)} min."
+        elif self.m.get("hank_utsatt"):
+            grunn = "Vinduet er åpent, men effektvakten holder igjen starten."
+        else:
+            nm = m1[0] if minutt < m1[0] else (k1[0] if minutt < k1[0] else m1[0])
+            grunn = f"Av. Neste vindu kl. {nm // 60:02d}:{nm % 60:02d}."
+        h.sett_sensor("ki_hanklevarmer", "pa" if pa else "av", {
+            "forklaring": grunn, "styr": styr, "i_vindu": i_vindu, "minutter_pa": minutter_pa, "maks_min": maks,
+            "bryter": ent, "effekt_sensor": eff or "", "effekt_w": h.f(eff) if eff else None,
+            "morgen": f"{h.tid_str('ki_hanklevarmer_morgen_start', '05:30')}–{h.tid_str('ki_hanklevarmer_morgen_slutt', '08:30')}",
+            "kveld": f"{h.tid_str('ki_hanklevarmer_kveld_start', '19:00')}–{h.tid_str('ki_hanklevarmer_kveld_slutt', '22:00')}"})
+
     async def hanklevarmer(self, naa: datetime) -> None:
         h = self.hub
         ent = h.cfg(CONF_HANKLEVARMER)
@@ -304,35 +337,61 @@ class KiModuser:
     async def gardiner_tick(self, naa: datetime) -> None:
         h = self.hub
         cover = h.cfg(CONF_GARDINER)
-        if not cover or not h.on("ki_styr_gardiner") or not h.finnes(cover):
+        if not cover or not h.finnes(cover):
+            h.sett_sensor("ki_gardiner", "ikke_konfigurert", {"forklaring": "Ingen gardin/cover er valgt i integrasjonen.",
+                                                               "styr": False, "i_sesong": False, "cover": cover or ""})
             return
         i_sesong = h.i_manedsvindu(int(h.num("ki_gardin_start_maned", 10)), int(h.num("ki_gardin_slutt_maned", 4)))
         sol_oppe = h.st("sun.sun") == "above_horizon"
+        folg_sol = h.on("ki_gardin_folg_sol", True)
+        minutt = naa.hour * 60 + naa.minute
+        apne_tidligst = h.tid_min("ki_gardin_apne_tidligst", "07:00")
+        lukk_senest = h.tid_min("ki_gardin_lukk_senest", "22:00")
         ute = h.f(h.cfg(CONF_UTE_TEMP))
         onsket: str | None = None
+        grunn = ""
+        # «Dag» = mellom åpne-tidligst og lukk-senest, og (hvis følg sola) sola er oppe.
+        dag = h.mellom(apne_tidligst, lukk_senest, minutt) and (sol_oppe or not folg_sol)
         if i_sesong:
-            # Lukket når sola er nede (varmetap gjennom 8 m glass), åpent på dagen for solvarme.
-            # Er det bitende kaldt, holdes de lukket også på dagen.
-            if not sol_oppe:
+            if not dag:
                 onsket = "lukket"
+                grunn = ("Kveld/natt — lukket for å holde på varmen." if minutt >= lukk_senest or minutt < apne_tidligst
+                         else "Sola er nede — lukket for å holde på varmen.")
             elif ute is not None and ute < h.num("ki_gardin_ute_grense", -10):
                 onsket = "lukket"
+                grunn = f"Bitende kaldt ute ({ute:.0f} °C) — holdes lukket også på dagen."
             else:
                 onsket = "apen"
+                grunn = "Dag — åpent for dagslys og solvarme."
         elif h.on("ki_sommermodus"):
-            # Sommer: skjerm mot sol midt på dagen når det er varmt ute
             try:
                 hoyde = float(h.attr("sun.sun", "elevation", 0))
             except (TypeError, ValueError):
                 hoyde = 0.0
-            vaer_temp = h.f(h.cfg(CONF_UTE_TEMP)) or h.attr(h.cfg(CONF_VAER), "temperature", None)
+            vaer_temp = ute if ute is not None else h.attr(h.cfg(CONF_VAER), "temperature", None)
             if hoyde > 30 and vaer_temp is not None and float(vaer_temp) >= 22:
                 onsket = "lukket"
+                grunn = "Sommer: skjermer mot sol midt på dagen."
             elif not sol_oppe or hoyde < 15:
                 onsket = "apen"
-        if onsket and onsket != self.gardin_sist:
+                grunn = "Sommer: lav sol — åpent."
+        else:
+            grunn = "Utenfor gardinsesongen — ingen styring."
+        styr = h.on("ki_styr_gardiner")
+        if styr and onsket and onsket != self.gardin_sist:
             self.gardin_sist = onsket
             await h.kall("cover", "close_cover" if onsket == "lukket" else "open_cover", {"entity_id": cover})
             if h.engine is not None:
-                h.engine.logg_hendelse(f"Gardiner {'lukkes' if onsket == 'lukket' else 'åpnes'} "
-                                       f"({'sola er nede' if not sol_oppe else 'dag'}, ute {ute if ute is not None else '?'} °C).")
+                h.engine.logg_hendelse(f"Gardiner {'lukkes' if onsket == 'lukket' else 'åpnes'}: {grunn}")
+        faktisk = h.st(cover)
+        neste = ""
+        if i_sesong:
+            neste = (f"Lukkes senest kl. {h.tid_str('ki_gardin_lukk_senest', '22:00')}" if dag
+                     else f"Åpnes tidligst kl. {h.tid_str('ki_gardin_apne_tidligst', '07:00')}")
+            if folg_sol:
+                neste += " (følger sola)"
+        h.sett_sensor("ki_gardiner", (onsket or "ingen") if styr else "av", {
+            "forklaring": grunn if styr else "KI-styring av gardiner er av.",
+            "onsket": onsket, "faktisk": faktisk, "i_sesong": i_sesong, "styr": styr, "folg_sol": folg_sol,
+            "sol_oppe": sol_oppe, "neste": neste, "cover": cover,
+            "sesong": f"{int(h.num('ki_gardin_start_maned', 10))}–{int(h.num('ki_gardin_slutt_maned', 4))}"})

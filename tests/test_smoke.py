@@ -129,7 +129,7 @@ async def test_options_flow(hass):
     # hus form submit
     r = await hass.config_entries.options.async_init(entry.entry_id)
     r = await hass.config_entries.options.async_configure(r["flow_id"], {"next_step_id": "hus"})
-    r = await hass.config_entries.options.async_configure(r["flow_id"], {"areal_m2": 130, "byggear": 1980, "glass_m2": 25, "stue_areal_m2": 40, "varsel_mottakere": ""})
+    r = await hass.config_entries.options.async_configure(r["flow_id"], {"areal_m2": 130, "byggear": 1980, "glass_m2": 25, "stue_areal_m2": 40, "varsel_mottakere": []})
     assert r["type"] == "create_entry", r
 
 async def test_config_flow(hass):
