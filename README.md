@@ -16,6 +16,29 @@ i klartekst, i beslutningsloggen.
 > Kort fortalt: én integrasjon, null YAML, null pyscript. Alt settes opp i Innstillinger →
 > Enheter og tjenester, med entitetsvelgere og husets data.
 
+### Laget for Norge
+
+KI Energi er skrevet for det norske nettleiesystemet: kapasitetsledd etter snittet av de tre
+høyeste timene i måneden, energiledd dag/natt, og Norgespris. Tekster, varsler og logg er på
+norsk.
+
+Den er **ikke avhengig** av andre integrasjoner, men vi **anbefaler
+[Strømkalkulator](https://github.com/fredrik-lindseth/Stromkalkulator)** ved siden av. Den
+regner ut den faktiske strømprisen din (spotpris + nettleie + avgifter, eller Norgespris),
+kjenner satsene til 74 nettselskap, og verifiseres mot ekte fakturaer. Sensorene derfra passer
+rett inn i KI Energi:
+
+| Strømkalkulator-sensor | Brukes i KI Energi som |
+|---|---|
+| Energiledd dag / natt | *Nettleie → Energiledd dag/natt* |
+| Kapasitetstrinn | *Måling → Kapasitetstrinn* |
+| Norgespris aktiv / prisforskjell | *Måling → Norgespris aktiv* |
+| Totalpris inkl. avgifter | *Nettleie → Strømpris* (til besparelsesestimatet) |
+
+Timeprisene til prisstyringen av berederen hentes fortsatt fra den offisielle
+[Nord Pool-integrasjonen](https://www.home-assistant.io/integrations/nordpool/) (`raw_today` /
+`raw_tomorrow`).
+
 ---
 
 ## Innhold
@@ -72,7 +95,7 @@ nytt og legg til integrasjonen som over.
 
 HACS-kategorien *Integration* installerer bare selve integrasjonen. Kopier
 `www/ki-klima-pro-card.js` til `/config/www/` og legg til ressursen
-`/local/ki-klima-pro-card.js?v=2.1.0` under Innstillinger → Dashboard → ⋮ → Ressurser
+`/local/ki-klima-pro-card.js?v=2.2.0` under Innstillinger → Dashboard → ⋮ → Ressurser
 (type *JavaScript-modul*). Tøm nettleser-cache.
 
 ---
@@ -106,8 +129,17 @@ Les `sensor.ki_beslutningslogg` noen dager. Ser resonnementet fornuftig ut, slå
 ## Kortet «KI Klima Pro»
 
 Ett kort med faner: **Oversikt · Soner · Energi · Vann og bad · Tanker · Oppsett · Avansert**.
-«Vann og bad» har underfaner for **Bereder** (status, legionella med sist sikret / neste frist, prisstyring)
-og **Håndklevarmer** (dusjvinduer, sikkerhetsavstenging). Gardinstyringen ligger under *Oppsett*. Alle innstillinger
+«Vann og bad» har underfaner for **Bereder** (status, legionella med sist sikret / neste frist,
+prisstyring med døgnstripe som viser hvilke timer berederen kjører) og **Håndklevarmer**
+(dusjvinduer, sikkerhetsavstenging). Gardinstyringen ligger under *Oppsett*.
+
+Statuskortet øverst kan utvides (pilen nederst): da vises **«Slik tenker motoren nå»** — budsjett,
+prognose, hva som senkes og hvorfor — og et sammendrag av hele systemet akkurat nå
+(`sensor.ki_energi_status` → attributtet `tankegang`).
+
+Under *Oppsett → Varslinger* velger du hvilke varsler som sendes: effektgrense, helg, hjemkomst,
+sommermodus, varmtvann og håndklevarmer (`switch.ki_varsel_*`). Kritiske feil på berederen
+sendes alltid. Alle innstillinger
 kan endres rett i kortet (stepper-rader, brytere, klokkeslett), og hver blokk har en «?»-hjelp.
 
 ```yaml

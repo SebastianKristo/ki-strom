@@ -661,8 +661,33 @@ class KiEngine:
         if skygge:
             hoved = "SKYGGEMODUS — " + hoved
 
+        # Tankegang — motorens resonnement i klartekst, til «utvid»-visningen i kortet
+        tanker = [
+            f"Modus {self.modus_tekst()}. Timegrensen er {budsjett['grense']:.2f} kWh ({budsjett['grense_grunn']}).",
+            f"Denne timen: {budsjett['forbrukt']:.2f} kWh brukt, {budsjett['igjen']:.2f} kWh igjen på "
+            f"{int(budsjett['minutter_igjen'])} min. Tillatt snitteffekt: {budsjett['tillatt_snitt']:.2f} kW.",
+            f"Forventer {forventet:.2f} kW nå ({prognose:.2f} kW uregulert + {styrt_kw:.2f} kW styrt), "
+            f"{prog[15]:.1f} kW om 15 min og {prog[60]:.1f} kW om en time.",
+        ]
+        if vvb_kw > 0 or vvb_ma:
+            tanker.append(f"Varmtvann: {vvb_grunn} — reserverer {vvb_kw:.2f} kW" + (" og går foran varmen." if vvb_ma else "."))
+        if senket:
+            tanker.append("Senker nå: " + ", ".join(
+                f"{p['navn']} til {p.get('settpunkt')} °C" for p in senket) + ".")
+        else:
+            tanker.append("Ingen soner senkes — alle holder målet sitt.")
+        ov = [p for p in plan if self.overstyring(p["key"])]
+        if ov:
+            tanker.append("Manuelle overstyringer: " + ", ".join(f"{p['navn']} {p.get('mal')} °C" for p in ov) + ".")
+        if ekstra_grunner:
+            tanker.append("Tar høyde for " + " og ".join(ekstra_grunner) + ".")
+        if budsjett.get("usikker"):
+            tanker.append("Grunnlaget er usikkert (lite lærte data) — holder ekstra margin.")
+        if skygge:
+            tanker.append("Skyggemodus: alt dette regnes og logges, men ingen termostater røres.")
+
         h.sett_sensor("ki_energi_status", farge, {
-            "forklaring": hoved, "skyggemodus": skygge, "modus": self.modus_tekst(),
+            "forklaring": hoved, "tankegang": tanker, "skyggemodus": skygge, "modus": self.modus_tekst(),
             "grense_kwh": budsjett["grense"], "grense_grunn": budsjett["grense_grunn"],
             "forbrukt_kwh": budsjett["forbrukt"], "igjen_kwh": budsjett["igjen"],
             "minutter_igjen": budsjett["minutter_igjen"],
@@ -901,7 +926,7 @@ class KiEngine:
         grense, _g = self.dynamisk_grense()
         if forbrukt > grense:
             await h.varsle("Effektgrense passert",
-                           f"Timen endte på {forbrukt:.2f} kWh, over grensen på {grense:.2f} kWh.")
+                           f"Timen endte på {forbrukt:.2f} kWh, over grensen på {grense:.2f} kWh.", kategori="effekt")
             self.logg_hendelse(f"Timen endte på {forbrukt:.2f} kWh — over grensen på {grense:.2f} kWh.")
         elif forbrukt > grense * 0.9:
             h.tell("ki_stat_unngatte_topper", 1)

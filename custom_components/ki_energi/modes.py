@@ -83,7 +83,7 @@ class KiModuser:
                 h.sett("ki_helgemodus", True)
                 await h.varsle("Helgemodus aktivert",
                                f"Alle har vært borte i {int(timer)} timer — huset er satt i sparemodus. "
-                               "Slå av helgemodus i klimakortet hvis dette var feil.")
+                               "Slå av helgemodus i klimakortet hvis dette var feil.", kategori="helg")
                 if h.engine is not None:
                     h.engine.logg_hendelse(f"Helgemodus aktivert automatisk etter {int(timer)} t fravær.")
                 h.lagre()
@@ -110,7 +110,7 @@ class KiModuser:
             await h.varsle("Helgemodus?", "Skal huset settes i helgemodus (sparetemperatur) i helgen?",
                            aksjoner=[{"action": AKSJON_HELG_JA, "title": "Ja, aktiver"},
                                      {"action": AKSJON_HELG_NEI, "title": "Nei, vi er hjemme"}],
-                           tag="ki_helg")
+                           tag="ki_helg", kategori="helg")
         # Søndag: spørsmål om hjemkomst
         if ukedag == 6 and h.on("ki_helgemodus") and not h.on("ki_hjemkomst_aktiv"):
             spor = h.tid_min("ki_helg_sporsmal_tid", "08:00")
@@ -124,7 +124,7 @@ class KiModuser:
                 h.sett("ki_helg_venter_svar", False)
                 await self.start_hjemkomst(None, "Ingen svar innen fristen — huset forberedes på hjemkomst")
                 await h.varsle("Hjemkomst forberedes",
-                               f"Ingen svar innen fristen. Huset varmes opp til kl. {h.tid_str('ki_hjemkomst_tid', '13:00')}.")
+                               f"Ingen svar innen fristen. Huset varmes opp til kl. {h.tid_str('ki_hjemkomst_tid', '13:00')}.", kategori="hjemkomst")
 
     # ------------------------------------------------------------------
     #  Helg og hjemkomst
@@ -140,7 +140,7 @@ class KiModuser:
                       {"action": AKSJON_HJEM_SENERE, "title": "Spør igjen om 2 t"},
                       {"action": AKSJON_HJEM_FORLENG, "title": "Forleng helgen"},
                       {"action": AKSJON_HJEM_NAA, "title": "Vi kommer hjem nå"}],
-            tag="ki_hjemkomst", alltid=True)
+            tag="ki_hjemkomst", kategori="helg")
 
     async def start_hjemkomst(self, planlagt: datetime | None, grunn: str) -> None:
         """Prediktiv oppvarmingssekvens. Motoren forvarmer sonevis ut fra målt oppvarmingsrate."""
@@ -193,17 +193,17 @@ class KiModuser:
             h.sett("ki_helg_venter_svar", False)
             self.m["sporsmal_utsatt_til"] = (naa + timedelta(hours=2)).replace(second=0, microsecond=0).isoformat()
             h.lagre()
-            await h.varsle("Greit", "Spør igjen om to timer.")
+            await h.varsle("Greit", "Spør igjen om to timer.", kategori="hjemkomst")
         elif aksjon == AKSJON_HJEM_FORLENG:
             h.sett("ki_helg_venter_svar", False)
             self.m["forlenget_dag"] = naa.strftime("%Y-%m-%d")
             h.lagre()
-            await h.varsle("Helgen er forlenget", "Huset holder sparetemperatur til noen kommer hjem, eller til du starter hjemkomst i kortet.")
+            await h.varsle("Helgen er forlenget", "Huset holder sparetemperatur til noen kommer hjem, eller til du starter hjemkomst i kortet.", kategori="helg")
         elif aksjon == AKSJON_HJEM_NEI:
             h.sett("ki_helg_venter_svar", False)
             self.m["forlenget_dag"] = naa.strftime("%Y-%m-%d")
             h.lagre()
-            await h.varsle("Helgemodus fortsetter", "Greit — huset holder sparetemperatur til noen kommer hjem.")
+            await h.varsle("Helgemodus fortsetter", "Greit — huset holder sparetemperatur til noen kommer hjem.", kategori="helg")
         if h.engine is not None:
             await h.engine.tick()
 
@@ -253,7 +253,7 @@ class KiModuser:
                 h.engine.logg_hendelse("Sommermodus " + ("aktivert" if onsket else "deaktivert")
                                        + f" automatisk (måned {naa.month}, ute {ute if ute is not None else '?'} °C).")
             await h.varsle("Sommermodus " + ("på" if onsket else "av"),
-                           "Satt automatisk ut fra dato og utetemperatur.")
+                           "Satt automatisk ut fra dato og utetemperatur.", kategori="sommer")
 
     # ------------------------------------------------------------------
     #  Håndklevarmer
@@ -313,7 +313,7 @@ class KiModuser:
         if pa and self.hank_pa_siden and (naa - self.hank_pa_siden).total_seconds() / 60 > maks:
             await h.kall("switch", "turn_off", {"entity_id": ent})
             await h.logbook("KI Håndklevarmer", f"Slått av automatisk — har stått på lenger enn {int(maks)} min.")
-            await h.varsle("Håndklevarmer slått av", f"Sto på lenger enn {int(maks)} min — slått av automatisk (sikkerhet).")
+            await h.varsle("Håndklevarmer slått av", f"Sto på lenger enn {int(maks)} min — slått av automatisk (sikkerhet).", kategori="hanklevarmer")
             return
         # Vinduskantene: slå på/av bare ved selve overgangen, så manuell bruk innimellom respekteres
         starter = minutt in (h.tid_min("ki_hanklevarmer_morgen_start", "05:30"), h.tid_min("ki_hanklevarmer_kveld_start", "19:00"))

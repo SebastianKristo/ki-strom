@@ -251,10 +251,14 @@ class KiHub:
         return ut
 
     async def varsle(self, tittel: str, melding: str, aksjoner: list[dict] | None = None,
-                     tag: str | None = None, alltid: bool = False) -> None:
-        """Send varsel til alle mottakere. `alltid` omgår ki_energi_varsler."""
-        if not alltid and not self.on("ki_energi_varsler", True):
-            return
+                     tag: str | None = None, alltid: bool = False, kategori: str | None = None) -> None:
+        """Send varsel til alle mottakere. `alltid` omgår både hovedbryteren og kategoribryteren
+        (brukes bare for kritiske feil). `kategori` peker på switch.ki_varsel_<kategori>."""
+        if not alltid:
+            if not self.on("ki_energi_varsler", True):
+                return
+            if kategori and not self.on(f"ki_varsel_{kategori}", True):
+                return
         data: dict[str, Any] = {}
         if aksjoner:
             data["actions"] = aksjoner

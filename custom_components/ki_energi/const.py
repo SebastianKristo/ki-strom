@@ -197,6 +197,12 @@ SWITCHES = [
     ("ki_nattsenk_aktiv", "KI Nattsenking Aktiv", True, "mdi:weather-night"),
     ("ki_nattsenk_okonomi", "KI Økonomisk Nattsenking", True, "mdi:cash-check"),
     ("ki_energi_varsler", "KI Energivarsler", True, "mdi:bell-outline"),
+    ("ki_varsel_effekt", "KI Varsel Effektgrense", True, "mdi:flash-alert"),
+    ("ki_varsel_helg", "KI Varsel Helg", True, "mdi:bag-suitcase"),
+    ("ki_varsel_hjemkomst", "KI Varsel Hjemkomst", True, "mdi:home-import-outline"),
+    ("ki_varsel_sommer", "KI Varsel Sommermodus", True, "mdi:white-balance-sunny"),
+    ("ki_varsel_vvb", "KI Varsel Varmtvann", True, "mdi:water-boiler"),
+    ("ki_varsel_hanklevarmer", "KI Varsel Håndklevarmer", True, "mdi:radiator"),
 ]
 
 # (nøkkel, navn, min, maks, steg, enhet, standard, ikon)

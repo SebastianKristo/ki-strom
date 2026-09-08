@@ -248,14 +248,14 @@ class KiVvb:
             h.sett("ki_vvb_kritisk_varslet", True)
             await h.varsle("Varmtvannsbereder svarer ikke",
                            f"Bryteren har stått på i {int(h.num('ki_vvb_maks_min_uten_effekt', 10))} minutter uten at "
-                           "effekten har steget. Sjekk sikring, kontaktor og element fysisk.", alltid=True)
+                           "effekten har steget. Sjekk sikring, kontaktor og element fysisk.", alltid=True, kategori="vvb")
 
         # Varer for lenge
         minutter = self.oppvarming_minutter()
         if minutter > h.num("ki_vvb_maks_oppvarming_min", 300) and not self.for_lenge_varslet:
             self.for_lenge_varslet = True
             await h.varsle("Berederen har varmet lenge",
-                           f"{minutter} minutter sammenhengende uten at termostaten har koblet ut. Verdt et blikk.")
+                           f"{minutter} minutter sammenhengende uten at termostaten har koblet ut. Verdt et blikk.", kategori="vvb")
 
         # Legionella: forfalt → tving. Prøver igjen hver 2. time til den er mettet.
         if self.forfalt() and not mettet:
@@ -267,7 +267,7 @@ class KiVvb:
                     await h.kall("switch", "turn_on", {"entity_id": self.bryter()})
                 await h.varsle("Legionellafrist passert",
                                f"Det er {self.dager_siden()} dager siden berederen sist nådde settpunktet. Tvinger oppvarming nå.",
-                               alltid=True)
+                               alltid=True, kategori="vvb")
                 if h.engine is not None:
                     h.engine.logg_hendelse("Legionellafrist passert — berederen tvinges på uansett pris og effekt.")
 
@@ -303,6 +303,28 @@ class KiVvb:
         if h.on("ki_vvb_prisstyring", True) and not h.on("ki_vvb_alltid_pa"):
             await h.kall("switch", "turn_off", {"entity_id": self.bryter()})
 
+    def _doegn(self, raa: list, naa: datetime) -> list[dict]:
+        """24 timer fra nå: pris (hvis kjent), om timen er valgt som billig, og om den er i vinduet."""
+        h = self.hub
+        pris: dict[tuple[int, int], float] = {}
+        for p in raa:
+            try:
+                s = p.get("start")
+                if isinstance(s, str):
+                    s = dt_util.parse_datetime(s)
+                s = dt_util.as_local(s)
+                pris.setdefault((s.day, s.hour), float(p.get("value", 0) or 0))
+            except Exception:  # noqa: BLE001
+                continue
+        folg = h.on("ki_vvb_folg_spotpris") and not h.pa(h.cfg(CONF_NORGESPRIS_AKTIV))
+        ut = []
+        for i in range(24):
+            t = naa + timedelta(hours=i)
+            ut.append({"t": t.hour, "pris": pris.get((t.day, t.hour)),
+                       "valgt": (t.hour in self.billige_timer) if folg else self.i_vindu(t.hour * 60),
+                       "vindu": self.i_vindu(t.hour * 60), "naa": i == 0})
+        return ut
+
     def _beregn_billige_timer(self) -> None:
         h = self.hub
         nordpool = h.cfg(CONF_NORDPOOL)
@@ -310,7 +332,8 @@ class KiVvb:
         if not nordpool:
             self.billige_timer = []
             metode = "Ikke i bruk. Berederen følger vinduet, ikke enkelttimer."
-            h.sett_sensor("ki_vvb_billige_timer", n, {"timer": [], "metode": metode, "antall_kandidater": 0})
+            h.sett_sensor("ki_vvb_billige_timer", n, {"timer": [], "metode": metode, "antall_kandidater": 0,
+                                                        "doegn": self._doegn([], dt_util.now().replace(minute=0, second=0, microsecond=0))})
             return
         naa = dt_util.now().replace(minute=0, second=0, microsecond=0)
         klar_min = h.tid_min("ki_vvb_klar_innen", "05:00")
@@ -344,7 +367,8 @@ class KiVvb:
         else:
             metode = "De billigste timene etter spotpris fram til fristen."
         h.sett_sensor("ki_vvb_billige_timer", n, {"timer": self.billige_timer, "metode": metode,
-                                                    "antall_kandidater": len(rt) + len(rm)})
+                                                    "antall_kandidater": len(rt) + len(rm),
+                                                    "doegn": self._doegn(list(rt) + list(rm), naa)})
 
     def status_tekst(self) -> str:
         h = self.hub
