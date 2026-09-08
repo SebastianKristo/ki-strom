@@ -55,7 +55,7 @@ offisielle [Nord Pool-integrasjonen](https://www.home-assistant.io/integrations/
 - [Entiteter](#entiteter)
 - [Nettleie etter døgnmaks](#nettleie-etter-døgnmaks)
 - [Tjenester](#tjenester)
-- [Oppgradering til 2.4.0](#oppgradering-til-240)
+- [Oppgradering til 2.5.0](#oppgradering-til-250)
 - [Migrering fra pakke + pyscript](#migrering-fra-pakke--pyscript)
 - [Feilsøking og FAQ](#feilsøking-og-faq)
 
@@ -98,7 +98,7 @@ nytt og legg til integrasjonen som over.
 
 HACS-kategorien *Integration* installerer bare selve integrasjonen. Kopier
 `www/ki-klima-pro-card.js` til `/config/www/` og legg til ressursen
-`/local/ki-klima-pro-card.js?v=2.4.0` under Innstillinger → Dashboard → ⋮ → Ressurser
+`/local/ki-klima-pro-card.js?v=2.5.0` under Innstillinger → Dashboard → ⋮ → Ressurser
 (type *JavaScript-modul*). Tøm nettleser-cache.
 
 ---
@@ -177,6 +177,13 @@ hash: "#klima"
 
 ## Soner og profiler
 
+**En sone er et rom, ikke en ovn.** Under *Konfigurer → Soner* velger du én eller flere termostater
+og én effektsensor per ovn for rommet; motoren skriver samme settpunkt til alle og summerer
+effekten. Ved oppgradering til 2.5.0 slås soner med samme rom, type og profil sammen automatisk
+(f.eks. «Stue panelovn» + «Stue oljefyr» → «Stue» med nøkkel `stue`); det logges, og
+`switch.ki_styr_<gammel nøkkel>` erstattes av `switch.ki_styr_stue`. Temperaturhjelperne
+(`number.ki_temp_stue_dag/natt`) beholdes.
+
 Integrasjonen starter med ti soner (bad, kjøkken gulv/panel, stue, gang, do, vaskegang,
 Cybele, Sebastian, Rune). Under **Konfigurer → Soner** kan hver sone endres, deaktiveres
 eller slettes, og nye legges til.
@@ -218,8 +225,10 @@ til hans vanlige vekketid (tjeneste `ki_energi.leggetid`). Prioritet mellom sone
 konfigurasjonen).
 
 Alle blokker på fanene utenom Oversikt kan legges sammen ved å trykke på overskriften — kortet
-husker hva som er åpent og lukket. Tider vises også som en døgnlinje, og sesonger (sommer, gardiner)
-som en månedsstripe.
+husker hva som er åpent og lukket. Alle tallfelt kan skrives i direkte (i tillegg til −/+). Tider
+vises som en døgnplan med én rad per person, og sesonger (sommer, gardiner) som en månedsstripe
+der du trykker startmåned og sluttmåned. Åpner du en sone, ser du effekt og temperatur nå og en
+graf for siste seks timer.
 
 ### Vinduer og dører
 
@@ -407,7 +416,7 @@ integrasjonen via `mobile_app_notification_action`; ingen egne automasjoner tren
 
 ## Nettleie etter døgnmaks
 
-Fra 2.4.0 følger motoren Elvias faktiske modell i stedet for en fast timegrense.
+Fra 2.5.0 følger motoren Elvias faktiske modell i stedet for en fast timegrense.
 
 ### Måling av hele klokketimer
 
@@ -465,7 +474,8 @@ ville gitt snitt 5,0 → 420 kr (+170 kr); det stopper motoren, med mindre du ha
 dyrere trinn». Neste dag er 5,5-dagen bare én av «de andre», og rommet krymper til
 3·4,7 − 5,5 − 4,8 = 3,8 kWh.
 
-Alt dette vises i `sensor.ki_nettleie` og i *Energi → Dynamisk grense*: dagens døgnmaks med time,
+Alt dette vises i `sensor.ki_nettleie` og i *Energi → Dynamisk grense* (topp tre og en
+søylegraf over månedens døgnmakser ligger i en nedtrekksdel): dagens døgnmaks med time,
 topp tre med datoer og kilde, registrert snitt og trinn, forventet sluttforbruk, forventet topp
 tre og trinn, økning i fastledd, reserve og datakvalitet — registrert og prognose adskilt.
 
@@ -492,7 +502,7 @@ Innlærte profiler, τ, overstyringer, logg og VVB-tilstand lagres i
 
 ---
 
-## Oppgradering til 2.4.0
+## Oppgradering til 2.5.0
 
 * `number.ki_maks_time_kwh` betyr nå **absolutt** timegrense (anlegg/komfort), ikke økonomi.
   Sto den på den gamle standardverdien 4,90, løftes den automatisk til 6,00 én gang ved første
@@ -502,6 +512,7 @@ Innlærte profiler, τ, overstyringer, logg og VVB-tilstand lagres i
   beholdes så dashboards ikke knekker.
 * Standardverdien for `number.ki_trinn_kostnad_diff` er 170 kr (250 → 420). Den brukes bare som
   reserve i besparelsesestimatet når tarifftabellen ikke dekker.
+* Soner med samme rom slås sammen til én sone (se [Soner og profiler](#soner-og-profiler)).
 * Timehistorikk og døgnmakser bygges opp fra første kjøring; de første dagene bærer de eksterne
   toppsensorene grunnlaget (datakvalitet «usikker», litt større reserve).
 

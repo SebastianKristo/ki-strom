@@ -251,7 +251,7 @@ class KiEnergiOptionsFlow(config_entries.OptionsFlow):
                 return self._lagre({}, soner)
             s.update({
                 "navn": user_input["navn"], "rom": user_input.get("rom") or user_input["navn"],
-                "climate": user_input.get("climate") or "", "effekt": user_input.get("effekt") or "",
+                "climate": list(user_input.get("climate") or []), "effekt": list(user_input.get("effekt") or []),
                 "duty": user_input.get("duty") or "", "temp": user_input.get("temp") or "",
                 "vindu": list(user_input.get("vindu") or []),
                 "type": user_input["type"], "prio": int(user_input["prio"]),
@@ -263,8 +263,8 @@ class KiEnergiOptionsFlow(config_entries.OptionsFlow):
         skjema = vol.Schema({
             vol.Required("navn", default=s.get("navn", key)): _tekst(),
             vol.Optional("rom", default=s.get("rom", "")): _tekst(),
-            vol.Optional("climate"): _ent("climate"),
-            vol.Optional("effekt"): _ent("sensor"),
+            vol.Optional("climate"): _ent("climate", multiple=True),
+            vol.Optional("effekt"): _ent("sensor", multiple=True),
             vol.Optional("duty"): _ent("sensor"),
             vol.Optional("temp"): _ent("sensor"),
             vol.Optional("vindu"): _ent("binary_sensor", multiple=True),
@@ -280,5 +280,8 @@ class KiEnergiOptionsFlow(config_entries.OptionsFlow):
             vol.Optional("slett", default=False): selector.BooleanSelector(),
         })
         forslag = {k: s.get(k) for k in ("climate", "effekt", "duty", "temp", "vindu") if s.get(k)}
+        for k in ("climate", "effekt"):
+            if isinstance(forslag.get(k), str):
+                forslag[k] = [forslag[k]]
         return self.async_show_form(step_id="sone", data_schema=self.add_suggested_values_to_schema(skjema, forslag),
                                     description_placeholders={"key": key, "navn": s.get("navn", key)})

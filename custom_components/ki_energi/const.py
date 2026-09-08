@@ -74,15 +74,11 @@ PROFIL_TEKST = {
 }
 
 DEFAULT_SONER: dict[str, dict] = {
-    "stue_panelovn": dict(
-        navn="Stue panelovn", rom="Stue", climate="climate.stue_panelovn",
-        effekt="sensor.stue_panelovn_current_power", duty="sensor.stue_panelovn_control_signal",
-        temp="", type="panel", prio=3, nominell=2.0, sol=True, profil="stue", aktiv=True,
-        temp_dag="ki_temp_stue_dag", temp_natt="ki_temp_stue_natt", temp_borte=""),
-    "stue_oljefyr": dict(
-        navn="Stue oljefyr", rom="Stue", climate="climate.stue_oljefyr",
-        effekt="sensor.stue_oljefyr_current_power", duty="sensor.stue_oljefyr_control_signal",
-        temp="", type="panel", prio=4, nominell=1.0, sol=True, profil="stue", aktiv=True,
+    "stue": dict(
+        navn="Stue", rom="Stue", climate=["climate.stue_panelovn", "climate.stue_oljefyr"],
+        effekt=["sensor.stue_panelovn_current_power", "sensor.stue_oljefyr_current_power"],
+        duty="sensor.stue_panelovn_control_signal",
+        temp="", type="panel", prio=3, nominell=3.0, sol=True, profil="stue", aktiv=True,
         temp_dag="ki_temp_stue_dag", temp_natt="ki_temp_stue_natt", temp_borte=""),
     "trappegang": dict(
         navn="Trappegang", rom="Trappegang", climate="climate.trappegang_panelovn",

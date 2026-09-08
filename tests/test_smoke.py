@@ -23,10 +23,12 @@ async def _setup(hass):
     hass.states.async_set("switch.cybele_posisjon_hjemme_borte", "on")
     hass.states.async_set("switch.rune_posisjon_hjemme_borte", "off")
     for k, s in DEFAULT_SONER.items():
-        if s.get("climate"):
-            hass.states.async_set(s["climate"], "heat", {"temperature": 21, "current_temperature": 20.5, "hvac_modes": ["off","heat"], "min_temp": 5, "max_temp": 30})
-        if s.get("effekt"):
-            hass.states.async_set(s["effekt"], "800")
+        for c in (s["climate"] if isinstance(s.get("climate"), list) else [s.get("climate")]):
+            if c:
+                hass.states.async_set(c, "heat", {"temperature": 21, "current_temperature": 20.5, "hvac_modes": ["off","heat"], "min_temp": 5, "max_temp": 30})
+        for e in (s["effekt"] if isinstance(s.get("effekt"), list) else [s.get("effekt")]):
+            if e:
+                hass.states.async_set(e, "800")
         if s.get("temp"):
             hass.states.async_set(s["temp"], "20.3")
     entry = MockConfigEntry(domain=DOMAIN, data=data, options={})
@@ -108,12 +110,12 @@ async def test_options_flow(hass):
     # edit a zone
     r = await hass.config_entries.options.async_init(entry.entry_id)
     r = await hass.config_entries.options.async_configure(r["flow_id"], {"next_step_id": "soner"})
-    r = await hass.config_entries.options.async_configure(r["flow_id"], {"sone": "stue_panelovn"})
+    r = await hass.config_entries.options.async_configure(r["flow_id"], {"sone": "stue"})
     assert r["step_id"] == "sone"
     r = await hass.config_entries.options.async_configure(r["flow_id"], {"navn": "Stua", "type": "panel", "profil": "stue", "prio": 1, "nominell": 2.0, "sol": True, "aktiv": True})
     assert r["type"] == "create_entry", r
     await hass.async_block_till_done()
-    assert entry.options[CONF_SONER]["stue_panelovn"]["navn"] == "Stua"
+    assert entry.options[CONF_SONER]["stue"]["navn"] == "Stua"
     # new zone
     r = await hass.config_entries.options.async_init(entry.entry_id)
     r = await hass.config_entries.options.async_configure(r["flow_id"], {"next_step_id": "soner"})
@@ -178,3 +180,31 @@ async def test_skyggemodus_styrer_ingenting_og_nettleie_publiseres(hass):
     await hass.services.async_call("switch", "turn_off", {"entity_id": "switch.ki_skyggemodus"}, blocking=True)
     await hub.engine.tick(); await hass.async_block_till_done()
     assert kall, "forventet settpunkt-skriving uten skyggemodus"
+
+
+async def test_migrering_soner_til_rom(hass):
+    """To ovner i samme rom slås sammen til én sone med lister av climate/effekt."""
+    from custom_components.ki_energi.const import DEFAULT_CONFIG
+    data = dict(DEFAULT_CONFIG)
+    data[CONF_SONER] = {
+        "stue_panelovn": dict(navn="Stue panelovn", rom="Stue", climate="climate.a", effekt="sensor.a_w",
+                              type="panel", prio=3, nominell=2.0, sol=True, profil="stue", aktiv=True),
+        "stue_oljefyr": dict(navn="Stue oljefyr", rom="Stue", climate="climate.b", effekt="sensor.b_w",
+                             type="panel", prio=4, nominell=1.0, sol=False, profil="stue", aktiv=True),
+        "bad": dict(navn="Bad", rom="Bad", climate="climate.c", type="gulv", prio=2, nominell=1.0, profil="konstant", aktiv=True),
+    }
+    for c in ("climate.a", "climate.b", "climate.c"):
+        hass.states.async_set(c, "heat", {"temperature": 21, "current_temperature": 20})
+    hass.states.async_set("sensor.strommaler_effekt", "3200"); hass.states.async_set("sensor.strommaler_imported_energy", "1")
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options={})
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    soner = entry.options[CONF_SONER]
+    assert set(soner) == {"stue", "bad"}
+    assert soner["stue"]["climate"] == ["climate.a", "climate.b"]
+    assert soner["stue"]["effekt"] == ["sensor.a_w", "sensor.b_w"]
+    assert soner["stue"]["nominell"] == 3.0 and soner["stue"]["prio"] == 3 and soner["stue"]["sol"] is True
+    hub = hass.data[DOMAIN][entry.entry_id]
+    assert hub.soner()["stue"]["climater"] == ["climate.a", "climate.b"]
+    assert hass.states.get("switch.ki_styr_stue") is not None

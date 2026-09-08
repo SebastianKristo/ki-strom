@@ -154,8 +154,8 @@
         "data": {
           "navn": "Navn",
           "rom": "Rom",
-          "climate": "Climate-entitet",
-          "effekt": "Effektsensor (W)",
+          "climate": "Termostater i rommet (én eller flere)",
+          "effekt": "Effektsensorer (én per ovn) (W)",
           "duty": "Control signal / duty cycle (%)",
           "temp": "Romtemperatursensor (valgfri, ellers climate)",
           "vindu": "Vindu-/dørsensorer (valgfri) — åpent = varmen settes ned",

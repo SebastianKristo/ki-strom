@@ -37,7 +37,59 @@ SCHEMA_HJEMKOMST = vol.Schema({vol.Optional("tid"): str, vol.Optional("naa", def
 SCHEMA_STANDARD = vol.Schema({})
 
 
+def _slug(tekst: str) -> str:
+    import unicodedata  # noqa: PLC0415
+    t = unicodedata.normalize("NFKD", tekst).encode("ascii", "ignore").decode().lower()
+    t = t.replace("ø", "o").replace("æ", "ae").replace("å", "a")
+    return "".join(c if c.isalnum() else "_" for c in t).strip("_") or "sone"
+
+
+def _migrer_soner_til_rom(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """2.5.0: soner er rom, ikke ovner. Flere soner med samme rom (og samme type/profil) slås
+    sammen til én sone med lister av climate/effekt. Kjøres én gang, markeres i options."""
+    opts = dict(entry.options)
+    if opts.get("soner_rom_migrert"):
+        return
+    soner = dict(opts.get("soner") or entry.data.get("soner") or {})
+    if not soner:
+        opts["soner_rom_migrert"] = True
+        hass.config_entries.async_update_entry(entry, options=opts)
+        return
+    grupper: dict[tuple, list[str]] = {}
+    for key, s in soner.items():
+        rom = (s.get("rom") or s.get("navn") or key).strip().lower()
+        grupper.setdefault((rom, s.get("type", "panel"), s.get("profil", "fellesrom")), []).append(key)
+    nye: dict[str, dict] = {}
+    endret = False
+    for (rom, _t, _p), keys in grupper.items():
+        if len(keys) == 1:
+            nye[keys[0]] = soner[keys[0]]
+            continue
+        endret = True
+        forste = soner[keys[0]]
+        ny_key = _slug(forste.get("rom") or rom)
+        if ny_key in soner and ny_key not in keys:
+            ny_key = ny_key + "_rom"
+        liste = lambda felt: [x for k in keys for x in ((soner[k].get(felt) if isinstance(soner[k].get(felt), list) else [soner[k].get(felt)]) or []) if x]  # noqa: E731
+        ny = dict(forste)
+        ny.update(navn=forste.get("rom") or forste.get("navn"), climate=liste("climate"), effekt=liste("effekt"),
+                  vindu=liste("vindu"), duty=next((soner[k].get("duty") for k in keys if soner[k].get("duty")), ""),
+                  temp=next((soner[k].get("temp") for k in keys if soner[k].get("temp")), ""),
+                  prio=min(int(soner[k].get("prio", 3)) for k in keys),
+                  nominell=round(sum(float(soner[k].get("nominell", 1.0)) for k in keys), 2),
+                  sol=any(bool(soner[k].get("sol")) for k in keys),
+                  temp_dag=forste.get("temp_dag") or f"ki_temp_{ny_key}_dag",
+                  temp_natt=forste.get("temp_natt") or f"ki_temp_{ny_key}_natt")
+        nye[ny_key] = ny
+        _LOGGER.info("ki_energi: slo sammen sonene %s til rommet «%s» (%s)", ", ".join(keys), ny["navn"], ny_key)
+    opts["soner_rom_migrert"] = True
+    if endret:
+        opts["soner"] = nye
+    hass.config_entries.async_update_entry(entry, options=opts)
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    _migrer_soner_til_rom(hass, entry)
     hub = KiHub(hass, entry)
     await hub.last_minne()
     hub.engine = KiEngine(hub)

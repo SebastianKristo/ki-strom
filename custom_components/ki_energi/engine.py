@@ -69,9 +69,10 @@ class KiEngine:
             return None
         s = 0.0
         for konf in h.aktive_soner().values():
-            v = h.f(konf.get("effekt"))
-            if v is not None and v >= 0:
-                s += v
+            for ent in konf.get("effekter") or [konf.get("effekt")]:
+                v = h.f(ent)
+                if v is not None and v >= 0:
+                    s += v
         for ent in (h.cfg(CONF_HANKLEVARMER_EFFEKT), h.cfg(CONF_VVB_EFFEKT)):
             v = h.f(ent)
             if v is not None and v >= 0:
@@ -479,10 +480,17 @@ class KiEngine:
             d = h.f(konf["duty"])
             if d is not None:
                 return float(konf["nominell"]) * max(0.05, min(1.0, d / 100.0))
-        w = h.f(konf.get("effekt"))
+        w = self.sone_effekt_w(konf)
         if w is not None and w > 50:
             return w / 1000.0
         return float(konf["nominell"]) * 0.5
+
+    def sone_effekt_w(self, konf: dict) -> float | None:
+        """Summen av sonens effektsensorer (flere ovner i samme rom), eller None hvis ingen svarer."""
+        h = self.hub
+        verdier = [h.f(e) for e in (konf.get("effekter") or [konf.get("effekt")]) if e]
+        verdier = [v for v in verdier if v is not None]
+        return sum(verdier) if verdier else None
 
     def romtemperatur(self, konf: dict) -> float | None:
         h = self.hub
@@ -500,7 +508,7 @@ class KiEngine:
         laster = []
         forvarming_pa = h.on("ki_prediktiv_forvarming", True)
         for key, konf in h.aktive_soner().items():
-            levende = h.st(konf["climate"]) is not None
+            levende = any(h.st(c) is not None for c in (konf.get("climater") or [konf["climate"]]))
             styrt = h.on(f"ki_styr_{key}", True)
             mal, grunn, frist = self.mal_temperatur(key, konf)
             naa = self.romtemperatur(konf)
@@ -540,7 +548,9 @@ class KiEngine:
                 effekt=round(self.forventet_effekt(konf, trenger), 3),
                 helpere=[[konf.get(f), navn] for f, navn in ((Z_TEMP_DAG, "Dag"), (Z_TEMP_NATT, "Natt"), (Z_TEMP_BORTE, "Borte")) if konf.get(f)],
                 styr=f"switch.ki_styr_{key}",
-                entiteter=[e for e in (konf.get("climate"), konf.get("effekt"), konf.get("duty"), konf.get("temp")) if e]))
+                entiteter=[e for e in (list(konf.get("climater") or [konf.get("climate")]) + list(konf.get("effekter") or [konf.get("effekt")])
+                                       + [konf.get("duty"), konf.get("temp")]) if e],
+                climater=list(konf.get("climater") or [konf["climate"]])))
         return laster
 
     # ------------------------------------------------------------------
@@ -637,26 +647,26 @@ class KiEngine:
             self.hub.sett_sensor("ki_energi_status", "fallback", {
                 "forklaring": f"Motoren krasjet: {e}", "feilspor": spor[-900:]})
 
-    def _migrer_240(self) -> None:
-        """v2.4.0: ki_maks_time_kwh var økonomisk grense (4,9). Nå er den absolutt, og økonomien
+    def _migrer_250(self) -> None:
+        """v2.5.0: ki_maks_time_kwh var økonomisk grense (4,9). Nå er den absolutt, og økonomien
         regnes av nettleiemodellen. Løft gammel standardverdi én gang så det nye rommet kan brukes."""
         h = self.hub
-        if self.st.get("migrert_240"):
+        if self.st.get("migrert_250"):
             return
         e = h.helpers.get("ki_maks_time_kwh")
         if e is None or e.verdi is None:
             return  # vent til hjelperen er gjenopprettet
         if abs(float(e.verdi) - 4.9) < 1e-6:
             h.sett("ki_maks_time_kwh", 6.0)
-            self.logg_hendelse("Oppgradering 2.4.0: absolutt timegrense løftet fra 4,90 til 6,00 kWh. "
+            self.logg_hendelse("Oppgradering 2.5.0: absolutt timegrense løftet fra 4,90 til 6,00 kWh. "
                                "Økonomisk grense regnes nå av nettleiemodellen (topp tre per dato).")
-        self.st["migrert_240"] = True
+        self.st["migrert_250"] = True
         h.lagre()
 
     async def _tick_indre(self) -> None:
         h = self.hub
         self.endret = False
-        self._migrer_240()
+        self._migrer_250()
         self.oppdater_effektsensorer()
 
         # Timemåler: prøv registeret, lukk ferdige timer (og rekonstruer ved hull)
@@ -723,7 +733,11 @@ class KiEngine:
         if not skygge:
             for p in plan:
                 if p.get("handling") in ("normal", "senket", "vindu") and p.get("settpunkt") is not None:
-                    if await self.skriv_settpunkt(p["key"], p["climate"], p["settpunkt"]):
+                    skrevet = False
+                    for ent in p.get("climater") or [p["climate"]]:
+                        if await self.skriv_settpunkt(f"{p['key']}|{ent}", ent, p["settpunkt"]):
+                            skrevet = True
+                    if skrevet:
                         endringer.append(f"{p['navn']} → {p['settpunkt']} °C")
 
         if senket:
@@ -906,10 +920,10 @@ class KiEngine:
             hindringer.append("Ingen tidskonstanter lært ennå")
         elif lite:
             hindringer.append("Få målinger for: " + ", ".join(lite))
-        av = [konf["navn"] for konf in soner.values() if h.st(konf["climate"]) == "off"]
+        av = [konf["navn"] for konf in soner.values() if any(h.st(c) == "off" for c in konf.get("climater") or [konf["climate"]])]
         if av:
             hindringer.append("Står avslått (settes til heat ved styring): " + ", ".join(av))
-        mangler = [konf["climate"] for konf in soner.values() if not h.finnes(konf["climate"])]
+        mangler = [c for konf in soner.values() for c in (konf.get("climater") or [konf["climate"]]) if not h.finnes(c)]
         if mangler:
             hindringer.append("Climate-entiteter som ikke finnes: " + ", ".join(mangler))
         if status in ("av", "fallback", None):
@@ -1026,7 +1040,7 @@ class KiEngine:
                         continue
                     endring = (t - t0) / dt_timer
                     diff = t - ute
-                    effekt = h.f(konf.get("effekt"), 0.0) or 0.0
+                    effekt = self.sone_effekt_w(konf) or 0.0
                     rad = h.minne["tau"].get(key, {"k": 0.08, "varme_rate": 1.2, "n": 0})
                     if effekt < 30 and diff > 3 and endring < -0.05:
                         k = min(0.5, max(0.005, -endring / diff))

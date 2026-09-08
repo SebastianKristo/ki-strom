@@ -527,6 +527,11 @@ class KiNettleie:
             "registrert_trinn_til": reg_trinn["til"],
             "kjente_dager": g["kjente_dager"], "udaterte_topper": g["udaterte"], "dager_igjen": g["dager_igjen"],
             "placeholder_kwh": placeholder, "tabell": [list(t) for t in tab],
+            # alle egne dager i måneden, til grafen i kortet
+            "dogn_maned": [dict(dato=d, kwh=r["kwh"], time=r["time"], kvalitet=r["kvalitet"],
+                                kjente_timer=r["kjente_timer"], manglende_timer=r["manglende_timer"],
+                                topp=d in {k for k, _v in reg_topper})
+                           for d, r in sorted(g["info"].items()) if r.get("kilde") == "egen"],
         }
 
         # Prognose for inneværende time

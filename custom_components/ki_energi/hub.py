@@ -83,6 +83,13 @@ class KiHub:
             s.setdefault(Z_TEMP_BORTE, "")
             for felt in ("climate", "effekt", "duty", "temp"):
                 s.setdefault(felt, "")
+            # En sone er et rom og kan ha flere ovner: climate/effekt kan være lister.
+            # `climate`/`effekt` er alltid første entitet (bakoverkompatibelt), `climater`/`effekter` alle.
+            for felt, flertall in (("climate", "climater"), ("effekt", "effekter")):
+                v = s.get(felt)
+                liste = [x for x in (v if isinstance(v, list) else [v]) if x]
+                s[flertall] = liste
+                s[felt] = liste[0] if liste else ""
             ut[key] = s
         return ut
 
