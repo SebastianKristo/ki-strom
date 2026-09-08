@@ -21,7 +21,7 @@
  * Config:  type: custom:ki-klima-pro-card
  */
 
-const KI_PRO_VERSJON = "2.5.0";
+const KI_PRO_VERSJON = "2.6.0";
 
 console.info(
   `%c KI-KLIMA-PRO-CARD %c ${KI_PRO_VERSJON} `,
@@ -136,7 +136,7 @@ const HODE_IKON = {
   "Beslutningslogg": "mdi:text-box-outline", "Tarifftabell": "mdi:table", "Motor": "mdi:engine", "Varme og komfort": "mdi:radiator",
   "Helg og sommer": "mdi:calendar-weekend", "Vann og bad": "mdi:shower", "Varslinger": "mdi:bell-ring-outline",
   "Dag og natt": "mdi:theme-light-dark", "Cybele": "mdi:account", "Sebastian": "mdi:account-school", "Stue og vindu": "mdi:sofa",
-  "Leggetid": "mdi:bed",
+  "Leggetid": "mdi:bed", "Elbil": "mdi:ev-station",
 };
 
 const HJELP = {
@@ -392,6 +392,7 @@ class KiKlimaProCard extends HTMLElement {
       "input_number.ki_gardin_slutt_maned", "input_datetime.ki_gardin_apne_tidligst", "input_datetime.ki_gardin_lukk_senest",
       "sensor.ki_nettleie", "input_text.ki_tariff_tabell", "input_number.ki_mal_trinn_kw", "input_number.ki_reserve_topp_kwh",
       "input_boolean.ki_tillat_dyrere_trinn",
+      "input_boolean.ki_elbil_natt", "input_number.ki_elbil_effekt_kw", "input_datetime.ki_elbil_fra", "input_datetime.ki_elbil_til",
       "input_boolean.ki_vindu_stopp", "input_number.ki_vindu_forsinkelse_min", "input_number.ki_vindu_temp",
       "input_boolean.ki_helg_spor_torsdag", "input_boolean.ki_helg_spor_fredag",
       "input_boolean.ki_varsel_effekt", "input_boolean.ki_varsel_helg", "input_boolean.ki_varsel_hjemkomst",
@@ -475,6 +476,17 @@ class KiKlimaProCard extends HTMLElement {
     if (["oversikt", "energi", "soner"].includes(this._fane)) this._hentHistorikk();
   }
 
+  get _hytte() { return this._a("sensor.ki_energi_status", "hustype", "bolig") === "fritidsbolig"; }
+  _l(tekst) {
+    // Etiketter som betyr noe annet på hytta
+    if (!this._hytte) return tekst;
+    return ({ "Helgemodus": "Tom hytte (frostsikring)", "Hjemkomst": "Ankomst", "Start hjemkomst": "Start ankomst",
+              "Avslutt hjemkomst": "Avslutt ankomst", "Forventet hjemkomst": "Ankomst fredag kl.", "Helgetemperatur": "Frosttemperatur",
+              "Helg gulvvarme": "Frost gulvvarme", "Helg bad": "Frost bad", "Helg automatisk ved fravær": "Frostsikring når hytta er tom",
+              "Torsdag/fredag etter lengre fravær": "Uansett ukedag, etter «Helg auto etter»-timer",
+              "Helg senk gulvvarme": "Frost senk gulvvarme", "Alle borte": "Hytta tom" })[tekst] || tekst;
+  }
+
   _tegnHero() {
     const sone = this._s("sensor.ki_energi_status", "ukjent");
     const forklaring = this._a("sensor.ki_energi_status", "forklaring", "Venter på motoren …");
@@ -498,7 +510,7 @@ class KiKlimaProCard extends HTMLElement {
         </div>
         <div class="herotekst">
           <div class="heronavn">${esc(SONE_TEKST[sone] || sone)}
-            ${skygge ? '<span class="merke">skygge</span>' : ""}</div>
+            ${skygge ? '<span class="merke">skygge</span>' : ""}${this._hytte ? '<span class="merke">hytte</span>' : ""}</div>
           <div class="heroforklaring">${esc(forklaring)}</div>
           <div class="herolinje">
             <span>${esc(this._s("sensor.ki_klima_status", "Klima ukjent"))}</span>
@@ -570,9 +582,9 @@ class KiKlimaProCard extends HTMLElement {
   _oversikt() {
     const a = (n, d) => this._a("sensor.ki_energi_status", n, d);
     const modus = [
-      ["input_boolean.ki_helgemodus", "Helgemodus", "mdi:bag-suitcase", true],
+      ["input_boolean.ki_helgemodus", this._l("Helgemodus"), "mdi:bag-suitcase", true],
       ["input_boolean.ki_sommermodus", "Sommermodus", "mdi:white-balance-sunny", true],
-      ["input_boolean.ki_hjemkomst_aktiv", "Hjemkomst", "mdi:home-import-outline", true],
+      ["input_boolean.ki_hjemkomst_aktiv", this._l("Hjemkomst"), "mdi:home-import-outline", true],
       ["input_boolean.ki_sebastian_ferie", "Ferie", "mdi:school-outline", true],
       ["binary_sensor.ki_alle_borte", "Alle borte", "mdi:home-export-outline", false],
     ];
@@ -1354,9 +1366,12 @@ class KiKlimaProCard extends HTMLElement {
         ["input_boolean.ki_styr_gardiner", "Styr gardiner", "Se egen blokk lenger ned"],
       ]],
       ["Helg og sommer", [
-        ["input_boolean.ki_helg_auto", "Helg automatisk ved fravær", "Torsdag/fredag etter lengre fravær"],
-        ["input_boolean.ki_helg_senk_gulvvarme", "Helg senk gulvvarme", "Gulvvarmen senkes også i helgemodus"],
+        ["input_boolean.ki_helg_auto", this._l("Helg automatisk ved fravær"), this._l("Torsdag/fredag etter lengre fravær")],
+        ["input_boolean.ki_helg_senk_gulvvarme", this._l("Helg senk gulvvarme"), "Gulvvarmen senkes også i helgemodus"],
         ["input_boolean.ki_sommer_auto", "Sommermodus automatisk", "Etter måned og utetemperatur"],
+      ]],
+      ["Elbil", [
+        ["input_boolean.ki_elbil_natt", "Elbil lader om natten", "Laderen er ikke smart — motoren holder av effekt i ladevinduet"],
       ]],
       ["Vann og bad", [
         ["input_boolean.ki_vvb_prisstyring", "VVB prisstyring", "Velger de billigste timene"],
@@ -1434,6 +1449,13 @@ class KiKlimaProCard extends HTMLElement {
         <div class="hode"><span>Sebastian</span><span class="sub">${this._tidKort("input_datetime.ki_sebastian_vekking")}–${this._tidKort("input_datetime.ki_sebastian_natt")}</span></div>
         ${this._tidPar("Vekking", "input_datetime.ki_sebastian_vekking", "Vekking helg", "input_datetime.ki_sebastian_vekking_helg")}
         ${this._tidRad("input_datetime.ki_sebastian_natt", "Legger seg")}
+      </div>
+      <div class="blokk">
+        <div class="hode"><span>Elbil</span><span class="sub">${this._tidKort("input_datetime.ki_elbil_fra")}–${this._tidKort("input_datetime.ki_elbil_til")}</span></div>
+        ${this._dognplan([{ navn: "Lading", spenn: [["input_datetime.ki_elbil_fra", "input_datetime.ki_elbil_til", "s", "Elbil"]] }])}
+        ${this._tidPar("Lader fra", "input_datetime.ki_elbil_fra", "Til", "input_datetime.ki_elbil_til")}
+        ${this._stepperRad("input_number.ki_elbil_effekt_kw", "Ladeeffekt", 1, " kW")}
+        <div class="notat">5 A på tre faser (400 V) ≈ 3,5 kW, på én fase (230 V) ≈ 1,2 kW. Når lastprofilen har lært natten, teller halvparten.</div>
       </div>
       <div class="blokk">
         <div class="hode"><span>Stue og vindu</span></div>
@@ -1530,9 +1552,9 @@ class KiKlimaProCard extends HTMLElement {
 
       <div class="blokk">
         <div class="hode"><span>Moduser og unntak</span></div>
-        ${this._stepperRad("input_number.ki_temp_helg", "Helgetemperatur", 1, " °C")}
-        ${this._stepperRad("input_number.ki_temp_helg_gulvvarme", "Helg gulvvarme", 1, " °C")}
-        ${this._stepperRad("input_number.ki_temp_helg_bad", "Helg bad", 1, " °C")}
+        ${this._stepperRad("input_number.ki_temp_helg", this._l("Helgetemperatur"), 1, " °C")}
+        ${this._stepperRad("input_number.ki_temp_helg_gulvvarme", this._l("Helg gulvvarme"), 1, " °C")}
+        ${this._stepperRad("input_number.ki_temp_helg_bad", this._l("Helg bad"), 1, " °C")}
         ${this._stepperRad("input_number.ki_temp_sommer", "Sommertemperatur", 1, " °C")}
         ${this._manedStripe("input_number.ki_sommer_start_maned", "input_number.ki_sommer_slutt_maned", "Sommermodus")}
         ${this._stepperRad("input_number.ki_sommer_start_maned", "Sommer fra måned", 0, "")}
@@ -1546,7 +1568,9 @@ class KiKlimaProCard extends HTMLElement {
 
       <div class="blokk">
         <div class="hode"><span>Helgevarsler</span><span class="sub">Torsdag, fredag og søndag</span></div>
-        <div class="notat" style="padding-top:0">«Skal dere bort i helgen?» sendes torsdag og fredag, bare hvis dere er hjemme. Svarer dere ja, settes sparemodus i det siste person drar.</div>
+        <div class="notat" style="padding-top:0">${this._hytte
+          ? "«Skal dere på hytta i helgen?» sendes torsdag og fredag når hytta er tom. Svarer dere ja, holdes frostsikringen til oppvarmingen må starte for å være ferdig til ankomsttiden fredag."
+          : "«Skal dere bort i helgen?» sendes torsdag og fredag, bare hvis dere er hjemme. Svarer dere ja, settes sparemodus i det siste person drar."}</div>
         ${this._dognplan([
           { navn: "Torsdag", mark: [["input_datetime.ki_helg_varsel_tid_torsdag", "Spør", "noytral"]] },
           { navn: "Fredag", mark: [["input_datetime.ki_helg_varsel_tid", "Spør", "noytral"]] },
@@ -1558,11 +1582,11 @@ class KiKlimaProCard extends HTMLElement {
         ${this._tidBryterRad("input_datetime.ki_helg_varsel_tid", "input_boolean.ki_helg_spor_fredag", "Spør fredag")}
         ${this._tidRad("input_datetime.ki_helg_sporsmal_tid", "Spørsmål søndag")}
         ${this._tidRad("input_datetime.ki_helg_frist_tid", "Svarfrist søndag")}
-        ${this._tidRad("input_datetime.ki_hjemkomst_tid", "Forventet hjemkomst")}
+        ${this._tidRad("input_datetime.ki_hjemkomst_tid", this._l("Forventet hjemkomst"))}
         <div class="hurtig">
           <div class="mini" data-handling="tjeneste" data-domene="ki_energi" data-tjeneste="helg_sporsmal">Send spørsmålet nå</div>
-          <div class="mini" data-handling="tjeneste" data-domene="ki_energi" data-tjeneste="hjemkomst">Start hjemkomst</div>
-          <div class="mini" data-handling="tjeneste" data-domene="ki_energi" data-tjeneste="hjemkomst_ferdig">Avslutt hjemkomst</div>
+          <div class="mini" data-handling="tjeneste" data-domene="ki_energi" data-tjeneste="hjemkomst">${this._l("Start hjemkomst")}</div>
+          <div class="mini" data-handling="tjeneste" data-domene="ki_energi" data-tjeneste="hjemkomst_ferdig">${this._l("Avslutt hjemkomst")}</div>
         </div>
         <div class="rad rad-les" data-handling="mer" data-entity="input_boolean.ki_helg_venter_svar">
           <div class="prikk p-${this._pa("input_boolean.ki_helg_venter_svar") ? "advarsel" : "noytral"}"></div>

@@ -43,6 +43,8 @@ CONF_BYGGEAR = "byggear"
 CONF_GLASS_M2 = "glass_m2"
 CONF_STUE_AREAL = "stue_areal_m2"
 CONF_SONER = "soner"
+CONF_HUSTYPE = "hustype"      # bolig | fritidsbolig
+CONF_PRESET = "preset"        # oslo | toten | tom
 
 # Sonefelt
 Z_NAVN = "navn"
@@ -161,6 +163,78 @@ DEFAULT_CONFIG = {
 }
 
 # ---------------------------------------------------------------------------
+#  Presets: ferdige oppsett for et hus. Entitets-ID-ene er forslag som redigeres i oppsettet.
+# ---------------------------------------------------------------------------
+DEFAULT_SONER_HYTTE: dict[str, dict] = {
+    "stue": dict(
+        navn="Stue", rom="Stue", climate=["climate.hytte_stue_varmepumpe"], effekt=["sensor.hytte_stue_varmepumpe_effekt"],
+        duty="", temp="", type="varmepumpe", prio=1, nominell=1.2, sol=False, profil="stue", aktiv=True,
+        temp_dag="ki_temp_stue_dag", temp_natt="ki_temp_stue_natt", temp_borte=""),
+    "kjokken_gulv": dict(
+        navn="Kjøkken", rom="Kjøkken", climate=["climate.hytte_kjokken_gulv"], effekt=["sensor.hytte_kjokken_gulv_effekt"],
+        duty="", temp="", type="gulv", prio=3, nominell=0.8, sol=False, profil="gulv_natt", aktiv=True,
+        temp_dag="ki_temp_kjokken_gulv_dag", temp_natt="ki_temp_kjokken_gulv_natt", temp_borte=""),
+    "bad_gulv": dict(
+        navn="Bad", rom="Bad", climate=["climate.hytte_bad_gulv"], effekt=["sensor.hytte_bad_gulv_effekt"],
+        duty="", temp="", type="gulv", prio=2, nominell=0.6, sol=False, profil="konstant", aktiv=True,
+        temp_dag="ki_temp_bad_gulv_dag", temp_natt="ki_temp_bad_gulv_natt", temp_borte=""),
+    "inngang": dict(
+        navn="Inngang", rom="Inngang", climate=["climate.hytte_inngang_gulv", "climate.hytte_inngang_oljefyr"],
+        effekt=["sensor.hytte_inngang_gulv_effekt", "sensor.hytte_inngang_oljefyr_effekt"],
+        duty="", temp="", type="gulv", prio=4, nominell=1.6, sol=False, profil="sjelden", aktiv=True,
+        temp_dag="ki_temp_trappegang_dag", temp_natt="ki_temp_trappegang_natt", temp_borte=""),
+    "cybele": dict(
+        navn="Cybele soverom", rom="Cybele", climate=["climate.hytte_cybele_panelovn"], effekt=["sensor.hytte_cybele_panelovn_effekt"],
+        duty="", temp="", type="panel", prio=2, nominell=1.0, sol=False, profil="cybele", aktiv=True,
+        temp_dag="ki_temp_cybele_dag", temp_natt="ki_temp_cybele_natt", temp_borte="ki_temp_cybele_borte"),
+    "sebastian": dict(
+        navn="Sebastian soverom", rom="Sebastian", climate=["climate.hytte_sebastian_panelovn"], effekt=["sensor.hytte_sebastian_panelovn_effekt"],
+        duty="", temp="", type="panel", prio=3, nominell=1.0, sol=False, profil="sebastian", aktiv=True,
+        temp_dag="ki_temp_sebastian_dag", temp_natt="ki_temp_sebastian_natt", temp_borte=""),
+    "rune": dict(
+        navn="Rune soverom", rom="Rune", climate=["climate.hytte_rune_panelovn"], effekt=["sensor.hytte_rune_panelovn_effekt"],
+        duty="", temp="", type="panel", prio=4, nominell=1.0, sol=False, profil="fellesrom", aktiv=True,
+        temp_dag="ki_temp_stue_dag", temp_natt="ki_temp_stue_natt", temp_borte=""),
+}
+
+# (nøkkel → {navn, hustype, beskrivelse, config-overstyringer, soner, hjelperverdier satt én gang})
+PRESETS: dict[str, dict] = {
+    "oslo": {
+        "navn": "Bolig — rekkehus i Oslo (standard)", "hustype": "bolig",
+        "beskrivelse": "120 m² rekkehus fra 1980, panelovner og gulvvarme, bereder med relé, håndklevarmer.",
+        "config": {}, "soner": DEFAULT_SONER, "verdier": {},
+    },
+    "toten": {
+        "navn": "Fritidsbolig — hytta på Toten", "hustype": "fritidsbolig",
+        "beskrivelse": "100 m² fra 1960 (etterisolert), varmepumpe i stua, gulvvarme på kjøkken/bad/inngang, "
+                       "oljefyr i inngangen, panelovner på soverom, bereder som bare måles, elbillader 5 A om natten.",
+        "config": {
+            CONF_AREAL: 100, CONF_BYGGEAR: 1960, CONF_GLASS_M2: 12, CONF_STUE_AREAL: 30,
+            CONF_VVB_BRYTER: "", CONF_VVB_EFFEKT: "sensor.hytte_bereder_effekt",
+            CONF_HANKLEVARMER: "", CONF_HANKLEVARMER_EFFEKT: "", CONF_GARDINER: "",
+            CONF_TILSTEDE_CYBELE: "person.cybele", CONF_TILSTEDE_SEBASTIAN: "person.sebastian", CONF_TILSTEDE_RUNE: "person.rune",
+            CONF_TOTAL_EFFEKT: "sensor.hytte_strommaler_effekt", CONF_IMPORTERT_ENERGI: "sensor.hytte_strommaler_imported_energy",
+            CONF_UTE_TEMP: "sensor.hytte_utetemperatur", CONF_VAER: "weather.forecast_home",
+        },
+        "soner": DEFAULT_SONER_HYTTE,
+        "verdier": {
+            # tom hytte = frostsikring, ikke 16 °C
+            "ki_temp_helg": 8.0, "ki_temp_helg_gulvvarme": 10.0, "ki_temp_helg_bad": 12.0, "ki_helg_senk_gulvvarme": True,
+            "ki_helg_auto_timer": 3, "ki_helg_auto": True, "ki_hjemkomst_tid": "17:00",
+            # spør fredag (ikke torsdag), søndag kl. 10 med frist 12
+            "ki_helg_spor_torsdag": False, "ki_helg_spor_fredag": True, "ki_helg_varsel_tid": "10:00",
+            "ki_helg_sporsmal_tid": "10:00", "ki_helg_frist_tid": "12:00",
+            # kapasitet: under 5 kW om mulig, aldri over 10 (absolutt grense 9,5)
+            "ki_mal_trinn_kw": 5.0, "ki_maks_time_kwh": 9.5, "ki_min_time_kwh": 2.5, "ki_reserve_topp_kwh": 0.4,
+            # elbil 5 A om natten (3-fas ≈ 3,5 kW; 1-fas ≈ 1,2 — juster)
+            "ki_elbil_natt": True, "ki_elbil_effekt_kw": 3.5,
+            "ki_sommer_auto": True, "ki_styr_gardiner": False, "ki_styr_hanklevarmer": False,
+        },
+    },
+    "tom": {"navn": "Tomt oppsett (velg alt selv)", "hustype": "bolig", "beskrivelse": "", "config": {}, "soner": {}, "verdier": {}},
+}
+
+# ---------------------------------------------------------------------------
 #  Hjelperentiteter. Nøkkelen er object_id; entiteten heter <domene>.<nøkkel>.
 #  Verdiene overlever restart (RestoreEntity). Standardverdi brukes første gang.
 # ---------------------------------------------------------------------------
@@ -193,6 +267,7 @@ SWITCHES = [
     ("ki_solkompensasjon", "KI Solkompensasjon", True, "mdi:weather-sunny"),
     ("ki_vindu_stopp", "KI Vindu Åpent Stopper Varme", True, "mdi:window-open-variant"),
     ("ki_tillat_dyrere_trinn", "KI Tillat Dyrere Kapasitetstrinn", False, "mdi:cash-lock-open"),
+    ("ki_elbil_natt", "KI Elbil Lader Om Natten", False, "mdi:ev-station"),
     ("ki_nattsenk_aktiv", "KI Nattsenking Aktiv", True, "mdi:weather-night"),
     ("ki_nattsenk_okonomi", "KI Økonomisk Nattsenking", True, "mdi:cash-check"),
     ("ki_energi_varsler", "KI Energivarsler", True, "mdi:bell-outline"),
@@ -263,6 +338,7 @@ NUMBERS = [
     ("ki_trinn_kostnad_diff", "KI Kostnad Neste Kapasitetstrinn", 0, 500, 5, "kr", 170, "mdi:cash"),
     ("ki_mal_trinn_kw", "KI Ønsket Kapasitetstrinn Under", 2, 20, 0.5, "kW", 5.0, "mdi:target"),
     ("ki_reserve_topp_kwh", "KI Reserve Mot Neste Trinn", 0, 1.5, 0.05, "kWh", 0.3, "mdi:shield-half-full"),
+    ("ki_elbil_effekt_kw", "KI Elbil Ladeeffekt", 0, 22, 0.1, "kW", 0, "mdi:ev-station"),
     ("ki_stat_unngatte_topper", "KI Unngåtte Topper", 0, 9999, 1, "", 0, "mdi:shield-check"),
     ("ki_stat_shed_hendelser", "KI Utkoblinger", 0, 99999, 1, "", 0, "mdi:stairs-down"),
     ("ki_stat_flyttet_kwh", "KI Flyttet Energi", 0, 9999, 0.01, "kWh", 0, "mdi:swap-horizontal"),
@@ -291,6 +367,8 @@ TIMES = [
     ("ki_middag_start", "KI Middagsvindu Start", "15:30", "mdi:stove"),
     ("ki_middag_slutt", "KI Middagsvindu Slutt", "19:00", "mdi:stove"),
     ("ki_gardin_apne_tidligst", "KI Gardiner Åpne Tidligst", "07:00", "mdi:curtains"),
+    ("ki_elbil_fra", "KI Elbil Lader Fra", "22:00", "mdi:ev-station"),
+    ("ki_elbil_til", "KI Elbil Lader Til", "06:00", "mdi:ev-station"),
     ("ki_gardin_lukk_senest", "KI Gardiner Lukk Senest", "22:00", "mdi:curtains-closed"),
     ("ki_hanklevarmer_morgen_start", "KI Håndklevarmer Morgen Start", "05:30", "mdi:radiator"),
     ("ki_hanklevarmer_morgen_slutt", "KI Håndklevarmer Morgen Slutt", "08:30", "mdi:radiator"),
@@ -365,3 +443,5 @@ AKSJON_HJEM_NEI = "KI_HJEM_NEI"
 AKSJON_HJEM_SENERE = "KI_HJEM_SENERE"
 AKSJON_HJEM_NAA = "KI_HJEM_NAA"
 AKSJON_HJEM_FORLENG = "KI_HJEM_FORLENG"
+AKSJON_HYTTE_DRAR = "KI_HYTTE_DRAR"
+AKSJON_HYTTE_BLIR = "KI_HYTTE_BLIR"

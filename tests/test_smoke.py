@@ -137,6 +137,8 @@ async def test_options_flow(hass):
 async def test_config_flow(hass):
     r = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
     assert r["type"] == "form" and r["step_id"] == "user"
+    r = await hass.config_entries.flow.async_configure(r["flow_id"], {"preset": "oslo"})
+    assert r["step_id"] == "maling"
     r = await hass.config_entries.flow.async_configure(r["flow_id"], {"total_effekt": "sensor.a", "importert_energi": "sensor.b"})
     assert r["step_id"] == "utstyr"
     r = await hass.config_entries.flow.async_configure(r["flow_id"], {})
@@ -145,7 +147,7 @@ async def test_config_flow(hass):
     assert r["step_id"] == "nettleie"
     r = await hass.config_entries.flow.async_configure(r["flow_id"], {})
     assert r["step_id"] == "hus"
-    r = await hass.config_entries.flow.async_configure(r["flow_id"], {"areal_m2": 120, "byggear": 1980, "glass_m2": 20, "stue_areal_m2": 40})
+    r = await hass.config_entries.flow.async_configure(r["flow_id"], {"hustype": "bolig", "areal_m2": 120, "byggear": 1980, "glass_m2": 20, "stue_areal_m2": 40})
     assert r["type"] == "create_entry", r
     await hass.async_block_till_done()
     assert r["data"]["vvb_bryter"] == ""
@@ -208,3 +210,81 @@ async def test_migrering_soner_til_rom(hass):
     hub = hass.data[DOMAIN][entry.entry_id]
     assert hub.soner()["stue"]["climater"] == ["climate.a", "climate.b"]
     assert hass.states.get("switch.ki_styr_stue") is not None
+
+
+async def test_preset_toten_fritidsbolig(hass):
+    """Hytte-preset: frostverdier legges inn, helg = tom hytte uansett ukedag, torsdagssvar planlegger fredag."""
+    from custom_components.ki_energi.const import PRESETS, DEFAULT_SONER_HYTTE, CONF_PRESET, CONF_HUSTYPE, AKSJON_HELG_JA
+    from datetime import datetime
+    p = PRESETS["toten"]
+    data = dict(DEFAULT_CONFIG); data.update(p["config"])
+    data[CONF_PRESET] = "toten"; data[CONF_HUSTYPE] = "fritidsbolig"
+    data[CONF_SONER] = {k: dict(v) for k, v in DEFAULT_SONER_HYTTE.items()}
+    hass.states.async_set("sensor.hytte_strommaler_effekt", "1200"); hass.states.async_set("sensor.hytte_strommaler_imported_energy", "500")
+    hass.states.async_set("sensor.hytte_utetemperatur", "-8"); hass.states.async_set("sensor.hytte_bereder_effekt", "0")
+    for pid in ("person.cybele", "person.sebastian", "person.rune"):
+        hass.states.async_set(pid, "not_home")
+    for s in DEFAULT_SONER_HYTTE.values():
+        for c in s["climate"]:
+            hass.states.async_set(c, "heat", {"temperature": 20, "current_temperature": 9})
+        for e in s["effekt"]:
+            hass.states.async_set(e, "0")
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options={})
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    hub = hass.data[DOMAIN][entry.entry_id]
+    assert hub.fritidsbolig()
+    await hub.engine.tick(); await hass.async_block_till_done()
+    # presetverdier lagt inn én gang
+    assert float(hass.states.get("number.ki_temp_helg").state) == 8.0
+    assert float(hass.states.get("number.ki_maks_time_kwh").state) == 9.5
+    assert hass.states.get("switch.ki_elbil_natt").state == "on"
+    assert hass.states.get("sensor.ki_energi_status").attributes["hustype"] == "fritidsbolig"
+    # bereder uten bryter: måles, styres ikke
+    await hub.vvb.tick(); await hass.async_block_till_done()
+    assert "ingen bryter" in hass.states.get("sensor.ki_vvb_forklaring").state
+    # helg-auto: tom hytte på en tirsdag → frostsikring etter 3 t
+    m = hub.moduser
+    m.m["borte_siden"] = (dt_util.now() - timedelta(hours=4)).isoformat()
+    tirsdag = dt_util.now().replace(hour=12)
+    while tirsdag.weekday() != 1:
+        tirsdag += timedelta(days=1)
+    with patch("homeassistant.util.dt.now", return_value=tirsdag):
+        await m.tick(); await hass.async_block_till_done()
+    assert hass.states.get("switch.ki_helgemodus").state == "on"
+    # torsdag: «Ja, vi kommer fredag» → ankomst planlagt fredag 17:00, frost beholdes
+    torsdag = tirsdag + timedelta(days=2)
+    with patch("homeassistant.util.dt.now", return_value=torsdag):
+        await m._handling(AKSJON_HELG_JA); await hass.async_block_till_done()
+    plan = hub.dt("ki_hjemkomst_planlagt")
+    assert plan.weekday() == 4 and plan.hour == 17
+    assert hass.states.get("switch.ki_hjemkomst_aktiv").state == "on"
+    assert hass.states.get("switch.ki_helgemodus").state == "on"
+    # fredag: «Ja, vi kommer» → oppvarming nå, plan i dag kl. 17
+    from custom_components.ki_energi.const import AKSJON_HELG_NAA, AKSJON_HYTTE_DRAR
+    fredag = torsdag + timedelta(days=1)
+    fredag = fredag.replace(hour=10)
+    with patch("homeassistant.util.dt.now", return_value=fredag):
+        await m._handling(AKSJON_HELG_NAA); await hass.async_block_till_done()
+    plan = hub.dt("ki_hjemkomst_planlagt")
+    assert plan.date() == fredag.date() and plan.hour == 17
+    # søndag: alle er der, «Ja, vi drar» → armert; siste drar → frost
+    for pid in ("person.cybele", "person.sebastian", "person.rune"):
+        hass.states.async_set(pid, "home")
+    sondag = fredag + timedelta(days=2)
+    with patch("homeassistant.util.dt.now", return_value=sondag):
+        await m.tick(); await hass.async_block_till_done()          # noen kom → ankomst ferdig, helg av
+        assert hass.states.get("switch.ki_helgemodus").state == "off"
+        await m._handling(AKSJON_HYTTE_DRAR); await hass.async_block_till_done()
+        assert m.m.get("helg_ved_avreise") is True
+        for pid in ("person.cybele", "person.sebastian", "person.rune"):
+            hass.states.async_set(pid, "not_home")
+        await m.tick(); await hass.async_block_till_done()
+    assert hass.states.get("switch.ki_helgemodus").state == "on"
+    # >20 t fram: målet er fortsatt frost (sett opp ny torsdagsplan for sjekken)
+    with patch("homeassistant.util.dt.now", return_value=torsdag):
+        await m._handling(AKSJON_HELG_JA); await hass.async_block_till_done()
+    with patch("homeassistant.util.dt.now", return_value=torsdag):
+        mal, grunn, frist = hub.engine.mal_temperatur("sebastian", hub.soner()["sebastian"])
+    assert mal == 8.0 and frist is None

@@ -22,7 +22,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_ENERGILEDD_DAG, CONF_ENERGILEDD_NATT, CONF_GLASS_M2, CONF_HANKLEVARMER_EFFEKT,
-    CONF_HVITEVARER, CONF_IMPORTERT_ENERGI, CONF_STROMPRIS, CONF_TILSTEDE_CYBELE,
+    CONF_HVITEVARER, CONF_IMPORTERT_ENERGI, CONF_PRESET, PRESETS, CONF_STROMPRIS, CONF_TILSTEDE_CYBELE,
     CONF_TILSTEDE_RUNE, CONF_TOPP1, CONF_TOPP2, CONF_TOPP3, CONF_TOTAL_EFFEKT, CONF_UTE_TEMP,
     CONF_VAER, CONF_VVB_EFFEKT, MAKS_LOGG_LINJER, PRIO_VEKT, TICK_SEK, Z_PROFIL, Z_TEMP_BORTE,
     Z_TEMP_DAG, Z_TEMP_NATT,
@@ -73,7 +73,11 @@ class KiEngine:
                 v = h.f(ent)
                 if v is not None and v >= 0:
                     s += v
-        for ent in (h.cfg(CONF_HANKLEVARMER_EFFEKT), h.cfg(CONF_VVB_EFFEKT)):
+        # bereder som bare måles (ingen bryter) er uregulert last og læres inn i profilen
+        styrbare = [h.cfg(CONF_HANKLEVARMER_EFFEKT)]
+        if h.vvb is not None and h.vvb.konfigurert():
+            styrbare.append(h.cfg(CONF_VVB_EFFEKT))
+        for ent in styrbare:
             v = h.f(ent)
             if v is not None and v >= 0:
                 s += v
@@ -202,6 +206,12 @@ class KiEngine:
             if n < 10 and r > 0:
                 ekstra += r * 0.5
                 grunner.append("frokostvinduet")
+        if h.on("ki_elbil_natt") and h.num("ki_elbil_effekt_kw", 0) > 0 \
+                and h.mellom(h.tid_min("ki_elbil_fra", "22:00"), h.tid_min("ki_elbil_til", "06:00"), t):
+            kw = h.num("ki_elbil_effekt_kw", 0)
+            _p, n = self.profil_hent(self.profilnokkel(dt_util.now() + timedelta(minutes=minutter_frem)))
+            ekstra += kw if n < 10 else kw * 0.5
+            grunner.append(f"elbillading ({kw:.1f} kW)")
         if h.mellom(h.tid_min("ki_middag_start", "15:30"), h.tid_min("ki_middag_slutt", "19:00"), t):
             r = h.num("ki_reserve_middag_kwh", 1.0)
             _p, n = self.profil_hent(self.profilnokkel(dt_util.now() + timedelta(minutes=minutter_frem)))
@@ -366,6 +376,8 @@ class KiEngine:
         plan = h.dt("ki_hjemkomst_planlagt")
         if plan is None:
             return h.tid_min("ki_hjemkomst_tid", "13:00")
+        if plan - dt_util.now() > timedelta(hours=20):
+            return None   # for langt fram — forvarming starter først når fristen er innen rekkevidde
         return plan.hour * 60 + plan.minute
 
     def mal_temperatur(self, key: str, konf: dict) -> tuple[float, str, int | None]:
@@ -385,6 +397,8 @@ class KiEngine:
         helg = h.on("ki_helgemodus")
         sommer = h.on("ki_sommermodus")
         hjemkomst = self.hjemkomst_frist()
+        if h.fritidsbolig() and h.on("ki_hjemkomst_aktiv") and hjemkomst is None:
+            helg = True   # hytta: planlagt ankomst langt fram = fortsatt frostsikring
         gulv_senk = helg and h.on("ki_helg_senk_gulvvarme")
         t_helg = h.num("ki_temp_helg", 16.0)
         t_sommer = h.num("ki_temp_sommer", 17.0)
@@ -564,6 +578,8 @@ class KiEngine:
         # kald morgen gjør et soverom viktigere: større avvik løfter det over prioritetsgrensen
         if last["avvik"] > 1.5 and last["prio"] >= 3:
             s += 150
+        if last["type"] == "varmepumpe":
+            s += 300   # billigste varme i huset — senkes sist
         s += ((sum(ord(c) for c in last["key"]) + rotasjon) % 7) * 2
         return s
 
@@ -598,7 +614,7 @@ class KiEngine:
                 p.update(handling="normal", settpunkt=last["mal"],
                          forklaring=last["forvarm_grunn"] or last["grunn"])
             else:
-                maks = shed_gulv if last["type"] == "gulv" else shed_panel
+                maks = shed_gulv if last["type"] == "gulv" else min(shed_panel, 1.0) if last["type"] == "varmepumpe" else shed_panel
                 mangel = last["effekt"] - max(tilgjengelig, 0.0)
                 trinn = min(maks, round(max(0.5, mangel / max(last["effekt"], 0.1) * maks) * 2) / 2)
                 p.update(handling="senket", settpunkt=round(last["mal"] - trinn, 1), senket=trinn,
@@ -648,7 +664,7 @@ class KiEngine:
                 "forklaring": f"Motoren krasjet: {e}", "feilspor": spor[-900:]})
 
     def _migrer_250(self) -> None:
-        """v2.5.0: ki_maks_time_kwh var økonomisk grense (4,9). Nå er den absolutt, og økonomien
+        """v2.6.0: ki_maks_time_kwh var økonomisk grense (4,9). Nå er den absolutt, og økonomien
         regnes av nettleiemodellen. Løft gammel standardverdi én gang så det nye rommet kan brukes."""
         h = self.hub
         if self.st.get("migrert_250"):
@@ -658,14 +674,40 @@ class KiEngine:
             return  # vent til hjelperen er gjenopprettet
         if abs(float(e.verdi) - 4.9) < 1e-6:
             h.sett("ki_maks_time_kwh", 6.0)
-            self.logg_hendelse("Oppgradering 2.5.0: absolutt timegrense løftet fra 4,90 til 6,00 kWh. "
+            self.logg_hendelse("Oppgradering 2.6.0: absolutt timegrense løftet fra 4,90 til 6,00 kWh. "
                                "Økonomisk grense regnes nå av nettleiemodellen (topp tre per dato).")
         self.st["migrert_250"] = True
         h.lagre()
 
+    def _bruk_preset(self) -> None:
+        """Første kjøring: sett hjelperverdier fra valgt preset (frosttemperaturer, elbil, grenser)."""
+        h = self.hub
+        if self.st.get("preset_satt"):
+            return
+        preset = PRESETS.get(h.cfg(CONF_PRESET, "oslo"))
+        if not preset:
+            self.st["preset_satt"] = True
+            return
+        e = h.helpers.get("ki_maks_time_kwh")
+        if e is None or e.verdi is None:
+            return  # hjelperne er ikke gjenopprettet ennå
+        for key, v in preset["verdier"].items():
+            if key.startswith("ki_") and key in h.helpers:
+                if isinstance(v, str) and ":" in v:
+                    from .time import _parse  # noqa: PLC0415
+                    h.sett(key, _parse(v))
+                else:
+                    h.sett(key, v)
+        self.st["preset_satt"] = True
+        self.st["migrert_250"] = True   # nyinstallasjon trenger ikke løfte grensen
+        h.lagre()
+        if preset["verdier"]:
+            self.logg_hendelse(f"Oppsett «{preset['navn']}» lagt inn: {len(preset['verdier'])} innstillinger satt.")
+
     async def _tick_indre(self) -> None:
         h = self.hub
         self.endret = False
+        self._bruk_preset()
         self._migrer_250()
         self.oppdater_effektsensorer()
 
@@ -828,6 +870,7 @@ class KiEngine:
 
         h.sett_sensor("ki_energi_status", farge, {
             "forklaring": hoved, "tankegang": tanker, "skyggemodus": skygge, "modus": self.modus_tekst(),
+            "hustype": "fritidsbolig" if h.fritidsbolig() else "bolig",
             "grense_kwh": budsjett["grense"], "grense_grunn": budsjett["grense_grunn"],
             "forbrukt_kwh": budsjett["forbrukt"], "igjen_kwh": budsjett["igjen"],
             "minutter_igjen": budsjett["minutter_igjen"],

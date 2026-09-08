@@ -45,7 +45,7 @@ def _slug(tekst: str) -> str:
 
 
 def _migrer_soner_til_rom(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """2.5.0: soner er rom, ikke ovner. Flere soner med samme rom (og samme type/profil) slås
+    """2.6.0: soner er rom, ikke ovner. Flere soner med samme rom (og samme type/profil) slås
     sammen til én sone med lister av climate/effekt. Kjøres én gang, markeres i options."""
     opts = dict(entry.options)
     if opts.get("soner_rom_migrert"):

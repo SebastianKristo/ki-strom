@@ -49,13 +49,14 @@ offisielle [Nord Pool-integrasjonen](https://www.home-assistant.io/integrations/
 - [Oppsett steg for steg](#oppsett-steg-for-steg)
 - [Kortet «KI Klima Pro»](#kortet-ki-klima-pro)
 - [Soner og profiler](#soner-og-profiler)
+- [Bolig eller fritidsbolig — presets](#bolig-eller-fritidsbolig--presets)
 - [Moduser: helg, hjemkomst, sommer](#moduser-helg-hjemkomst-sommer)
 - [Varmtvann og legionella](#varmtvann-og-legionella)
 - [Eksempler](#eksempler)
 - [Entiteter](#entiteter)
 - [Nettleie etter døgnmaks](#nettleie-etter-døgnmaks)
 - [Tjenester](#tjenester)
-- [Oppgradering til 2.5.0](#oppgradering-til-250)
+- [Oppgradering til 2.6.0](#oppgradering-til-260)
 - [Migrering fra pakke + pyscript](#migrering-fra-pakke--pyscript)
 - [Feilsøking og FAQ](#feilsøking-og-faq)
 
@@ -98,7 +99,7 @@ nytt og legg til integrasjonen som over.
 
 HACS-kategorien *Integration* installerer bare selve integrasjonen. Kopier
 `www/ki-klima-pro-card.js` til `/config/www/` og legg til ressursen
-`/local/ki-klima-pro-card.js?v=2.5.0` under Innstillinger → Dashboard → ⋮ → Ressurser
+`/local/ki-klima-pro-card.js?v=2.6.0` under Innstillinger → Dashboard → ⋮ → Ressurser
 (type *JavaScript-modul*). Tøm nettleser-cache.
 
 ---
@@ -179,7 +180,7 @@ hash: "#klima"
 
 **En sone er et rom, ikke en ovn.** Under *Konfigurer → Soner* velger du én eller flere termostater
 og én effektsensor per ovn for rommet; motoren skriver samme settpunkt til alle og summerer
-effekten. Ved oppgradering til 2.5.0 slås soner med samme rom, type og profil sammen automatisk
+effekten. Ved oppgradering til 2.6.0 slås soner med samme rom, type og profil sammen automatisk
 (f.eks. «Stue panelovn» + «Stue oljefyr» → «Stue» med nøkkel `stue`); det logges, og
 `switch.ki_styr_<gammel nøkkel>` erstattes av `switch.ki_styr_stue`. Temperaturhjelperne
 (`number.ki_temp_stue_dag/natt`) beholdes.
@@ -238,6 +239,46 @@ ovnen i den sonen ned til «vindu-temperaturen» (standard 12 °C) og effekten t
 Når vinduet lukkes, går sonen tilbake til normal styring. Begge verdiene og hovedbryteren
 (`switch.ki_vindu_stopp`) ligger under *Oppsett*. Sonen vises med merket **Vindu åpent** i kortet
 og i «Slik tenker motoren nå».
+
+## Bolig eller fritidsbolig — presets
+
+Første steg i oppsettet er å velge hus:
+
+| Preset | Hustype | Innhold |
+|---|---|---|
+| **Bolig — rekkehus i Oslo** | bolig | Standardoppsettet: panelovner og gulvvarme, bereder med relé, håndklevarmer, helg/hjemkomst som beskrevet under. |
+| **Fritidsbolig — hytta på Toten** | fritidsbolig | 100 m² fra 1960, varmepumpe i stua (type *varmepumpe*: billigst, senkes sist), gulvvarme kjøkken/bad/inngang, oljefyr i inngangen (samme sone som gulvet), panelovner på tre soverom, bereder som bare måles, elbillader 5 A om natten. Frosttemperaturer 8/10/12 °C, mål under 5 kW, absolutt grense 9,5 kWh. |
+| **Tomt oppsett** | bolig | Ingen soner, ingen forslag. |
+
+Alle entitets-ID-er i presetet er forslag og redigeres i stegene som følger. Hjelperverdiene
+(frosttemperaturer, elbil, grenser) legges inn én gang ved første kjøring og kan endres fritt
+etterpå. Hustypen kan byttes senere under *Konfigurer → Hus og varsler*.
+
+### Slik oppfører hytta seg
+
+* **Tom hytte = frostsikring.** Når ingen er der i «Helg auto etter»-timer (3 t i presetet),
+  uansett ukedag, settes `switch.ki_helgemodus` (vises som «Tom hytte (frostsikring)» i kortet):
+  panelovner 8 °C, gulvvarme 10 °C, bad 12 °C.
+* **Fredag kl. 10** spør den *«Kommer dere til Toten i dag?»* når hytta er tom. «Ja, vi kommer»
+  starter oppvarmingen med én gang, med mål om varm hytte til `ki_hjemkomst_tid` (17:00) — sone
+  for sone innenfor effektbudsjettet, gulvvarme først, varmepumpen alltid, panelovnene sist.
+  «Nei» eller ikke svar gjør ingenting; frostsikringen står. (Torsdagsspørsmålet kan slås på i
+  tillegg; da planlegger «ja» ankomst fredag og frosten holdes til forvarmingen må starte.)
+* **Søndag kl. 10** spør den *«Drar dere hjem i dag?»*. «Ja, vi drar» — eller ikke svar innen
+  fristen kl. 12 — gjør at hytta går i frostsikring i det siste person drar. «Nei, vi blir»
+  stopper spørsmålet for dagen; frostsikringen kommer likevel av seg selv når hytta har vært tom
+  i «Helg auto etter»-timer.
+* Kommer ingen innen tre timer etter planlagt ankomst, går hytta tilbake til frostsikring.
+* Kommer noen (person-entiteter «home» i hyttas Home Assistant), avsluttes ankomst og vanlige
+  dag/natt-temperaturer gjelder. Sebastian og Cybele har samme profiler som hjemme (kaldt om
+  natten, varmt til vekking).
+* **Bereder uten bryter** regnes som uregulert last og læres inn i lastprofilen. Prisstyring og
+  legionella slås på av seg selv den dagen du legger inn et relé under *Konfigurer → Utstyr*.
+* **Elbil** (`switch.ki_elbil_natt`, `number.ki_elbil_effekt_kw`, `time.ki_elbil_fra/til`):
+  motoren holder av ladeeffekten i ladevinduet når den planlegger varme, så bil + forvarming ikke
+  havner i samme time. Når profilen har lært natten, teller halvparten.
+* Nettleien regnes likt som hjemme (Elvia også på Toten): mål under 5 kW, og absolutt grense
+  9,5 kWh sikrer at én time aldri passerer 10 kW-trinnet selv ved full oppvarming fra kaldt.
 
 ## Moduser: helg, hjemkomst, sommer
 
@@ -416,7 +457,7 @@ integrasjonen via `mobile_app_notification_action`; ingen egne automasjoner tren
 
 ## Nettleie etter døgnmaks
 
-Fra 2.5.0 følger motoren Elvias faktiske modell i stedet for en fast timegrense.
+Fra 2.6.0 følger motoren Elvias faktiske modell i stedet for en fast timegrense.
 
 ### Måling av hele klokketimer
 
@@ -502,7 +543,7 @@ Innlærte profiler, τ, overstyringer, logg og VVB-tilstand lagres i
 
 ---
 
-## Oppgradering til 2.5.0
+## Oppgradering til 2.6.0
 
 * `number.ki_maks_time_kwh` betyr nå **absolutt** timegrense (anlegg/komfort), ikke økonomi.
   Sto den på den gamle standardverdien 4,90, løftes den automatisk til 6,00 én gang ved første

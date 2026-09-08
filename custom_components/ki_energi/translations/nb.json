@@ -2,13 +2,10 @@
   "config": {
     "step": {
       "user": {
-        "title": "Måling",
-        "description": "Målesensorene alt annet bygger på.",
+        "title": "Velg hus",
+        "description": "Velg et ferdig oppsett. Alle entiteter og verdier kan endres i stegene som følger og senere under Konfigurer.",
         "data": {
-          "total_effekt": "Totaleffekt fra strømmåleren (W)",
-          "importert_energi": "Importert energi fra strømmåleren (kWh, akkumulert)",
-          "ute_temp": "Utetemperatur",
-          "vaer": "Værentitet (brukes til skydekke/solkompensasjon)"
+          "preset": "Oppsett"
         }
       },
       "utstyr": {
@@ -49,13 +46,24 @@
       },
       "hus": {
         "title": "Hus",
-        "description": "Husets data brukes til solkompensasjon og standardverdier for treghet.",
+        "description": "Husets data brukes til solkompensasjon og standardverdier for treghet. Fritidsbolig: frostsikring når ingen er der, oppvarming før ankomst, spørsmål torsdag/fredag om helgen.",
         "data": {
           "areal_m2": "Boligareal (m²)",
           "byggear": "Byggeår",
           "glass_m2": "Glassflate i stua (m²)",
           "stue_areal_m2": "Stuens areal (m²)",
-          "varsel_mottakere": "Varselmottakere (velg én eller flere enheter)"
+          "varsel_mottakere": "Varselmottakere (velg én eller flere enheter)",
+          "hustype": "Hustype"
+        }
+      },
+      "maling": {
+        "title": "Måling",
+        "description": "Målesensorene alt annet bygger på.",
+        "data": {
+          "total_effekt": "Totaleffekt fra strømmåleren (W)",
+          "importert_energi": "Importert energi fra strømmåleren (kWh, akkumulert)",
+          "ute_temp": "Utetemperatur",
+          "vaer": "Værentitet (brukes til skydekke/solkompensasjon)"
         }
       }
     },
@@ -124,13 +132,14 @@
       },
       "hus": {
         "title": "Hus",
-        "description": "Husets data brukes til solkompensasjon og standardverdier for treghet.",
+        "description": "Husets data brukes til solkompensasjon og standardverdier for treghet. Fritidsbolig: frostsikring når ingen er der, oppvarming før ankomst, spørsmål torsdag/fredag om helgen.",
         "data": {
           "areal_m2": "Boligareal (m²)",
           "byggear": "Byggeår",
           "glass_m2": "Glassflate i stua (m²)",
           "stue_areal_m2": "Stuens areal (m²)",
-          "varsel_mottakere": "Varselmottakere (velg én eller flere enheter)"
+          "varsel_mottakere": "Varselmottakere (velg én eller flere enheter)",
+          "hustype": "Hustype"
         }
       },
       "soner": {

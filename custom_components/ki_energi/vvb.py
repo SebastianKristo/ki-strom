@@ -156,6 +156,8 @@ class KiVvb:
     def reservasjon(self) -> tuple[float, str, bool]:
         h = self.hub
         if not self.konfigurert():
+            if self.effekt() is not None:
+                return 0.0, "Berederen måles, men har ingen bryter — regnes som uregulert last", False
             return 0.0, "Berederen er ikke konfigurert", False
         effekt = (self.effekt() or 0.0) / 1000.0
         nominell = h.num("ki_vvb_effekt_kw", 2.0) or 2.0
@@ -198,7 +200,11 @@ class KiVvb:
                       "ki_vvb_legionella_ok", "ki_vvb_legionella_forfalt", "ki_vvb_bor_varme"):
                 h.sett_sensor(k, None)
             h.sett_sensor("ki_vvb_legionella_status", "Ikke konfigurert")
-            h.sett_sensor("ki_vvb_forklaring", "Ingen varmtvannsbereder er satt opp i integrasjonen.")
+            if self.effekt() is not None:
+                h.sett_sensor("ki_vvb_forklaring", f"Berederen måles ({self.effekt():.0f} W), men har ingen bryter. "
+                              "Motoren lærer forbruket inn som uregulert last. Legg til et relé senere for prisstyring og legionella.")
+            else:
+                h.sett_sensor("ki_vvb_forklaring", "Ingen varmtvannsbereder er satt opp i integrasjonen.")
             return
         naa = dt_util.now()
 

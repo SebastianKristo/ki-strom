@@ -12,6 +12,7 @@ from homeassistant.helpers import selector
 from .const import (
     CONF_AREAL, CONF_BYGGEAR, CONF_ENERGILEDD_DAG, CONF_ENERGILEDD_NATT, CONF_GARDINER,
     CONF_GLASS_M2, CONF_HANKLEVARMER, CONF_HANKLEVARMER_EFFEKT, CONF_HVITEVARER,
+    CONF_HUSTYPE, CONF_PRESET, PRESETS,
     CONF_IMPORTERT_ENERGI, CONF_KAPASITETSTRINN, CONF_NORDPOOL, CONF_NORGESPRIS_AKTIV, CONF_SONER,
     CONF_STROMPRIS, CONF_STUE_AREAL, CONF_TILSTEDE_CYBELE, CONF_TILSTEDE_RUNE,
     CONF_TILSTEDE_SEBASTIAN, CONF_TOPP1, CONF_TOPP2, CONF_TOPP3, CONF_TOTAL_EFFEKT, CONF_UTE_TEMP,
@@ -49,6 +50,10 @@ def _notify(hass=None):
 
 def skjema_hus(hass=None) -> dict:
     return {
+        vol.Required(CONF_HUSTYPE, default="bolig"): selector.SelectSelector(selector.SelectSelectorConfig(
+            options=[selector.SelectOptionDict(value="bolig", label="Bolig — noen bor her fast"),
+                     selector.SelectOptionDict(value="fritidsbolig", label="Fritidsbolig — tom mesteparten av tiden, frostsikring når ingen er der")],
+            mode="dropdown")),
         vol.Required(CONF_AREAL, default=120): _num(20, 1000, 1, "m²"),
         vol.Required(CONF_BYGGEAR, default=1980): _num(1800, 2100, 1),
         vol.Required(CONF_GLASS_M2, default=20): _num(0, 200, 1, "m²"),
@@ -111,46 +116,71 @@ class KiEnergiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def __init__(self) -> None:
         self._data: dict[str, Any] = {}
 
+    def _forslag(self, *keys):
+        """Forslag til feltverdier: preset overstyrer standard."""
+        preset = PRESETS.get(self._data.get(CONF_PRESET, "oslo"), PRESETS["oslo"])
+        ut = {}
+        for k in keys:
+            v = preset["config"].get(k, DEFAULT_CONFIG.get(k))
+            if v not in (None, ""):
+                ut[k] = v
+        return ut
+
     async def async_step_user(self, user_input=None):
+        """Første steg: velg hus (preset). Alt etterpå fylles med forslag fra valget."""
         if self._async_current_entries():
             return self.async_abort(reason="single_instance_allowed")
         if user_input is not None:
+            self._data[CONF_PRESET] = user_input[CONF_PRESET]
+            self._data[CONF_HUSTYPE] = PRESETS[user_input[CONF_PRESET]]["hustype"]
+            return await self.async_step_maling()
+        return self.async_show_form(step_id="user", data_schema=vol.Schema({
+            vol.Required(CONF_PRESET, default="oslo"): selector.SelectSelector(selector.SelectSelectorConfig(
+                options=[selector.SelectOptionDict(value=k, label=p["navn"] + (" — " + p["beskrivelse"] if p["beskrivelse"] else ""))
+                         for k, p in PRESETS.items()], mode="list"))}))
+
+    async def async_step_maling(self, user_input=None):
+        if user_input is not None:
             self._data.update(_rens(user_input, SKJEMA_MALING))
             return await self.async_step_utstyr()
-        return self.async_show_form(step_id="user", data_schema=self.add_suggested_values_to_schema(
-            vol.Schema(SKJEMA_MALING), {k: DEFAULT_CONFIG[k] for k in (CONF_TOTAL_EFFEKT, CONF_IMPORTERT_ENERGI, CONF_UTE_TEMP, CONF_VAER)}))
+        return self.async_show_form(step_id="maling", data_schema=self.add_suggested_values_to_schema(
+            vol.Schema(SKJEMA_MALING), self._forslag(CONF_TOTAL_EFFEKT, CONF_IMPORTERT_ENERGI, CONF_UTE_TEMP, CONF_VAER)))
 
     async def async_step_utstyr(self, user_input=None):
         if user_input is not None:
             self._data.update(_rens(user_input, SKJEMA_UTSTYR))
             return await self.async_step_personer()
         return self.async_show_form(step_id="utstyr", data_schema=self.add_suggested_values_to_schema(
-            vol.Schema(SKJEMA_UTSTYR), {k: DEFAULT_CONFIG[k] for k in (CONF_VVB_BRYTER, CONF_VVB_EFFEKT, CONF_HANKLEVARMER, CONF_HANKLEVARMER_EFFEKT)}))
+            vol.Schema(SKJEMA_UTSTYR), self._forslag(CONF_VVB_BRYTER, CONF_VVB_EFFEKT, CONF_HANKLEVARMER, CONF_HANKLEVARMER_EFFEKT)))
 
     async def async_step_personer(self, user_input=None):
         if user_input is not None:
             self._data.update(_rens(user_input, SKJEMA_PERSONER))
             return await self.async_step_nettleie()
         return self.async_show_form(step_id="personer", data_schema=self.add_suggested_values_to_schema(
-            vol.Schema(SKJEMA_PERSONER), {k: DEFAULT_CONFIG[k] for k in (CONF_TILSTEDE_CYBELE, CONF_TILSTEDE_SEBASTIAN, CONF_TILSTEDE_RUNE)}))
+            vol.Schema(SKJEMA_PERSONER), self._forslag(CONF_TILSTEDE_CYBELE, CONF_TILSTEDE_SEBASTIAN, CONF_TILSTEDE_RUNE)))
 
     async def async_step_nettleie(self, user_input=None):
         if user_input is not None:
             self._data.update(_rens(user_input, SKJEMA_NETTLEIE))
             return await self.async_step_hus()
         return self.async_show_form(step_id="nettleie", data_schema=self.add_suggested_values_to_schema(
-            vol.Schema(SKJEMA_NETTLEIE), {k: DEFAULT_CONFIG[k] for k in (CONF_TOPP1, CONF_TOPP2, CONF_TOPP3, CONF_ENERGILEDD_DAG, CONF_ENERGILEDD_NATT, CONF_STROMPRIS, CONF_KAPASITETSTRINN, CONF_NORGESPRIS_AKTIV)}))
+            vol.Schema(SKJEMA_NETTLEIE), self._forslag(CONF_TOPP1, CONF_TOPP2, CONF_TOPP3, CONF_ENERGILEDD_DAG, CONF_ENERGILEDD_NATT, CONF_STROMPRIS, CONF_KAPASITETSTRINN, CONF_NORGESPRIS_AKTIV)))
 
     async def async_step_hus(self, user_input=None):
         skjema = skjema_hus(self.hass)
+        preset = PRESETS.get(self._data.get(CONF_PRESET, "oslo"), PRESETS["oslo"])
         if user_input is not None:
             self._data.update(_rens(user_input, skjema))
-            self._data[CONF_SONER] = {k: dict(v) for k, v in DEFAULT_SONER.items()}
-            return self.async_create_entry(title="KI Energi", data=self._data)
+            self._data[CONF_SONER] = {k: dict(v) for k, v in preset["soner"].items()}
+            tittel = "KI Energi" if preset["hustype"] == "bolig" else "KI Energi (hytte)"
+            return self.async_create_entry(title=tittel, data=self._data)
         tilgjengelig = set(self.hass.services.async_services().get("notify", {}).keys())
-        forslag = [m for m in DEFAULT_CONFIG[CONF_VARSEL_MOTTAKERE] if m in tilgjengelig]
+        forslag = self._forslag(CONF_AREAL, CONF_BYGGEAR, CONF_GLASS_M2, CONF_STUE_AREAL)
+        forslag[CONF_VARSEL_MOTTAKERE] = [m for m in DEFAULT_CONFIG[CONF_VARSEL_MOTTAKERE] if m in tilgjengelig]
+        forslag[CONF_HUSTYPE] = preset["hustype"]
         return self.async_show_form(step_id="hus", data_schema=self.add_suggested_values_to_schema(
-            vol.Schema(skjema), {CONF_VARSEL_MOTTAKERE: forslag}))
+            vol.Schema(skjema), forslag))
 
     @staticmethod
     @callback
@@ -270,7 +300,8 @@ class KiEnergiOptionsFlow(config_entries.OptionsFlow):
             vol.Optional("vindu"): _ent("binary_sensor", multiple=True),
             vol.Required("type", default=s.get("type", "panel")): selector.SelectSelector(selector.SelectSelectorConfig(
                 options=[selector.SelectOptionDict(value="panel", label="Panelovn (rask)"),
-                         selector.SelectOptionDict(value="gulv", label="Gulvvarme (treg)")], mode="dropdown")),
+                         selector.SelectOptionDict(value="gulv", label="Gulvvarme (treg)"),
+                         selector.SelectOptionDict(value="varmepumpe", label="Varmepumpe (billigst — senkes sist)")], mode="dropdown")),
             vol.Required("profil", default=s.get("profil", "fellesrom")): selector.SelectSelector(selector.SelectSelectorConfig(
                 options=[selector.SelectOptionDict(value=p, label=PROFIL_TEKST[p]) for p in PROFILER], mode="dropdown")),
             vol.Required("prio", default=int(s.get("prio", 3))): _num(1, 5, 1, mode="slider"),

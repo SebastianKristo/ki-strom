@@ -15,6 +15,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    CONF_HUSTYPE, CONF_PRESET, PRESETS,
     CONF_SONER, DEFAULT_CONFIG, DEFAULT_SONER, DOMAIN, Z_AKTIV, Z_PROFIL,
     Z_TEMP_BORTE, Z_TEMP_DAG, Z_TEMP_NATT,
 )
@@ -92,6 +93,9 @@ class KiHub:
                 s[felt] = liste[0] if liste else ""
             ut[key] = s
         return ut
+
+    def fritidsbolig(self) -> bool:
+        return self.cfg(CONF_HUSTYPE, "bolig") == "fritidsbolig"
 
     def aktive_soner(self) -> dict[str, dict]:
         return {k: v for k, v in self.soner().items() if v.get(Z_AKTIV, True) and v.get("climate")}

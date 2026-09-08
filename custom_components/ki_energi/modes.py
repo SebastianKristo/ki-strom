@@ -15,7 +15,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     AKSJON_HELG_JA, AKSJON_HELG_NAA, AKSJON_HELG_NEI, AKSJON_HJEM_FORLENG, AKSJON_HJEM_JA, AKSJON_HJEM_NAA,
-    AKSJON_HJEM_NEI, AKSJON_HJEM_SENERE, CONF_GARDINER, CONF_HANKLEVARMER, CONF_HANKLEVARMER_EFFEKT, CONF_TILSTEDE_CYBELE,
+    AKSJON_HJEM_NEI, AKSJON_HJEM_SENERE, AKSJON_HYTTE_BLIR, AKSJON_HYTTE_DRAR, CONF_GARDINER, CONF_HANKLEVARMER, CONF_HANKLEVARMER_EFFEKT, CONF_TILSTEDE_CYBELE,
     CONF_TILSTEDE_RUNE, CONF_TILSTEDE_SEBASTIAN, CONF_UTE_TEMP, CONF_VAER,
 )
 from .hub import KiHub
@@ -77,22 +77,28 @@ class KiModuser:
         if borte and self.m.get("helg_ved_avreise") and not h.on("ki_helgemodus"):
             self.m.pop("helg_ved_avreise", None)
             h.sett("ki_helgemodus", True)
-            await h.varsle("God tur!", "Alle er ute — huset er satt i helgemodus (sparetemperatur).", kategori="helg")
+            await h.varsle("God tur!", "Hytta er tom — frostsikring er på." if h.fritidsbolig()
+                           else "Alle er ute — huset er satt i helgemodus (sparetemperatur).", kategori="helg")
             if h.engine is not None:
                 h.engine.logg_hendelse("Helgemodus aktivert ved avreise (forhåndsvarslet).")
             h.lagre()
 
         # --- helg: automatisk aktivering torsdag/fredag ved langt fravær ---
         if (borte and h.on("ki_helg_auto", True) and not h.on("ki_helgemodus")
-                and not h.on("ki_sommermodus") and naa.weekday() in (3, 4)):
+                and not h.on("ki_sommermodus") and (h.fritidsbolig() or naa.weekday() in (3, 4))
+                and not (h.fritidsbolig() and h.on("ki_hjemkomst_aktiv"))):
             siden = dt_util.parse_datetime(self.m.get("borte_siden", "")) if self.m.get("borte_siden") else None
             timer = h.num("ki_helg_auto_timer", 6)
             if siden and (naa - siden) >= timedelta(hours=timer) and self.m.get("helg_auto_dag") != dag:
                 self.m["helg_auto_dag"] = dag
                 h.sett("ki_helgemodus", True)
-                await h.varsle("Helgemodus aktivert",
-                               f"Alle har vært borte i {int(timer)} timer — huset er satt i sparemodus. "
-                               "Slå av helgemodus i klimakortet hvis dette var feil.", kategori="helg")
+                if h.fritidsbolig():
+                    await h.varsle("Hytta er tom", f"Ingen har vært der på {int(timer)} timer — frostsikring er på. "
+                                   "Svar på torsdagsspørsmålet eller trykk «Start ankomst» for å varme opp.", kategori="helg")
+                else:
+                    await h.varsle("Helgemodus aktivert",
+                                   f"Alle har vært borte i {int(timer)} timer — huset er satt i sparemodus. "
+                                   "Slå av helgemodus i klimakortet hvis dette var feil.", kategori="helg")
                 if h.engine is not None:
                     h.engine.logg_hendelse(f"Helgemodus aktivert automatisk etter {int(timer)} t fravær.")
                 h.lagre()
@@ -108,17 +114,44 @@ class KiModuser:
         if h.on("ki_hjemkomst_aktiv"):
             plan = h.dt("ki_hjemkomst_planlagt")
             if plan and naa > plan + timedelta(hours=3):
-                await self.hjemkomst_ferdig("Planlagt hjemkomst er passert med god margin")
+                if h.fritidsbolig() and borte:
+                    await self.hjemkomst_ferdig("Planlagt ankomst er passert uten at noen kom")
+                    h.sett("ki_helgemodus", True)
+                    if h.engine is not None:
+                        h.engine.logg_hendelse("Ingen kom til hytta — tilbake til frostsikring.")
+                        await h.engine.tick()
+                else:
+                    await self.hjemkomst_ferdig("Planlagt hjemkomst er passert med god margin")
 
     async def _tidshendelser(self, naa: datetime, minutt: int) -> None:
         h = self.hub
         ukedag = naa.weekday()
+        dagens = naa.strftime("%Y-%m-%d")
         # Torsdag og fredag: «Skal dere bort i helgen?» — bare hvis dere fortsatt er hjemme,
         # helg ikke allerede er på, og dere ikke alt har svart denne uka.
         spor_tid = (h.tid_min("ki_helg_varsel_tid_torsdag", "16:00") if ukedag == 3 and h.on("ki_helg_spor_torsdag", True)
                     else h.tid_min("ki_helg_varsel_tid", "10:00") if ukedag == 4 and h.on("ki_helg_spor_fredag", True) else None)
         uke = naa.strftime("%G-%V")
-        if (spor_tid is not None and minutt == spor_tid
+        if (h.fritidsbolig() and spor_tid is not None and minutt == spor_tid
+                and not h.on("ki_hjemkomst_aktiv") and not h.on("ki_sommermodus")
+                and self.alle_borte() is not False and self.m.get("helg_svart_uke") != uke):
+            # Hytta. Fredag: «Kommer dere i dag?» — ja starter oppvarmingen nå, nei/ikke svar gjør ingenting.
+            # Torsdag (hvis slått på): ja planlegger fredag.
+            if ukedag == 4:
+                await h.varsle("Kommer dere til Toten i dag?",
+                               f"Svar ja, så starter oppvarmingen nå og hytta er varm til kl. {h.tid_str('ki_hjemkomst_tid', '17:00')}. "
+                               "Svarer dere ikke, skjer ingenting — frostsikringen står.",
+                               aksjoner=[{"action": AKSJON_HELG_NAA, "title": "Ja, vi kommer"},
+                                         {"action": AKSJON_HELG_NEI, "title": "Nei"}],
+                               tag="ki_helg", kategori="helg")
+            else:
+                await h.varsle("Skal dere på hytta i helgen?",
+                               f"Svar ja, så er hytta varm til fredag kl. {h.tid_str('ki_hjemkomst_tid', '17:00')}.",
+                               aksjoner=[{"action": AKSJON_HELG_JA, "title": "Ja, vi kommer fredag"},
+                                         {"action": AKSJON_HELG_NAA, "title": "Ja, start oppvarming nå"},
+                                         {"action": AKSJON_HELG_NEI, "title": "Nei, ikke denne helgen"}],
+                               tag="ki_helg", kategori="helg")
+        elif (spor_tid is not None and minutt == spor_tid and not h.fritidsbolig()
                 and not h.on("ki_helgemodus") and not h.on("ki_sommermodus")
                 and not self.alle_borte() and not self.m.get("helg_ved_avreise")
                 and self.m.get("helg_svart_uke") != uke):
@@ -129,8 +162,29 @@ class KiModuser:
                                      {"action": AKSJON_HELG_NAA, "title": "Ja, sett sparemodus nå"},
                                      {"action": AKSJON_HELG_NEI, "title": "Nei, vi er hjemme"}],
                            tag="ki_helg", kategori="helg")
-        # Søndag: spørsmål om hjemkomst
-        if ukedag == 6 and h.on("ki_helgemodus") and not h.on("ki_hjemkomst_aktiv"):
+        # Søndag på hytta: «Drar dere hjem i dag?» — ja eller ikke svar → frostsikring når siste drar.
+        # «Nei, vi blir» → ikke spør mer i dag; frost kommer likevel av seg selv når hytta har vært tom lenge nok.
+        if (ukedag == 6 and h.fritidsbolig() and not h.on("ki_helgemodus")
+                and self.m.get("forlenget_dag") != dagens):
+            spor = h.tid_min("ki_helg_sporsmal_tid", "10:00")
+            frist = h.tid_min("ki_helg_frist_tid", "12:00")
+            if minutt == spor and not self.m.get("helg_ved_avreise"):
+                h.sett("ki_helg_venter_svar", True)
+                await h.varsle("Drar dere hjem i dag?",
+                               f"Svarer dere ja (eller ikke innen kl. {frist // 60:02d}:{frist % 60:02d}), går hytta i frostsikring "
+                               "i det siste person drar.",
+                               aksjoner=[{"action": AKSJON_HYTTE_DRAR, "title": "Ja, vi drar"},
+                                         {"action": AKSJON_HYTTE_BLIR, "title": "Nei, vi blir"}],
+                               tag="ki_hytte", kategori="helg")
+            if minutt == frist and h.on("ki_helg_venter_svar"):
+                h.sett("ki_helg_venter_svar", False)
+                self.m["helg_ved_avreise"] = True
+                h.lagre()
+                if h.engine is not None:
+                    h.engine.logg_hendelse("Ingen svar søndag — frostsikring settes når siste person drar.")
+
+        # Søndag: spørsmål om hjemkomst (bare i boligen — på hytta er søndag avreise)
+        if ukedag == 6 and h.on("ki_helgemodus") and not h.on("ki_hjemkomst_aktiv") and not h.fritidsbolig():
             spor = h.tid_min("ki_helg_sporsmal_tid", "08:00")
             utsatt = self.m.get("sporsmal_utsatt_til")
             if minutt == spor or (utsatt and naa >= dt_util.parse_datetime(utsatt) and minutt == (dt_util.parse_datetime(utsatt).hour * 60 + dt_util.parse_datetime(utsatt).minute)):
@@ -171,7 +225,9 @@ class KiModuser:
                 planlagt = naa + timedelta(minutes=30)
         h.sett("ki_hjemkomst_planlagt", planlagt)
         h.sett("ki_helg_venter_svar", False)
-        h.sett("ki_helgemodus", False)
+        # I boligen avsluttes helg her. På hytta beholdes frostsikringen til forvarmingen må starte
+        # (motoren regner selv ut når, ut fra oppvarmingsraten den har lært).
+        h.sett("ki_helgemodus", bool(h.fritidsbolig()))
         h.sett("ki_hjemkomst_aktiv", True)
         if h.engine is not None:
             h.engine.logg_hendelse(f"Hjemkomst startet: {grunn}. Mål kl. {planlagt:%H:%M}. "
@@ -200,7 +256,36 @@ class KiModuser:
         h = self.hub
         naa = dt_util.now()
         uke = naa.strftime("%G-%V")
-        if aksjon == AKSJON_HELG_JA:
+        if aksjon == AKSJON_HELG_JA and h.fritidsbolig():
+            self.m["helg_svart_uke"] = uke
+            m = h.tid_min("ki_hjemkomst_tid", "17:00")
+            plan = naa.replace(hour=m // 60, minute=m % 60, second=0, microsecond=0) + timedelta(days=(4 - naa.weekday()) % 7)
+            if plan <= naa:                       # fredag etter ankomsttid → neste fredag
+                plan += timedelta(days=7)
+            await self.start_hjemkomst(plan, "Svar: kommer til hytta")
+            await h.varsle("Greit", f"Hytta er klar {plan:%A} kl. {plan:%H:%M}. Frostsikring fram til oppvarmingen må starte.", kategori="helg")
+        elif aksjon == AKSJON_HELG_NAA and h.fritidsbolig():
+            self.m["helg_svart_uke"] = uke
+            h.lagre()
+            m = h.tid_min("ki_hjemkomst_tid", "17:00")
+            plan = naa.replace(hour=m // 60, minute=m % 60, second=0, microsecond=0)
+            if plan <= naa + timedelta(minutes=20):
+                plan = naa + timedelta(minutes=20)
+            await self.start_hjemkomst(plan, "Svar: kommer i dag")
+            await h.varsle("Greit", f"Oppvarmingen er i gang — hytta er klar rundt kl. {plan:%H:%M}.", kategori="helg")
+        elif aksjon == AKSJON_HYTTE_DRAR:
+            h.sett("ki_helg_venter_svar", False)
+            self.m["helg_ved_avreise"] = True
+            h.lagre()
+            await h.logbook("KI Klima", "Frostsikring settes når siste person drar fra hytta.")
+            await h.varsle("God tur hjem", "Hytta går i frostsikring i det siste person drar.", kategori="helg")
+        elif aksjon == AKSJON_HYTTE_BLIR:
+            h.sett("ki_helg_venter_svar", False)
+            self.m["forlenget_dag"] = naa.strftime("%Y-%m-%d")
+            self.m.pop("helg_ved_avreise", None)
+            h.lagre()
+            await h.logbook("KI Klima", "Blir på hytta — spør ikke mer i dag.")
+        elif aksjon == AKSJON_HELG_JA:
             self.m["helg_svart_uke"] = uke
             if self.alle_borte():
                 h.sett("ki_helgemodus", True)
