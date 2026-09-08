@@ -13,12 +13,14 @@ from homeassistant.helpers.event import (
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    CONF_IMPORTERT_ENERGI,
     CONF_HANKLEVARMER_EFFEKT, CONF_HVITEVARER, CONF_TOTAL_EFFEKT, CONF_VVB_EFFEKT, DOMAIN, LAERING_MIN,
     PLATFORMS, TICK_SEK,
 )
 from .engine import KiEngine
 from .hub import KiHub
 from .modes import KiModuser
+from .nettleie import KiNettleie
 from .vvb import KiVvb
 
 _LOGGER = logging.getLogger(__name__)
@@ -41,6 +43,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hub.engine = KiEngine(hub)
     hub.vvb = KiVvb(hub)
     hub.moduser = KiModuser(hub)
+    hub.nettleie = KiNettleie(hub)
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = hub
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -69,7 +72,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hub.avmeld_ved_stopp(async_call_later(hass, 20, _tick))
     hub.avmeld_ved_stopp(async_track_time_interval(hass, _tick, timedelta(seconds=TICK_SEK)))
     hub.avmeld_ved_stopp(async_track_time_interval(hass, _laering, timedelta(minutes=LAERING_MIN)))
-    hub.avmeld_ved_stopp(async_track_time_change(hass, _timeslutt, minute=59, second=30))
+    # Timen lukkes på hele klokketimen (+5 s så registeret rekker å oppdatere), ikke kl. :59:30.
+    hub.avmeld_ved_stopp(async_track_time_change(hass, _timeslutt, minute=0, second=5))
+    # Energiregisteret prøves ved hver oppdatering, med sensorens eget tidsstempel.
+    if hub.cfg(CONF_IMPORTERT_ENERGI):
+        @callback
+        def _energi_endret(event):
+            hub.nettleie.prove_fra_state(event.data.get("new_state"))
+        hub.avmeld_ved_stopp(async_track_state_change_event(hass, [hub.cfg(CONF_IMPORTERT_ENERGI)], _energi_endret))
     hub.avmeld_ved_stopp(async_track_time_change(hass, _midnatt, hour=0, minute=0, second=5))
 
     fulgt = [e for e in [hub.cfg(CONF_TOTAL_EFFEKT), hub.cfg(CONF_VVB_EFFEKT), hub.cfg(CONF_HANKLEVARMER_EFFEKT)] if e]

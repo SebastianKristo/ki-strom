@@ -53,7 +53,9 @@ offisielle [Nord Pool-integrasjonen](https://www.home-assistant.io/integrations/
 - [Varmtvann og legionella](#varmtvann-og-legionella)
 - [Eksempler](#eksempler)
 - [Entiteter](#entiteter)
+- [Nettleie etter døgnmaks](#nettleie-etter-døgnmaks)
 - [Tjenester](#tjenester)
+- [Oppgradering til 2.4.0](#oppgradering-til-240)
 - [Migrering fra pakke + pyscript](#migrering-fra-pakke--pyscript)
 - [Feilsøking og FAQ](#feilsøking-og-faq)
 
@@ -63,7 +65,7 @@ offisielle [Nord Pool-integrasjonen](https://www.home-assistant.io/integrations/
 
 | Funksjon | Hvordan |
 |---|---|
-| **Effektbudsjett per time** | Leser energiregisteret ved timestart, regner ut hvor mye som er igjen av trinnet (2–5 kW, eller høyere trinn hvis det lønner seg denne måneden) og fordeler resten på ovnene etter prioritet. |
+| **Effektbudsjett per time** | Måler hver hele klokketime mot energiregisteret (tidsstemplet, med målt/estimert/manglende kvalitet), husker døgnmaks per dato og regner etter Elvias modell: snittet av de tre høyeste døgnmaksene fra tre ulike dager. Timegrensen settes så dagens døgnmaks ikke løfter snittet over ønsket trinn — og timer opp til dagens allerede registrerte døgnmaks er «gratis». Se [Nettleie etter døgnmaks](#nettleie-etter-døgnmaks). |
 | **Prognose 15/30/60/120 min** | Lærer husets lastprofil (uke × time) og varsler *før* timen sprekker. Fleksible laster flyttes fram i stedet for å kuttes i siste liten. |
 | **Prediktiv oppvarming** | Lærer tidskonstanten (τ) for hvert rom og starter oppvarmingen akkurat tidsnok til vekking, hjemkomst eller søndagsretur. Gulvvarme får alltid minst 45 min forvarming. |
 | **Nattsenking bare når det lønner seg** | Regner på om senkingen faktisk sparer penger med dagens pris, nettleie og rommets τ — ellers holdes temperaturen. |
@@ -96,7 +98,7 @@ nytt og legg til integrasjonen som over.
 
 HACS-kategorien *Integration* installerer bare selve integrasjonen. Kopier
 `www/ki-klima-pro-card.js` til `/config/www/` og legg til ressursen
-`/local/ki-klima-pro-card.js?v=2.2.0` under Innstillinger → Dashboard → ⋮ → Ressurser
+`/local/ki-klima-pro-card.js?v=2.4.0` under Innstillinger → Dashboard → ⋮ → Ressurser
 (type *JavaScript-modul*). Tøm nettleser-cache.
 
 ---
@@ -209,11 +211,11 @@ Hver sone får `switch.ki_styr_<sone>` (skal motoren styre denne?) og
 
 ### Leggetid og prioritet fra kortet
 
-Øverst på *Oversikt* ligger **Leggetid**: én knapp per soverom. Trykker du «Sebastian» når han
-legger seg, senkes rommet til natt-temperatur med én gang og varmes opp igjen til hans vanlige
-vekketid (tjeneste `ki_energi.leggetid`). Under *Soner → Vurdering per sone* kan du flytte soner
-opp og ned i prioritet med pilene (`ki_energi.sett_prio`); endringen lagres i minnet og overstyrer
-konfigurasjonen.
+Øverst på *Oversikt* ligger **Leggetid**: én knapp for Cybeles og Sebastians rom. Trykker du
+«Sebastian» når han legger seg, senkes rommet til natt-temperatur med én gang og varmes opp igjen
+til hans vanlige vekketid (tjeneste `ki_energi.leggetid`). Prioritet mellom soner settes under
+*Konfigurer → Soner*, eller med tjenesten `ki_energi.sett_prio` (lagres i minnet og overstyrer
+konfigurasjonen).
 
 Alle blokker på fanene utenom Oversikt kan legges sammen ved å trykke på overskriften — kortet
 husker hva som er åpent og lukket. Tider vises også som en døgnlinje, og sesonger (sommer, gardiner)
@@ -230,7 +232,8 @@ og i «Slik tenker motoren nå».
 
 ## Moduser: helg, hjemkomst, sommer
 
-**Slik fungerer en hyttehelg:** Torsdag kl. 16 (og fredag kl. 10 hvis dere ikke svarte) spør
+**Slik fungerer en hyttehelg:** Torsdag kl. 16 (og fredag kl. 10 hvis dere ikke svarte — begge
+dagene kan slås av hver for seg under Helgevarsler) spør
 KI Energi *«Skal dere bort i helgen?»* — bare hvis dere fortsatt er hjemme. Svarer dere
 *«Ja, vi drar»*, skjer ingenting før siste person har gått ut døra; da settes helgemodus
 automatisk. Drar dere uten å svare, aktiveres helgemodus av seg selv etter 6 timers fravær
@@ -356,7 +359,9 @@ Nye entiteter: `sensor.ki_prognose` (15/30/60/120 min), `sensor.ki_besparelse`,
 `switch.ki_nattsenk_aktiv`, `switch.ki_sommer_auto`, `switch.ki_helg_auto`,
 `switch.ki_hjemkomst_aktiv`, `switch.ki_vvb_legionella_aktiv`, `number.ki_temp_helg_bad`,
 `number.ki_sommer_*_maned`, `number.ki_sommer_ute_grense`, `number.ki_helg_auto_timer`,
-`number.ki_gardin_ute_grense`, `number.ki_trinn_kostnad_diff`, `number.ki_stat_spart_kr`,
+`number.ki_gardin_ute_grense`, `number.ki_trinn_kostnad_diff` (reserve når tabellen ikke dekker),
+`number.ki_mal_trinn_kw`, `number.ki_reserve_topp_kwh`, `switch.ki_tillat_dyrere_trinn`,
+`text.ki_tariff_tabell`, `sensor.ki_nettleie`, `number.ki_stat_spart_kr`,
 `number.ki_stat_komfortavvik`, `time.ki_hjemkomst_tid`, `time.ki_cybele_borte_fra/til`.
 
 Fjernet (den gamle DEL 1 «effektvakt»): `ki_motor_overtar`, `ki_shed_niva`,
@@ -400,11 +405,85 @@ integrasjonen via `mobile_app_notification_action`; ingen egne automasjoner tren
 
 ---
 
+## Nettleie etter døgnmaks
+
+Fra 2.4.0 følger motoren Elvias faktiske modell i stedet for en fast timegrense.
+
+### Måling av hele klokketimer
+
+* Energiregisteret (`Måling → Importert energi`) prøves ved hver oppdatering, med sensorens eget
+  tidsstempel. Verdien ved en timegrense regnes som **målt** når en prøve ligger innenfor ±15 s,
+  ellers **estimert** ved lineær interpolering mellom nærmeste prøver (bare hvis hullet er under
+  20 min). Er hullet lengre, er timen **mangler** — den regnes ikke som null og differansen legges
+  ikke på én time.
+* Ved omstart eller databrudd forsøker motoren å rekonstruere prøvene rundt timegrensene fra
+  Home Assistants recorder. Lykkes det ikke, forblir timen «mangler».
+* Faller registeret (nullstilling/målerbytte), forkastes timen bruddet skjedde i; neste time
+  måles normalt.
+* Timene nøkles i UTC, så høst-døgnet med 25 timer og vår-døgnet med 23 timer håndteres uten at
+  timer slås sammen eller mistes. Datoer er lokale (Home Assistants tidssone).
+* `sensor.ki_time_energi` viser foreløpig verdi for inneværende time; kilden i statussensoren
+  sier om nullpunktet var målt eller interpolert.
+
+### Døgnmaks, topp tre og tariff
+
+* Døgnmaks per lokal dato beregnes av **fullførte** timer, med klokketime, kilde og kvalitet.
+  Inneværende time holdes utenom som prognose.
+* De tre eksterne toppsensorene (`Nettleie → Topp 1–3`) har ingen dato. Egne, daterte
+  døgnmakser er fasit. En ekstern verdi lik en egen dag (±0,06 kWh) regnes som samme dag; resten
+  legges inn som **udaterte dager** — de kan aldri være «i dag», så de trekker alltid i
+  konservativ retning, og datakvaliteten settes til «usikker». Ved installasjon midt i måneden
+  er det derfor de eksterne tallene som bærer de første dagene.
+* Tarifftabellen ligger i `text.ki_tariff_tabell` (standard `2:150,5:250,10:420,15:585,20:755`,
+  øvre grense kW → kr/mnd). Nøyaktig på grensen regnes som trinnet over (5,0 → 420 kr). Snittet
+  avrundes ikke. Over siste grense er trinnet **ukjent** — motoren dikter ikke satser.
+
+### Timegrensen
+
+For hver time regnes:
+
+1. forventet sluttforbruk = brukt hittil + planlagt effekt × tid igjen;
+2. kandidat for dagens døgnmaks = maks(registrert døgnmaks, forventet sluttforbruk);
+3. topp tre fra tre ulike datoer i en kopi av måneden, med dagens verdi erstattet — aldri telt
+   dobbelt;
+4. snitt, trinn og eventuell økning i fastledd (kr/mnd, én gang per måned — ikke per time).
+
+Grensen er `maks(dagens registrerte døgnmaks, 3·(mål − reserve) − de to høyeste andre dagene)`,
+begrenset av **absolutt timegrense** (`number.ki_maks_time_kwh`, nå 6,0 som standard — anleggets
+og komfortens tak, ikke økonomi) og laveste grense. Mål er `number.ki_mal_trinn_kw` (snitt under
+5 kW). Er målet alt passert denne måneden, holder motoren snittet under *neste* grense i stedet
+(«mål passert» i kortet). Bryteren `switch.ki_tillat_dyrere_trinn` setter komfort foran
+fastledd: da gjelder bare den absolutte grensen. Det finnes ingen skjult kroneverdi for komfort.
+
+Reserven er `number.ki_reserve_topp_kwh` (0,30) pluss 0,10 ved delvis og 0,20 ved usikker
+historikk. Er færre enn to andre dager kjent, går motoren i **reservemodus**: ukjente dager regnes
+som den høyeste kjente døgnmaksen eller den absolutte grensen — ikke som null.
+
+Eksempel: topper 4,8 / 4,1 / 3,9 fra tre dager. Ender en time i dag på 5,5 kWh, blir snittet 4,8
+(fortsatt 250 kr), og resten av dagen kan alle timer gå til 5,5 uten at noen ovn senkes. 6,1 kWh
+ville gitt snitt 5,0 → 420 kr (+170 kr); det stopper motoren, med mindre du har slått på «tillat
+dyrere trinn». Neste dag er 5,5-dagen bare én av «de andre», og rommet krymper til
+3·4,7 − 5,5 − 4,8 = 3,8 kWh.
+
+Alt dette vises i `sensor.ki_nettleie` og i *Energi → Dynamisk grense*: dagens døgnmaks med time,
+topp tre med datoer og kilde, registrert snitt og trinn, forventet sluttforbruk, forventet topp
+tre og trinn, økning i fastledd, reserve og datakvalitet — registrert og prognose adskilt.
+
+### Begrensninger
+
+* Prognosen for timen bygger på motorens lastprofil; den er et anslag, ikke en sikker kostnad.
+* Reserven er en enkel regel (grunnreserve + påslag), ikke en statistisk modell av resten av
+  måneden. Den skjelner mellom «ingen økning med dagens topper» og «mindre rom framover», men
+  regner ikke sannsynlighet for framtidige topper.
+* Motoren kan bare fjerne styrt varme. Komfyr, bil og bereder utenfor motorens kontroll kan
+  fortsatt gi en topp den ikke får stoppet.
+* Trinn over 20 kW er ikke i standardtabellen; legg dem inn selv om du trenger dem.
+
 ## Tidsplan i motoren
 
 - Energimotor: hvert minutt (første kjøring 20 s etter oppstart)
 - Læring (lastprofil + tidskonstanter): hvert 5. minutt
-- Timeslutt/registrering av time: hh:59:30
+- Timeslutt: hele klokketimen (hh:00:05 lukkes forrige time; timemåleren venter inntil 5 min på forsinket registerprøve)
 - Månedsskifte (nullstill statistikk): 00:00 den 1.
 - Sommer-auto: 12:00 daglig; helg-auto/hjemkomst sjekkes i motoren
 
@@ -412,6 +491,19 @@ Innlærte profiler, τ, overstyringer, logg og VVB-tilstand lagres i
 `.storage/ki_energi.<entry_id>.minne` og overlever omstart og oppdatering.
 
 ---
+
+## Oppgradering til 2.4.0
+
+* `number.ki_maks_time_kwh` betyr nå **absolutt** timegrense (anlegg/komfort), ikke økonomi.
+  Sto den på den gamle standardverdien 4,90, løftes den automatisk til 6,00 én gang ved første
+  kjøring (logges i beslutningsloggen). Har du satt en annen verdi, røres den ikke.
+* `number.ki_mal_snitt_kwh` (mål for snitt) brukes ikke lenger av motoren; erstattet av
+  `number.ki_mal_trinn_kw` (ønsket trinn) og `number.ki_reserve_topp_kwh` (reserve). Entiteten
+  beholdes så dashboards ikke knekker.
+* Standardverdien for `number.ki_trinn_kostnad_diff` er 170 kr (250 → 420). Den brukes bare som
+  reserve i besparelsesestimatet når tarifftabellen ikke dekker.
+* Timehistorikk og døgnmakser bygges opp fra første kjøring; de første dagene bærer de eksterne
+  toppsensorene grunnlaget (datakvalitet «usikker», litt større reserve).
 
 ## Migrering fra pakke + pyscript
 

@@ -29,5 +29,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     entiteter = []
     for key, navn, ikon in TEXTS:
         std = hub.cfg(CONF_VARSEL_MOTTAKERE, "") if key == "ki_varsel_mottakere" else ""
+        if key == "ki_tariff_tabell":
+            from .const import TARIFF_TABELL_STANDARD  # noqa: PLC0415
+            std = TARIFF_TABELL_STANDARD
         entiteter.append(KiText(hub, key, navn, std or "", ikon))
     async_add_entities(entiteter)

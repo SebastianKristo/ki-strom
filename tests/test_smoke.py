@@ -147,3 +147,34 @@ async def test_config_flow(hass):
     assert r["type"] == "create_entry", r
     await hass.async_block_till_done()
     assert r["data"]["vvb_bryter"] == ""
+
+
+async def test_skyggemodus_styrer_ingenting_og_nettleie_publiseres(hass):
+    """10: skyggemodus regner og logger, men rører ikke termostater. Nettleiesensoren fylles."""
+    entry = await _setup(hass)
+    hub = hass.data[DOMAIN][entry.entry_id]
+    kall = []
+    async def fake_set_temp(call):
+        kall.append(dict(call.data))
+    hass.services.async_register("climate", "set_temperature", fake_set_temp)
+
+    # skygge på (standard) — mål tilsier senking når budsjettet er trangt
+    await hass.services.async_call("number", "set_value", {"entity_id": "number.ki_maks_time_kwh", "value": 2.0}, blocking=True)
+    await hass.services.async_call("switch", "turn_on", {"entity_id": "switch.ki_skyggemodus"}, blocking=True)
+    await hub.engine.tick(); await hass.async_block_till_done()
+    assert kall == []
+    n = hass.states.get("sensor.ki_nettleie")
+    assert n is not None and n.state not in ("unknown", "unavailable")
+    a = n.attributes
+    for k in ("grense_kwh", "hvorfor", "reserve_kwh", "datakvalitet", "topp_tre", "tabell", "dager_igjen"):
+        assert k in a, k
+    # eksterne topper uten dato i testoppsettet → usikker
+    assert a["datakvalitet"] == "usikker" and a["udaterte_topper"] == 3
+    assert hass.states.get("sensor.ki_energi_status").attributes.get("skyggemodus") is True
+    await hub.vvb.tick(); await hass.async_block_till_done()
+    assert len(hass.states.get("sensor.ki_vvb_billige_timer").attributes.get("doegn") or []) == 24
+
+    # skygge av → motoren skriver settpunkter
+    await hass.services.async_call("switch", "turn_off", {"entity_id": "switch.ki_skyggemodus"}, blocking=True)
+    await hub.engine.tick(); await hass.async_block_till_done()
+    assert kall, "forventet settpunkt-skriving uten skyggemodus"

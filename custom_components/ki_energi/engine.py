@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 import math
 import traceback
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from homeassistant.core import callback
 from homeassistant.util import dt as dt_util
@@ -43,6 +43,7 @@ class KiEngine:
         self.siste_tick: datetime | None = None
         self.hjemkomst_forklaring = ""
         self.vindu_apent_siden: dict[str, datetime] = {}
+        self.nettleie_vurdering: dict | None = None
 
     # ------------------------------------------------------------------
     #  Små hjelpere
@@ -101,40 +102,30 @@ class KiEngine:
         h.sett_sensor("ki_uregulert_effekt", max(total - styrt, 0.0))
 
     def forbrukt_denne_timen(self) -> tuple[float | None, str]:
-        """kWh brukt hittil i klokketimen, målt mot målerens energiregister."""
+        """kWh brukt hittil i klokketimen, fra timemåleren (tidsstemplet nullpunkt ved hele timen)."""
         h = self.hub
-        total = h.f(h.cfg(CONF_IMPORTERT_ENERGI))
-        if total is None:
+        if h.nettleie is None:
             return None, ""
-        denne = dt_util.now().strftime("%Y-%m-%dT%H")
-        basis = self.st.get("time_basis")
-        if not basis or basis.get("time") != denne or basis.get("verdi", 0) > total:
-            self.st["time_basis"] = {"time": denne, "verdi": total}
-            h.lagre()
-            return 0.0, "egen timesmåling (nullpunkt satt nå)"
-        return max(0.0, total - basis["verdi"]), "egen timesmåling mot energiregisteret"
+        kwh, kv = h.nettleie.forelopig_time()
+        if kwh is None:
+            return None, ""
+        if kv == "forelopig_estimert":
+            return kwh, "timesmåling mot energiregisteret — nullpunktet ved timeskiftet er interpolert (estimert)"
+        return kwh, "timesmåling mot energiregisteret (nullpunkt målt ved timeskiftet)"
 
     # ------------------------------------------------------------------
     #  Budsjett
     # ------------------------------------------------------------------
     def dynamisk_grense(self) -> tuple[float, str]:
+        """Økonomisk timegrense fra nettleiemodellen (døgnmaks per dato, topp tre, tarifftrinn).
+        Den absolutte grensen ki_maks_time_kwh gjelder alltid i tillegg."""
         h = self.hub
         hard = h.num("ki_maks_time_kwh", 4.9)
-        laveste = h.num("ki_min_time_kwh", 3.0)
-        if not h.on("ki_dynamisk_grense", True):
+        if not h.on("ki_dynamisk_grense", True) or h.nettleie is None:
             return hard, "Fast grense"
-        mal = h.num("ki_mal_snitt_kwh", 4.7)
-        topper = sorted([h.f(h.cfg(CONF_TOPP1), 0.0) or 0.0, h.f(h.cfg(CONF_TOPP2), 0.0) or 0.0,
-                         h.f(h.cfg(CONF_TOPP3), 0.0) or 0.0], reverse=True)
-        rom = 3 * mal - topper[0] - topper[1]
-        grense = max(laveste, min(hard, max(topper[2], rom)))
-        if rom >= hard:
-            grunn = f"God margin — månedens topper er {topper[0]:.1f}/{topper[1]:.1f}/{topper[2]:.1f} kWh"
-        elif grense <= topper[2] + 0.01:
-            grunn = f"Timen kan bruke {grense:.2f} kWh uten å endre topplista"
-        else:
-            grunn = f"Snittet av tre topper må holdes under {mal:.2f} kWh"
-        return round(grense, 2), grunn
+        v = h.nettleie.vurder()
+        self.nettleie_vurdering = v
+        return v["grense_kwh"], v["hvorfor"]
 
     def budsjett(self) -> dict:
         h = self.hub
@@ -646,24 +637,54 @@ class KiEngine:
             self.hub.sett_sensor("ki_energi_status", "fallback", {
                 "forklaring": f"Motoren krasjet: {e}", "feilspor": spor[-900:]})
 
+    def _migrer_240(self) -> None:
+        """v2.4.0: ki_maks_time_kwh var økonomisk grense (4,9). Nå er den absolutt, og økonomien
+        regnes av nettleiemodellen. Løft gammel standardverdi én gang så det nye rommet kan brukes."""
+        h = self.hub
+        if self.st.get("migrert_240"):
+            return
+        e = h.helpers.get("ki_maks_time_kwh")
+        if e is None or e.verdi is None:
+            return  # vent til hjelperen er gjenopprettet
+        if abs(float(e.verdi) - 4.9) < 1e-6:
+            h.sett("ki_maks_time_kwh", 6.0)
+            self.logg_hendelse("Oppgradering 2.4.0: absolutt timegrense løftet fra 4,90 til 6,00 kWh. "
+                               "Økonomisk grense regnes nå av nettleiemodellen (topp tre per dato).")
+        self.st["migrert_240"] = True
+        h.lagre()
+
     async def _tick_indre(self) -> None:
         h = self.hub
         self.endret = False
+        self._migrer_240()
         self.oppdater_effektsensorer()
+
+        # Timemåler: prøv registeret, lukk ferdige timer (og rekonstruer ved hull)
+        if h.nettleie is not None:
+            for rad in await h.nettleie.oppdater():
+                lok = dt_util.as_local(datetime.fromtimestamp(rad["start"], tz=timezone.utc))
+                if rad["kwh"] is None:
+                    self.logg_hendelse(f"Timen {lok:%d.%m. %H}:00–{(lok.hour + 1) % 24:02d}:00 mangler måling — telles ikke som null.")
+                else:
+                    self.logg_hendelse(f"Timen {lok:%d.%m. %H}:00–{(lok.hour + 1) % 24:02d}:00 endte på {rad['kwh']:.2f} kWh ({rad['kvalitet']}).")
 
         # Egen timesmåling og estimat — alltid, også når motoren er av
         forbrukt, _kilde = self.forbrukt_denne_timen()
         total_kw = (h.f(h.cfg(CONF_TOTAL_EFFEKT), 0.0) or 0.0) / 1000.0
         n = dt_util.now()
+        estimert_time = None
         if forbrukt is not None:
             h.sett_sensor("ki_time_energi", round(forbrukt, 3))
             rest = (3600 - (n.minute * 60 + n.second)) / 3600.0
-            h.sett_sensor("ki_estimert_timesforbruk", round(forbrukt + total_kw * rest, 2))
+            estimert_time = round(forbrukt + total_kw * rest, 2)
+            h.sett_sensor("ki_estimert_timesforbruk", estimert_time)
 
         self.klima_status()
 
         if not h.on("ki_energi_hovedbryter", True):
             h.sett_sensor("ki_energi_status", "av", {"forklaring": "Energimotoren er slått av"})
+            if h.nettleie is not None:
+                h.nettleie.publiser(h.nettleie.vurder(estimert_time))
             self.beredskap()
             return
 
@@ -689,6 +710,14 @@ class KiEngine:
         forventet = round(prognose + vvb_kw + styrt_kw, 2)
         farge = self.sone_farge(forventet, budsjett["tillatt_snitt"])
         senket = [p for p in plan if p.get("handling") == "senket"]
+
+        # Nettleie: forventet sluttforbruk for timen etter planen → topp tre, trinn, fastledd
+        nv = None
+        if h.nettleie is not None:
+            forventet_time = round(budsjett["forbrukt"] + forventet * budsjett["timer_igjen"], 3)
+            nv = h.nettleie.vurder(forventet_time)
+            self.nettleie_vurdering = nv
+            h.nettleie.publiser(nv)
 
         endringer = []
         if not skygge:
@@ -743,12 +772,25 @@ class KiEngine:
 
         # Tankegang — motorens resonnement i klartekst, til «utvid»-visningen i kortet
         tanker = [
-            f"Modus {self.modus_tekst()}. Timegrensen er {budsjett['grense']:.2f} kWh ({budsjett['grense_grunn']}).",
+            f"Modus {self.modus_tekst()}. Timegrensen er {budsjett['grense']:.2f} kWh"
+            + (f" ({budsjett['grense_grunn']})." if h.nettleie is None else "."),
             f"Denne timen: {budsjett['forbrukt']:.2f} kWh brukt, {budsjett['igjen']:.2f} kWh igjen på "
             f"{int(budsjett['minutter_igjen'])} min. Tillatt snitteffekt: {budsjett['tillatt_snitt']:.2f} kW.",
             f"Forventer {forventet:.2f} kW nå ({prognose:.2f} kW uregulert + {styrt_kw:.2f} kW styrt), "
             f"{prog[15]:.1f} kW om 15 min og {prog[60]:.1f} kW om en time.",
         ]
+        if nv is not None:
+            if nv.get("dagens_maks_kwh") is not None:
+                tanker.append(f"Nettleie: dagens døgnmaks er {nv['dagens_maks_kwh']:.2f} kWh (kl. {nv['dagens_maks_time']}); "
+                              f"timer opp til det koster ingenting ekstra.")
+            if nv.get("registrert_snitt") is not None:
+                kr = f"{nv['registrert_trinn_kr']:.0f} kr" if nv["registrert_trinn_kr"] is not None else "ukjent trinn"
+                tanker.append(f"Topp tre i måneden gir snitt {nv['registrert_snitt']:.2f} kW → {kr}/mnd. "
+                              f"Timen ligger an til {nv.get('forventet_time_kwh', 0):.2f} kWh → "
+                              + (f"fastleddet øker med {nv['okning_fastledd_kr']:.0f} kr." if nv.get("hoyere_fastledd")
+                                 else "samme trinn, men mindre rom resten av måneden." if nv.get("redusert_margin")
+                                 else "ingen endring i fastleddet."))
+            tanker.append(nv["hvorfor"] + f" Reserve {nv['reserve_kwh']:.2f} kWh, datakvalitet {nv['datakvalitet']}.")
         if vvb_kw > 0 or vvb_ma:
             tanker.append(f"Varmtvann: {vvb_grunn} — reserverer {vvb_kw:.2f} kW" + (" og går foran varmen." if vvb_ma else "."))
         vinduer = [p for p in plan if p.get("handling") == "vindu"]
@@ -890,8 +932,8 @@ class KiEngine:
         # fordi rommet står lavere en stund) + unngåtte topper priset som 1/3 av trinnkostnad
         spart_kwh = round(flyttet * 0.10, 2)
         energi = h.f(h.cfg(CONF_STROMPRIS), 1.0) or 1.0
-        spart_kr = round(flyttet * diff_nettleie + spart_kwh * energi
-                         + topper * h.num("ki_trinn_kostnad_diff", 80.0) / 3.0, 2)
+        trinn_diff = self.trinn_diff_kr()
+        spart_kr = round(flyttet * diff_nettleie + spart_kwh * energi + topper * trinn_diff / 3.0, 2)
         h.sett("ki_stat_spart_kr", spart_kr)
         h.sett_sensor("ki_besparelse", spart_kr, {
             "estimat": True,
@@ -900,7 +942,20 @@ class KiEngine:
             "unngatte_topper": int(topper), "utkoblinger": int(h.num("ki_stat_shed_hendelser", 0)),
             "komfortavvik_gradtimer": round(h.num("ki_stat_komfortavvik", 0.0), 2),
             "spart_nettleie_kr": round(flyttet * diff_nettleie, 2),
-            "spart_effektledd_kr": round(topper * h.num("ki_trinn_kostnad_diff", 80.0) / 3.0, 2)})
+            "trinn_diff_kr": trinn_diff,
+            "spart_effektledd_kr": round(topper * trinn_diff / 3.0, 2)})
+
+    def trinn_diff_kr(self) -> float:
+        """Forskjellen i fastledd mellom registrert trinn og neste, fra tarifftabellen.
+        Faller tilbake på hjelperen ki_trinn_kostnad_diff hvis tabellen ikke dekker."""
+        h = self.hub
+        v = self.nettleie_vurdering
+        if v and v.get("registrert_trinn_kr") is not None and v.get("registrert_trinn_til") is not None:
+            from .nettleie import trinn as _trinn  # noqa: PLC0415
+            neste = _trinn(v["registrert_trinn_til"], [tuple(t) for t in v["tabell"]])
+            if neste["kr"] is not None:
+                return float(neste["kr"] - v["registrert_trinn_kr"])
+        return h.num("ki_trinn_kostnad_diff", 170.0)
 
     # ------------------------------------------------------------------
     #  Logg
@@ -1002,13 +1057,18 @@ class KiEngine:
     #  Timeslutt og månedsskifte
     # ------------------------------------------------------------------
     async def timeslutt(self) -> None:
+        """Kjøres like etter hel time. Lukker timen i timemåleren og varsler hvis den passerte grensen."""
         h = self.hub
+        if h.nettleie is None:
+            return
+        lukket = await h.nettleie.oppdater()
         if not h.on("ki_energi_hovedbryter", True):
             return
-        forbrukt, _m = self.forbrukt_denne_timen()
-        if forbrukt is None:
+        siste = [r for r in lukket if r.get("kwh") is not None]
+        if not siste:
             return
-        grense, _g = self.dynamisk_grense()
+        forbrukt = siste[-1]["kwh"]
+        grense = float((self.nettleie_vurdering or {}).get("grense_kwh") or h.num("ki_maks_time_kwh", 4.9))
         if forbrukt > grense:
             await h.varsle("Effektgrense passert",
                            f"Timen endte på {forbrukt:.2f} kWh, over grensen på {grense:.2f} kWh.", kategori="effekt")

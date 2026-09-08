@@ -115,8 +115,8 @@ class KiModuser:
         ukedag = naa.weekday()
         # Torsdag og fredag: «Skal dere bort i helgen?» — bare hvis dere fortsatt er hjemme,
         # helg ikke allerede er på, og dere ikke alt har svart denne uka.
-        spor_tid = (h.tid_min("ki_helg_varsel_tid_torsdag", "16:00") if ukedag == 3
-                    else h.tid_min("ki_helg_varsel_tid", "10:00") if ukedag == 4 else None)
+        spor_tid = (h.tid_min("ki_helg_varsel_tid_torsdag", "16:00") if ukedag == 3 and h.on("ki_helg_spor_torsdag", True)
+                    else h.tid_min("ki_helg_varsel_tid", "10:00") if ukedag == 4 and h.on("ki_helg_spor_fredag", True) else None)
         uke = naa.strftime("%G-%V")
         if (spor_tid is not None and minutt == spor_tid
                 and not h.on("ki_helgemodus") and not h.on("ki_sommermodus")

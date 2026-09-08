@@ -196,10 +196,13 @@ SWITCHES = [
     ("ki_laering_tau", "KI Lær Tidskonstanter", True, "mdi:school"),
     ("ki_solkompensasjon", "KI Solkompensasjon", True, "mdi:weather-sunny"),
     ("ki_vindu_stopp", "KI Vindu Åpent Stopper Varme", True, "mdi:window-open-variant"),
+    ("ki_tillat_dyrere_trinn", "KI Tillat Dyrere Kapasitetstrinn", False, "mdi:cash-lock-open"),
     ("ki_nattsenk_aktiv", "KI Nattsenking Aktiv", True, "mdi:weather-night"),
     ("ki_nattsenk_okonomi", "KI Økonomisk Nattsenking", True, "mdi:cash-check"),
     ("ki_energi_varsler", "KI Energivarsler", True, "mdi:bell-outline"),
     ("ki_varsel_effekt", "KI Varsel Effektgrense", True, "mdi:flash-alert"),
+    ("ki_helg_spor_torsdag", "KI Helg Spør Torsdag", True, "mdi:calendar-question"),
+    ("ki_helg_spor_fredag", "KI Helg Spør Fredag", True, "mdi:calendar-question"),
     ("ki_varsel_helg", "KI Varsel Helg", True, "mdi:bag-suitcase"),
     ("ki_varsel_hjemkomst", "KI Varsel Hjemkomst", True, "mdi:home-import-outline"),
     ("ki_varsel_sommer", "KI Varsel Sommermodus", True, "mdi:white-balance-sunny"),
@@ -247,7 +250,7 @@ NUMBERS = [
     ("ki_vvb_effekt_kw", "KI VVB Effekt", 0.5, 4, 0.1, "kW", 2.0, "mdi:flash"),
     ("ki_vvb_boost_minutter", "KI VVB Boost Varighet", 15, 240, 15, "min", 60, "mdi:rocket-launch"),
     ("vvb_billigste_timer_dogn", "VVB Antall Billige Timer", 1, 14, 1, "t", 6, "mdi:clock-check"),
-    ("ki_maks_time_kwh", "KI Hard Timegrense", 2, 6, 0.05, "kWh", 4.9, "mdi:flash-alert"),
+    ("ki_maks_time_kwh", "KI Absolutt Timegrense", 2, 15, 0.05, "kWh", 6.0, "mdi:flash-alert"),
     ("ki_mal_snitt_kwh", "KI Mål For Snitt Av Tre Topper", 2, 5, 0.05, "kWh", 4.7, "mdi:target"),
     ("ki_min_time_kwh", "KI Laveste Timegrense", 1, 5, 0.1, "kWh", 3.0, "mdi:arrow-collapse-down"),
     ("ki_reserve_uregulert_kwh", "KI Reserve For Uregulert Last", 0, 2, 0.05, "kWh", 0.35, "mdi:shield-outline"),
@@ -261,7 +264,9 @@ NUMBERS = [
     ("ki_vindu_forsinkelse_min", "KI Vindu Forsinkelse", 0, 30, 1, "min", 3, "mdi:timer-outline"),
     ("ki_vindu_temp", "KI Vindu Åpent Temperatur", 5, 18, 0.5, "°C", 12, "mdi:snowflake-thermometer"),
     ("ki_komfort_vekt", "KI Komfortvekt", 10, 200, 5, "", 60, "mdi:sofa"),
-    ("ki_trinn_kostnad_diff", "KI Kostnad Neste Kapasitetstrinn", 0, 500, 5, "kr", 80, "mdi:cash"),
+    ("ki_trinn_kostnad_diff", "KI Kostnad Neste Kapasitetstrinn", 0, 500, 5, "kr", 170, "mdi:cash"),
+    ("ki_mal_trinn_kw", "KI Ønsket Kapasitetstrinn Under", 2, 20, 0.5, "kW", 5.0, "mdi:target"),
+    ("ki_reserve_topp_kwh", "KI Reserve Mot Neste Trinn", 0, 1.5, 0.05, "kWh", 0.3, "mdi:shield-half-full"),
     ("ki_stat_unngatte_topper", "KI Unngåtte Topper", 0, 9999, 1, "", 0, "mdi:shield-check"),
     ("ki_stat_shed_hendelser", "KI Utkoblinger", 0, 99999, 1, "", 0, "mdi:stairs-down"),
     ("ki_stat_flyttet_kwh", "KI Flyttet Energi", 0, 9999, 0.01, "kWh", 0, "mdi:swap-horizontal"),
@@ -309,7 +314,10 @@ DATETIMES = [
 ]
 
 TEXTS = [
+    ("ki_tariff_tabell", "KI Tarifftabell", "mdi:table"),
 ]
+# Standardverdi for tarifftabellen: øvre grense kW → kr/mnd (inkl. avgifter). Snitt ≥ 20 = ukjent.
+TARIFF_TABELL_STANDARD = "2:150,5:250,10:420,15:585,20:755"
 
 # Sensorer motoren skriver. (nøkkel, navn, ikon, enhet, device_class, state_class)
 SENSORS = [
@@ -328,6 +336,7 @@ SENSORS = [
     ("ki_uregulert_effekt", "KI Uregulert Effekt", "mdi:help-circle-outline", "W", "power", "measurement"),
     ("ki_hvitevarer_effekt", "KI Hvitevarer Effekt", "mdi:stove", "W", "power", "measurement"),
     ("ki_time_energi", "KI Energi Denne Timen", "mdi:counter", "kWh", "energy", "total"),
+    ("ki_nettleie", "KI Nettleie", "mdi:transmission-tower", None, None, None),
     ("ki_estimert_timesforbruk", "KI Estimert Timesforbruk", "mdi:chart-line", "kWh", None, "measurement"),
     ("ki_vvb_legionella_status", "KI VVB Legionella Status", "mdi:water-boiler", None, None, None),
     ("ki_vvb_forklaring", "KI VVB Forklaring", "mdi:text-long", None, None, None),
