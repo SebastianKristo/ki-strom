@@ -1,0 +1,175 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Måling",
+        "description": "Målesensorene alt annet bygger på.",
+        "data": {
+          "total_effekt": "Totaleffekt fra strømmåleren (W)",
+          "importert_energi": "Importert energi fra strømmåleren (kWh, akkumulert)",
+          "ute_temp": "Utetemperatur",
+          "vaer": "Værentitet (brukes til skydekke/solkompensasjon)"
+        }
+      },
+      "utstyr": {
+        "title": "Utstyr",
+        "description": "Varmtvann, håndklevarmer, gardiner og store uregulerte laster. Alt er valgfritt.",
+        "data": {
+          "vvb_bryter": "Varmtvannsbereder – bryter/relé",
+          "vvb_effekt": "Varmtvannsbereder – effektsensor (W)",
+          "hanklevarmer": "Håndklevarmer – bryter",
+          "hanklevarmer_effekt": "Håndklevarmer – effektsensor (W)",
+          "gardiner": "Gardiner i stua (cover)",
+          "hvitevarer": "Effektsensorer for komfyr, oppvaskmaskin osv. (flere)"
+        }
+      },
+      "personer": {
+        "title": "Personer",
+        "description": "Hvem som er hjemme. Brukes til Cybeles dagsenking, stuas ettermiddagsreduksjon, helgemodus og hjemkomst.",
+        "data": {
+          "tilstede_cybele": "Tilstedeværelse Cybele (on/home = hjemme)",
+          "tilstede_sebastian": "Tilstedeværelse Sebastian",
+          "tilstede_rune": "Tilstedeværelse Rune"
+        }
+      },
+      "nettleie": {
+        "title": "Nettleie",
+        "description": "Elvia-sensorene og strømpris. Toppforbruk 1–3 gir den dynamiske timegrensen.",
+        "data": {
+          "topp1": "Elvia toppforbruk 1 (kWh)",
+          "topp2": "Elvia toppforbruk 2 (kWh)",
+          "topp3": "Elvia toppforbruk 3 (kWh)",
+          "energiledd_dag": "Nettleie energiledd dag (kr/kWh)",
+          "energiledd_natt": "Nettleie energiledd natt/helg (kr/kWh)",
+          "strompris": "Strømpris per kWh (Norgespris eller spot)",
+          "kapasitetstrinn": "Kapasitetstrinn (vises i kortet)",
+          "norgespris_aktiv": "Norgespris aktiv nå (binary_sensor)",
+          "nordpool": "Nord Pool-sensor med raw_today/raw_tomorrow (kun for spotprisstyring av bereder)"
+        }
+      },
+      "hus": {
+        "title": "Hus",
+        "description": "Husets data brukes til solkompensasjon og standardverdier for treghet.",
+        "data": {
+          "areal_m2": "Boligareal (m²)",
+          "byggear": "Byggeår",
+          "glass_m2": "Glassflate i stua (m²)",
+          "stue_areal_m2": "Stuens areal (m²)",
+          "varsel_mottakere": "Varselmottakere (kommaseparert, f.eks. notify.mobile_app_xxx)"
+        }
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "KI Energi er allerede satt opp."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "KI Energi",
+        "menu_options": {
+          "maling": "Måling",
+          "utstyr": "Utstyr",
+          "personer": "Personer",
+          "nettleie": "Nettleie og pris",
+          "hus": "Hus og varsler",
+          "soner": "Soner"
+        }
+      },
+      "maling": {
+        "title": "Måling",
+        "description": "",
+        "data": {
+          "total_effekt": "Totaleffekt fra strømmåleren (W)",
+          "importert_energi": "Importert energi fra strømmåleren (kWh, akkumulert)",
+          "ute_temp": "Utetemperatur",
+          "vaer": "Værentitet (brukes til skydekke/solkompensasjon)"
+        }
+      },
+      "utstyr": {
+        "title": "Utstyr",
+        "description": "Varmtvann, håndklevarmer, gardiner og store uregulerte laster. Alt er valgfritt.",
+        "data": {
+          "vvb_bryter": "Varmtvannsbereder – bryter/relé",
+          "vvb_effekt": "Varmtvannsbereder – effektsensor (W)",
+          "hanklevarmer": "Håndklevarmer – bryter",
+          "hanklevarmer_effekt": "Håndklevarmer – effektsensor (W)",
+          "gardiner": "Gardiner i stua (cover)",
+          "hvitevarer": "Effektsensorer for komfyr, oppvaskmaskin osv. (flere)"
+        }
+      },
+      "personer": {
+        "title": "Personer",
+        "description": "Hvem som er hjemme. Brukes til Cybeles dagsenking, stuas ettermiddagsreduksjon, helgemodus og hjemkomst.",
+        "data": {
+          "tilstede_cybele": "Tilstedeværelse Cybele (on/home = hjemme)",
+          "tilstede_sebastian": "Tilstedeværelse Sebastian",
+          "tilstede_rune": "Tilstedeværelse Rune"
+        }
+      },
+      "nettleie": {
+        "title": "Nettleie",
+        "description": "Elvia-sensorene og strømpris. Toppforbruk 1–3 gir den dynamiske timegrensen.",
+        "data": {
+          "topp1": "Elvia toppforbruk 1 (kWh)",
+          "topp2": "Elvia toppforbruk 2 (kWh)",
+          "topp3": "Elvia toppforbruk 3 (kWh)",
+          "energiledd_dag": "Nettleie energiledd dag (kr/kWh)",
+          "energiledd_natt": "Nettleie energiledd natt/helg (kr/kWh)",
+          "strompris": "Strømpris per kWh (Norgespris eller spot)",
+          "kapasitetstrinn": "Kapasitetstrinn (vises i kortet)",
+          "norgespris_aktiv": "Norgespris aktiv nå (binary_sensor)",
+          "nordpool": "Nord Pool-sensor med raw_today/raw_tomorrow (kun for spotprisstyring av bereder)"
+        }
+      },
+      "hus": {
+        "title": "Hus",
+        "description": "Husets data brukes til solkompensasjon og standardverdier for treghet.",
+        "data": {
+          "areal_m2": "Boligareal (m²)",
+          "byggear": "Byggeår",
+          "glass_m2": "Glassflate i stua (m²)",
+          "stue_areal_m2": "Stuens areal (m²)",
+          "varsel_mottakere": "Varselmottakere (kommaseparert, f.eks. notify.mobile_app_xxx)"
+        }
+      },
+      "soner": {
+        "title": "Soner",
+        "description": "Velg en sone å redigere, eller legg til en ny.",
+        "data": {
+          "sone": "Sone"
+        }
+      },
+      "ny_sone": {
+        "title": "Ny sone",
+        "description": "Nøkkelen brukes i entitets-ID-er (små bokstaver, understrek).",
+        "data": {
+          "key": "Nøkkel",
+          "navn": "Navn"
+        }
+      },
+      "sone": {
+        "title": "Sone: {navn}",
+        "description": "Nøkkel: {key}. Endringer starter integrasjonen på nytt.",
+        "data": {
+          "navn": "Navn",
+          "rom": "Rom",
+          "climate": "Climate-entitet",
+          "effekt": "Effektsensor (W)",
+          "duty": "Control signal / duty cycle (%)",
+          "temp": "Romtemperatursensor (valgfri, ellers climate)",
+          "type": "Type",
+          "profil": "Styringsprofil",
+          "prio": "Prioritet (1 = viktigst)",
+          "nominell": "Nominell effekt (kW)",
+          "sol": "Påvirkes av solinnstråling",
+          "aktiv": "Aktiv",
+          "slett": "Slett denne sonen"
+        }
+      }
+    },
+    "error": {
+      "finnes": "Nøkkelen er tom eller finnes allerede."
+    }
+  }
+}

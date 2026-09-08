@@ -1,0 +1,13 @@
+{
+  "domain": "ki_energi",
+  "name": "KI Energi",
+  "codeowners": ["@SebastianKristo"],
+  "config_flow": true,
+  "dependencies": ["sun"],
+  "documentation": "https://github.com/SebastianKristo/ki-strom",
+  "integration_type": "hub",
+  "iot_class": "calculated",
+  "issue_tracker": "https://github.com/SebastianKristo/ki-strom/issues",
+  "requirements": [],
+  "version": "2.0.0"
+}

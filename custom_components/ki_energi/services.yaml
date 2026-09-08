@@ -1,0 +1,88 @@
+overstyr:
+  name: Overstyr sone
+  description: Midlertidig måltemperatur for én sone. Utløper av seg selv.
+  fields:
+    sone:
+      name: Sone
+      description: Sonenøkkel, f.eks. stue_panelovn
+      required: true
+      example: stue_panelovn
+      selector:
+        text:
+    temp:
+      name: Temperatur
+      required: true
+      example: 23
+      selector:
+        number:
+          min: 5
+          max: 30
+          step: 0.5
+          unit_of_measurement: "°C"
+    minutter:
+      name: Varighet
+      example: 120
+      selector:
+        number:
+          min: 5
+          max: 1440
+          unit_of_measurement: min
+fjern_overstyring:
+  name: Fjern overstyring
+  description: Fjerner overstyring for én sone, eller alle hvis sone utelates.
+  fields:
+    sone:
+      name: Sone
+      example: stue_panelovn
+      selector:
+        text:
+nullstill_laering:
+  name: Nullstill læring
+  description: Sletter innlærte lastprofiler og/eller tidskonstanter.
+  fields:
+    hva:
+      name: Hva
+      example: tau
+      selector:
+        select:
+          options: ["alt", "profil", "tau"]
+vvb_boost:
+  name: Varmtvann boost
+  description: Slår på berederen nå i et gitt antall minutter.
+  fields:
+    minutter:
+      name: Minutter
+      selector:
+        number:
+          min: 15
+          max: 240
+          unit_of_measurement: min
+vvb_avbryt_boost:
+  name: Avbryt varmtvann-boost
+vvb_tving_syklus:
+  name: Tving legionellasyklus nå
+hjemkomst:
+  name: Start hjemkomst
+  description: Starter prediktiv oppvarming så huset er klart til angitt tid (standard er innstillingen for søndag).
+  fields:
+    tid:
+      name: Klokkeslett
+      example: "13:00"
+      selector:
+        text:
+    naa:
+      name: Kommer hjem nå
+      selector:
+        boolean:
+hjemkomst_ferdig:
+  name: Avslutt hjemkomst
+  description: Tilbake til normal ukeplan.
+helg_sporsmal:
+  name: Send hjemkomst-spørsmål
+  description: Sender søndagsvarselet nå.
+sett_standardverdier:
+  name: Sett standardverdier
+  description: Setter alle innstillinger tilbake til anbefalte verdier.
+tick:
+  name: Kjør motoren nå
+  description: Tvinger en beregning umiddelbart.
