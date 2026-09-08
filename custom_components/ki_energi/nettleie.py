@@ -29,7 +29,8 @@ TARIFF_STANDARD: list[tuple[float, float]] = [(2, 150), (5, 250), (10, 420), (15
 TARIFF_STANDARD_TEKST = "2:150,5:250,10:420,15:585,20:755"
 
 TOL_MALT_SEK = 15          # prøve innen ±15 s av timegrensen regnes som målt
-MAKS_GAP_SEK = 20 * 60     # lengre hull enn dette interpoleres ikke — da er verdien «mangler»
+MAKS_GAP_SEK = 61 * 60     # lengre hull enn dette interpoleres ikke — da er verdien «mangler».
+                           # (Registre som bare oppdateres hver time gir da «estimert», ikke «mangler».)
 VENT_PA_PROVE_SEK = 5 * 60 # så lenge venter vi på en forsinket prøve etter timeskiftet
 RESET_TOLERANSE = 0.5      # registeret falt mer enn dette → nullstilt/byttet måler
 
@@ -255,12 +256,21 @@ class Timemaler:
         return lukket
 
     def forelopig(self, naa_ts: float, naa_verdi: float | None) -> tuple[float | None, str]:
-        """kWh hittil i inneværende time og kvaliteten på nullpunktet."""
+        """kWh hittil i inneværende time og kvaliteten på nullpunktet.
+
+        Mangler prøve ved timegrensen (typisk rett etter omstart) brukes første prøve i timen som
+        nullpunkt — verdien er da et gulv (forbruket før første prøve er ukjent) og merkes «delvis».
+        """
+        if naa_verdi is None:
+            return None, "mangler"
         start = self.timestart(naa_ts)
         v0, k0 = self.verdi_ved(start)
-        if v0 is None or naa_verdi is None:
+        if v0 is not None:
+            return max(0.0, naa_verdi - v0), "forelopig" if k0 == "malt" else "forelopig_estimert"
+        forste = next((q for q in self.m["prover"] if start <= q[0] <= naa_ts), None)
+        if forste is None:
             return None, "mangler"
-        return max(0.0, naa_verdi - v0), "forelopig" if k0 == "malt" else "forelopig_estimert"
+        return max(0.0, naa_verdi - forste[1]), "forelopig_delvis"
 
     def mangler_rundt(self, start_ts: float) -> list[tuple[float, float]]:
         """Tidsvinduer der vi mangler prøver for å lukke timen [start, start+3600)."""
@@ -327,6 +337,15 @@ class KiNettleie:
         if eid:
             self.prove_fra_state(h.hass.states.get(eid))
         naa = dt_util.utcnow().timestamp()
+        # Første kjøring etter oppstart: hent prøver rundt starten på inneværende time fra
+        # recorder, så nullpunktet blir riktig selv om integrasjonen startet midt i timen.
+        if not getattr(self, "_start_rekonstruert", False):
+            self._start_rekonstruert = True
+            start = self.maler.timestart(naa)
+            if self.maler.verdi_ved(start)[0] is None:
+                n = await self._rekonstruer(start - MAKS_GAP_SEK, min(naa, start + MAKS_GAP_SEK))
+                if n:
+                    _LOGGER.info("ki_energi: %d prøver hentet fra historikken for inneværende time", n)
         lukket = self.maler.oppdater(naa)
         # rekonstruer timer som ble lukket som «mangler» — én gang per time
         for rad in [r for r in lukket if r["kvalitet"] == "mangler"]:

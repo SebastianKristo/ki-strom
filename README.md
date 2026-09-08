@@ -58,7 +58,7 @@ offisielle [Nord Pool-integrasjonen](https://www.home-assistant.io/integrations/
 - [Entiteter](#entiteter)
 - [Nettleie etter døgnmaks](#nettleie-etter-døgnmaks)
 - [Tjenester](#tjenester)
-- [Oppgradering til 2.7.0](#oppgradering-til-270)
+- [Oppgradering til 2.8.0](#oppgradering-til-280)
 - [Migrering fra pakke + pyscript](#migrering-fra-pakke--pyscript)
 - [Feilsøking og FAQ](#feilsøking-og-faq)
 
@@ -101,22 +101,29 @@ nytt og legg til integrasjonen som over.
 
 HACS-kategorien *Integration* installerer bare selve integrasjonen. Kopier
 `www/ki-klima-pro-card.js` til `/config/www/` og legg til ressursen
-`/local/ki-klima-pro-card.js?v=2.7.0` under Innstillinger → Dashboard → ⋮ → Ressurser
+`/local/ki-klima-pro-card.js?v=2.8.0` under Innstillinger → Dashboard → ⋮ → Ressurser
 (type *JavaScript-modul*). Tøm nettleser-cache.
 
 ---
 
 ## Oppsett steg for steg
 
-Veiviseren har fem steg. Alle felt har entitetsvelgere; verdiene under er eksempler.
+Veiviseren finner det meste selv. Hvert felt er forhåndsutfylt med det den gjenkjente i din
+Home Assistant (device_class, enhet, navn), og du bytter bare det som er feil.
 
-| Steg | Du oppgir | Eksempel |
+| Steg | Hva skjer | Automatisk |
 |---|---|---|
-| **1 Måling** | Total effekt (W), importert energi (kWh, økende), utetemperatur, værentitet | `sensor.strommaler_effekt`, `sensor.strommaler_imported_energy`, `sensor.outdoor_meter_temperature`, `weather.forecast_home` |
-| **2 Utstyr** | VVB-bryter og effektsensor, håndklevarmer, gardiner, hvitevarer (valgfritt) | `switch.varmtvannsbereder`, `sensor.varmtvannsbereder_power`, `cover.stue_gardin` |
-| **3 Personer** | Én hjemme/borte-entitet per person | `switch.sebastian_posisjon_hjemme_borte`, `person.cybele` |
-| **4 Nettleie og pris** | Elvia topp 1–3, energiledd dag/natt, spotpris eller Norgespris, Nord Pool (for VVB-planlegging) | `sensor.nettleie_elvia_toppforbruk`, `sensor.norgespris_total_strompris_norgespris` |
-| **5 Hus og varsler** | Areal, byggeår, glass-m² i stua, stueareal, og hvilke telefoner som skal varsles (velges fra en liste over `notify.mobile_app_*`) | 120 m², 1980, 20 m², 40 m² |
+| **1 Velg hus** | Bolig i Oslo, hytta på Toten, eller tomt oppsett | — |
+| **2 Måling** | Effektmåler (W) og energiregister (kWh) | Finner hovedmåleren (høyest effekt, «ams/meter/måler» i navnet) og det akkumulerte importregisteret. Avviser dagsforbruk-sensorer med forklaring. |
+| **3 Utstyr** | Bereder, håndklevarmer, gardiner, hvitevarer — alt valgfritt | Gjenkjenner bereder/håndklevarmer på navn. Velgerne viser bare effektsensorer der det trengs. |
+| **4 Personer** | Tilstedeværelse per person | Finner `person.*` eller hjemme/borte-brytere med navnet i. |
+| **5 Nettleie** | Toppsensorer, energiledd, Norgespris, Nord Pool — alt valgfritt | Finner Strømkalkulator-/Elvia-sensorer og Nord Pool (`raw_today`). |
+| **6 Hus og varsler** | Hustype, areal, byggeår, glass, telefoner | Telefoner fra `notify.mobile_app_*`. |
+| **7 Soner** | **Lag soner fra områdene mine** | Ett rom per HA-område med termostat: alle termostater i området i samme sone, effektsensorer summert, vindussensorer koblet på. Type (panel/gulv/varmepumpe) og profil (stue, bad = konstant, Cybele, Sebastian, gang = sjelden) gjettes fra navnet. |
+
+Menyen under **Konfigurer** viser status øverst («8 soner. Ikke satt opp: spotpris») og har
+«Lag soner fra områdene mine» så du kan hente inn nye rom senere uten å miste innstillingene i de
+som finnes.
 
 Etterpå: **Konfigurer** på integrasjonen gir samme meny + **Soner**.
 
@@ -182,7 +189,7 @@ hash: "#klima"
 
 **En sone er et rom, ikke en ovn.** Under *Konfigurer → Soner* velger du én eller flere termostater
 og én effektsensor per ovn for rommet; motoren skriver samme settpunkt til alle og summerer
-effekten. Ved oppgradering til 2.7.0 slås soner med samme rom, type og profil sammen automatisk
+effekten. Ved oppgradering til 2.8.0 slås soner med samme rom, type og profil sammen automatisk
 (f.eks. «Stue panelovn» + «Stue oljefyr» → «Stue» med nøkkel `stue`); det logges, og
 `switch.ki_styr_<gammel nøkkel>` erstattes av `switch.ki_styr_stue`. Temperaturhjelperne
 (`number.ki_temp_stue_dag/natt`) beholdes.
@@ -459,7 +466,7 @@ integrasjonen via `mobile_app_notification_action`; ingen egne automasjoner tren
 
 ## Nettleie etter døgnmaks
 
-Fra 2.7.0 følger motoren Elvias faktiske modell i stedet for en fast timegrense.
+Fra 2.8.0 følger motoren Elvias faktiske modell i stedet for en fast timegrense.
 
 ### Måling av hele klokketimer
 
@@ -545,7 +552,7 @@ Innlærte profiler, τ, overstyringer, logg og VVB-tilstand lagres i
 
 ---
 
-## Oppgradering til 2.7.0
+## Oppgradering til 2.8.0
 
 * `number.ki_maks_time_kwh` betyr nå **absolutt** timegrense (anlegg/komfort), ikke økonomi.
   Sto den på den gamle standardverdien 4,90, løftes den automatisk til 6,00 én gang ved første

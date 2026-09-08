@@ -9,6 +9,7 @@ from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.helpers import selector
 
+from . import oppdag
 from .const import (
     CONF_AREAL, CONF_BYGGEAR, CONF_ENERGILEDD_DAG, CONF_ENERGILEDD_NATT, CONF_GARDINER,
     CONF_GLASS_M2, CONF_HANKLEVARMER, CONF_HANKLEVARMER_EFFEKT, CONF_HVITEVARER,
@@ -21,8 +22,11 @@ from .const import (
 )
 
 
-def _ent(domain, multiple=False):
-    return selector.EntitySelector(selector.EntitySelectorConfig(domain=domain, multiple=multiple))
+def _ent(domain, multiple=False, device_class=None):
+    konf = dict(domain=domain, multiple=multiple)
+    if device_class:
+        konf["device_class"] = device_class
+    return selector.EntitySelector(selector.EntitySelectorConfig(**konf))
 
 
 def _num(mn, mx, step=1, unit=None, mode="box"):
@@ -65,18 +69,18 @@ def skjema_hus(hass=None) -> dict:
 ALLE_DOMENER = ["sensor", "binary_sensor", "switch", "input_boolean", "person", "device_tracker", "group"]
 
 SKJEMA_MALING = {
-    vol.Required(CONF_TOTAL_EFFEKT): _ent("sensor"),
-    vol.Required(CONF_IMPORTERT_ENERGI): _ent("sensor"),
-    vol.Optional(CONF_UTE_TEMP): _ent("sensor"),
+    vol.Required(CONF_TOTAL_EFFEKT): _ent("sensor", device_class="power"),
+    vol.Required(CONF_IMPORTERT_ENERGI): _ent("sensor", device_class="energy"),
+    vol.Optional(CONF_UTE_TEMP): _ent("sensor", device_class="temperature"),
     vol.Optional(CONF_VAER): _ent("weather"),
 }
 SKJEMA_UTSTYR = {
     vol.Optional(CONF_VVB_BRYTER): _ent(["switch", "input_boolean"]),
-    vol.Optional(CONF_VVB_EFFEKT): _ent("sensor"),
+    vol.Optional(CONF_VVB_EFFEKT): _ent("sensor", device_class="power"),
     vol.Optional(CONF_HANKLEVARMER): _ent("switch"),
-    vol.Optional(CONF_HANKLEVARMER_EFFEKT): _ent("sensor"),
+    vol.Optional(CONF_HANKLEVARMER_EFFEKT): _ent("sensor", device_class="power"),
     vol.Optional(CONF_GARDINER): _ent("cover"),
-    vol.Optional(CONF_HVITEVARER): _ent("sensor", multiple=True),
+    vol.Optional(CONF_HVITEVARER): _ent("sensor", multiple=True, device_class="power"),
 }
 SKJEMA_PERSONER = {
     vol.Optional(CONF_TILSTEDE_CYBELE): _ent(ALLE_DOMENER),
@@ -95,6 +99,23 @@ SKJEMA_NETTLEIE = {
     vol.Optional(CONF_NORDPOOL): _ent("sensor"),
 }
 SKJEMA_HUS = skjema_hus()
+
+
+def _valider_maling(hass, data: dict) -> dict[str, str]:
+    """Sjekk at målesensorene faktisk er det de skal være. Returnerer feil per felt."""
+    feil: dict[str, str] = {}
+    st = hass.states.get(data.get(CONF_TOTAL_EFFEKT) or "")
+    if st is None:
+        feil[CONF_TOTAL_EFFEKT] = "finnes_ikke"
+    elif str(st.attributes.get("unit_of_measurement") or "") not in ("W", "kW"):
+        feil[CONF_TOTAL_EFFEKT] = "ikke_effekt"
+    st = hass.states.get(data.get(CONF_IMPORTERT_ENERGI) or "")
+    if st is None:
+        feil[CONF_IMPORTERT_ENERGI] = "finnes_ikke"
+    elif st.attributes.get("state_class") not in ("total_increasing", "total") \
+            or str(st.attributes.get("unit_of_measurement") or "") not in ("kWh", "Wh", "MWh"):
+        feil[CONF_IMPORTERT_ENERGI] = "ikke_register"
+    return feil
 
 
 def _rens(data: dict, skjema: dict | None = None) -> dict:
@@ -117,11 +138,20 @@ class KiEnergiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._data: dict[str, Any] = {}
 
     def _forslag(self, *keys):
-        """Forslag til feltverdier: preset overstyrer standard."""
+        """Forslag til feltverdier. Rekkefølge: preset → standard → automatisk gjenkjenning.
+        En preset-/standardverdi som ikke finnes i denne Home Assistant-en byttes ut med det vi fant."""
         preset = PRESETS.get(self._data.get(CONF_PRESET, "oslo"), PRESETS["oslo"])
+        funnet = getattr(self, "_funnet", None)
+        if funnet is None:
+            funnet = self._funnet = oppdag.forslag_alle(self.hass)
         ut = {}
         for k in keys:
             v = preset["config"].get(k, DEFAULT_CONFIG.get(k))
+            if isinstance(v, str) and v.startswith(("sensor.", "switch.", "binary_sensor.", "climate.", "person.", "weather.", "cover.")) \
+                    and self.hass.states.get(v) is None:
+                v = funnet.get(k, "")
+            if v in (None, "") and k in funnet:
+                v = funnet[k]
             if v not in (None, ""):
                 ut[k] = v
         return ut
@@ -140,11 +170,18 @@ class KiEnergiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                          for k, p in PRESETS.items()], mode="list"))}))
 
     async def async_step_maling(self, user_input=None):
+        feil = {}
         if user_input is not None:
-            self._data.update(_rens(user_input, SKJEMA_MALING))
-            return await self.async_step_utstyr()
+            feil = _valider_maling(self.hass, user_input)
+            if not feil:
+                self._data.update(_rens(user_input, SKJEMA_MALING))
+                return await self.async_step_utstyr()
+        forslag = user_input or self._forslag(CONF_TOTAL_EFFEKT, CONF_IMPORTERT_ENERGI, CONF_UTE_TEMP, CONF_VAER)
+        funnet = getattr(self, "_funnet", {}) or {}
         return self.async_show_form(step_id="maling", data_schema=self.add_suggested_values_to_schema(
-            vol.Schema(SKJEMA_MALING), self._forslag(CONF_TOTAL_EFFEKT, CONF_IMPORTERT_ENERGI, CONF_UTE_TEMP, CONF_VAER)))
+            vol.Schema(SKJEMA_MALING), forslag), errors=feil,
+            description_placeholders={"funnet": ", ".join(f"{k} → {v}" for k, v in funnet.items()
+                                                          if k in ("total_effekt", "importert_energi", "ute_temp", "vaer")) or "ingenting"})
 
     async def async_step_utstyr(self, user_input=None):
         if user_input is not None:
@@ -172,15 +209,39 @@ class KiEnergiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         preset = PRESETS.get(self._data.get(CONF_PRESET, "oslo"), PRESETS["oslo"])
         if user_input is not None:
             self._data.update(_rens(user_input, skjema))
-            self._data[CONF_SONER] = {k: dict(v) for k, v in preset["soner"].items()}
-            tittel = "KI Energi" if preset["hustype"] == "bolig" else "KI Energi (hytte)"
-            return self.async_create_entry(title=tittel, data=self._data)
+            return await self.async_step_soner_auto()
         tilgjengelig = set(self.hass.services.async_services().get("notify", {}).keys())
         forslag = self._forslag(CONF_AREAL, CONF_BYGGEAR, CONF_GLASS_M2, CONF_STUE_AREAL)
         forslag[CONF_VARSEL_MOTTAKERE] = [m for m in DEFAULT_CONFIG[CONF_VARSEL_MOTTAKERE] if m in tilgjengelig]
         forslag[CONF_HUSTYPE] = preset["hustype"]
         return self.async_show_form(step_id="hus", data_schema=self.add_suggested_values_to_schema(
             vol.Schema(skjema), forslag))
+
+    async def async_step_soner_auto(self, user_input=None):
+        """Siste steg: lag soner fra Home Assistant-områdene (én per rom med termostat), eller bruk presetets."""
+        preset = PRESETS.get(self._data.get(CONF_PRESET, "oslo"), PRESETS["oslo"])
+        funnet = oppdag.soner_fra_omrader(self.hass)
+        if user_input is not None:
+            valgt = user_input.get("soner") or []
+            if user_input.get("kilde") == "omrader" and valgt:
+                self._data[CONF_SONER] = {k: dict(funnet[k]) for k in valgt if k in funnet}
+            else:
+                self._data[CONF_SONER] = {k: dict(v) for k, v in preset["soner"].items()}
+            tittel = "KI Energi" if self._data.get(CONF_HUSTYPE, preset["hustype"]) == "bolig" else "KI Energi (hytte)"
+            return self.async_create_entry(title=tittel, data=self._data)
+        valg = [selector.SelectOptionDict(value=k, label=f"{v['navn']} — {len(v['climate'])} termostat(er), "
+                                          f"{len(v['effekt'])} effektsensor(er), {v['type']}, profil {v['profil']}")
+                for k, v in sorted(funnet.items())]
+        skjema = vol.Schema({
+            vol.Required("kilde", default="omrader" if funnet else "preset"): selector.SelectSelector(selector.SelectSelectorConfig(
+                options=[selector.SelectOptionDict(value="omrader", label=f"Lag soner fra områdene mine ({len(funnet)} funnet)"),
+                         selector.SelectOptionDict(value="preset", label=f"Bruk sonene fra «{preset['navn']}» og rett dem opp etterpå")],
+                mode="list")),
+            vol.Optional("soner", default=[k for k in funnet]): selector.SelectSelector(selector.SelectSelectorConfig(
+                options=valg or [selector.SelectOptionDict(value="_", label="Ingen områder med termostater funnet")], multiple=True, mode="list")),
+        })
+        return self.async_show_form(step_id="soner_auto", data_schema=skjema,
+                                    description_placeholders={"antall": str(len(funnet))})
 
     @staticmethod
     @callback
@@ -215,7 +276,44 @@ class KiEnergiOptionsFlow(config_entries.OptionsFlow):
 
     # -- meny ------------------------------------------------------------
     async def async_step_init(self, user_input=None):
-        return self.async_show_menu(step_id="init", menu_options=["maling", "utstyr", "personer", "nettleie", "hus", "soner"])
+        g = self._gjeldende()
+        mangler = []
+        for k, navn in ((CONF_TOTAL_EFFEKT, "effektmåler"), (CONF_IMPORTERT_ENERGI, "energiregister"), (CONF_UTE_TEMP, "utetemperatur"),
+                        (CONF_VVB_BRYTER, "bereder-bryter"), (CONF_TOPP1, "toppsensor 1"), (CONF_NORDPOOL, "spotpris (Nord Pool)")):
+            v = g.get(k)
+            if not v or self.hass.states.get(v) is None:
+                mangler.append(navn)
+        soner = self._soner()
+        dode = [s["navn"] for s in soner.values()
+                if not any(self.hass.states.get(c) for c in (s.get("climate") if isinstance(s.get("climate"), list) else [s.get("climate")]) if c)]
+        status = f"{len(soner)} soner" + (f" — termostat svarer ikke i: {', '.join(dode)}" if dode else "") \
+            + (f". Ikke satt opp: {', '.join(mangler)}" if mangler else ". Alt er koblet.")
+        return self.async_show_menu(step_id="init", menu_options=["maling", "utstyr", "personer", "nettleie", "hus", "soner", "soner_auto"],
+                                    description_placeholders={"status": status})
+
+    async def async_step_soner_auto(self, user_input=None):
+        """Lag/oppdater soner fra HA-områdene. Eksisterende soner med samme nøkkel beholder egne innstillinger."""
+        funnet = oppdag.soner_fra_omrader(self.hass)
+        if user_input is not None:
+            soner = self._soner()
+            for k in user_input.get("soner") or []:
+                if k not in funnet:
+                    continue
+                ny = dict(funnet[k])
+                if k in soner and not user_input.get("overskriv"):
+                    gammel = soner[k]
+                    for felt in ("type", "prio", "nominell", "sol", "profil", "aktiv", "navn"):
+                        ny[felt] = gammel.get(felt, ny[felt])
+                soner[k] = ny
+            return self._lagre({}, soner)
+        valg = [selector.SelectOptionDict(value=k, label=f"{v['navn']} — {len(v['climate'])} termostat(er), {len(v['effekt'])} effektsensor(er), {v['type']}")
+                for k, v in sorted(funnet.items())]
+        if not valg:
+            return self.async_abort(reason="ingen_omrader")
+        return self.async_show_form(step_id="soner_auto", data_schema=vol.Schema({
+            vol.Optional("soner", default=list(funnet)): selector.SelectSelector(selector.SelectSelectorConfig(options=valg, multiple=True, mode="list")),
+            vol.Optional("overskriv", default=False): selector.BooleanSelector(),
+        }), description_placeholders={"antall": str(len(funnet))})
 
     async def _enkelt_skjema(self, step_id: str, skjema: dict, user_input):
         if user_input is not None:

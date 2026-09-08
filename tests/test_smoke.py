@@ -139,6 +139,12 @@ async def test_config_flow(hass):
     assert r["type"] == "form" and r["step_id"] == "user"
     r = await hass.config_entries.flow.async_configure(r["flow_id"], {"preset": "oslo"})
     assert r["step_id"] == "maling"
+    # feil sensor-type gir feilmelding, riktige går videre
+    hass.states.async_set("sensor.a", "1200", {"unit_of_measurement": "W", "device_class": "power"})
+    hass.states.async_set("sensor.b", "5000", {"unit_of_measurement": "kWh", "device_class": "energy", "state_class": "total_increasing"})
+    hass.states.async_set("sensor.dag", "12", {"unit_of_measurement": "kWh", "device_class": "energy", "state_class": "measurement"})
+    r = await hass.config_entries.flow.async_configure(r["flow_id"], {"total_effekt": "sensor.a", "importert_energi": "sensor.dag"})
+    assert r["type"] == "form" and r["errors"] == {"importert_energi": "ikke_register"}
     r = await hass.config_entries.flow.async_configure(r["flow_id"], {"total_effekt": "sensor.a", "importert_energi": "sensor.b"})
     assert r["step_id"] == "utstyr"
     r = await hass.config_entries.flow.async_configure(r["flow_id"], {})
@@ -148,6 +154,8 @@ async def test_config_flow(hass):
     r = await hass.config_entries.flow.async_configure(r["flow_id"], {})
     assert r["step_id"] == "hus"
     r = await hass.config_entries.flow.async_configure(r["flow_id"], {"hustype": "bolig", "areal_m2": 120, "byggear": 1980, "glass_m2": 20, "stue_areal_m2": 40})
+    assert r["step_id"] == "soner_auto", r
+    r = await hass.config_entries.flow.async_configure(r["flow_id"], {"kilde": "preset", "soner": []})
     assert r["type"] == "create_entry", r
     await hass.async_block_till_done()
     assert r["data"]["vvb_bryter"] == ""
@@ -288,3 +296,35 @@ async def test_preset_toten_fritidsbolig(hass):
     with patch("homeassistant.util.dt.now", return_value=torsdag):
         mal, grunn, frist = hub.engine.mal_temperatur("sebastian", hub.soner()["sebastian"])
     assert mal == 8.0 and frist is None
+
+
+async def test_oppdag_soner_fra_omrader(hass):
+    """Automatisk gjenkjenning: én sone per område med termostat, effekt og vindu i samme område kobles på."""
+    from homeassistant.helpers import area_registry as ar, entity_registry as er
+    from custom_components.ki_energi import oppdag
+    areg = ar.async_get(hass); ereg = er.async_get(hass)
+    stue = areg.async_create("Stue"); bad = areg.async_create("Bad")
+    for eid, area, attrs in (
+        ("climate.stue_panelovn", stue.id, {"hvac_modes": ["off", "heat"]}),
+        ("climate.stue_varmepumpe", stue.id, {"hvac_modes": ["off", "heat", "cool"]}),
+        ("sensor.stue_panelovn_effekt", stue.id, {"device_class": "power", "unit_of_measurement": "W"}),
+        ("binary_sensor.stue_vindu", stue.id, {"device_class": "window"}),
+        ("climate.bad_gulv", bad.id, {"hvac_modes": ["off", "heat"]}),
+    ):
+        dom, obj = eid.split(".")
+        e = ereg.async_get_or_create(dom, "test", obj, suggested_object_id=obj)
+        ereg.async_update_entity(e.entity_id, area_id=area)
+        hass.states.async_set(e.entity_id, "heat" if dom == "climate" else "0", {**attrs, "friendly_name": obj.replace("_", " ")})
+    soner = oppdag.soner_fra_omrader(hass)
+    assert set(soner) == {"stue", "bad"}
+    assert soner["stue"]["type"] == "varmepumpe" and soner["stue"]["profil"] == "stue"
+    assert len(soner["stue"]["climate"]) == 2 and soner["stue"]["effekt"] == ["sensor.stue_panelovn_effekt"]
+    assert soner["stue"]["vindu"] == ["binary_sensor.stue_vindu"]
+    assert soner["bad"]["type"] == "gulv" and soner["bad"]["profil"] == "konstant"
+    # sensorgjenkjenning
+    hass.states.async_set("sensor.ams_maler_effekt", "3400", {"device_class": "power", "unit_of_measurement": "W"})
+    hass.states.async_set("sensor.ams_maler_energi_importert", "12345", {"device_class": "energy", "unit_of_measurement": "kWh", "state_class": "total_increasing"})
+    hass.states.async_set("sensor.energi_i_dag", "8", {"device_class": "energy", "unit_of_measurement": "kWh", "state_class": "total_increasing"})
+    f = oppdag.forslag_alle(hass)
+    assert f["total_effekt"] == "sensor.ams_maler_effekt"
+    assert f["importert_energi"] == "sensor.ams_maler_energi_importert"
