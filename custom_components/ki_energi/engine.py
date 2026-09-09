@@ -605,6 +605,8 @@ class KiEngine:
                     # Lært rate, men aldri under 0,3 °C/t (ellers blir «behov» absurd) og aldri
                     # mer enn 10 t forvarming. Mangler læring brukes 1,2 °C/t.
                     rate = max(0.3, rate if rate and rate > 0 else 1.2)
+                    if any(h.pa(e) for e in (konf.get("vindu") or [])):
+                        rate *= 0.6   # åpent vindu: regn med tregere oppvarming, start tidligere
                     behov = min((mangler / rate) * 60.0, 10 * 60.0)
                     if konf.get("type") == "gulv":
                         behov = max(behov, 45.0)      # gulv er tregt — start uansett tidlig
@@ -624,13 +626,18 @@ class KiEngine:
                 avvik -= sol
 
             vindu, vindu_navn = self.vindu_apent(key, konf)
+            pers = self.person_for(konf)
             if vindu and forvarm:
                 # Vindu åpent, men forvarmingen mot vekking/hjemkomst har startet: varm opp likevel,
                 # så rommet er riktig når det skal brukes. (Vinduet får heller stå og lufte.)
                 vindu = False
                 forvarm_grunn += " — vinduet er åpent, varmer likevel fram mot fristen"
+            elif vindu and pers and not ("sover" in grunn.lower() or "natt" in grunn.lower()):
+                # Soverom: åpent vindu senker bare mens personen sover. Er hen våken (eller det er
+                # dag), skal rommet holde måltemperaturen — vinduet er da et valg, ikke en lekkasje.
+                vindu = False
+                grunn += f" — {vindu_navn} er åpent, holder likevel varmen"
             trenger = levende and styrt and avvik > 0.1 and not vindu
-            pers = self.person_for(konf)
             laster.append(dict(
                 vindu=vindu, vindu_navn=vindu_navn, profil=konf.get(Z_PROFIL),
                 person=pers["navn"] if pers else None, person_type=pers["type"] if pers else None,

@@ -367,6 +367,7 @@ NUMBERS = [
     ("ki_mal_trinn_kw", "KI Ønsket Kapasitetstrinn Under", 2, 20, 0.5, "kW", 5.0, "mdi:target"),
     ("ki_reserve_topp_kwh", "KI Reserve Mot Neste Trinn", 0, 1.5, 0.05, "kWh", 0.3, "mdi:shield-half-full"),
     ("ki_elbil_effekt_kw", "KI Elbil Ladeeffekt", 0, 22, 0.1, "kW", 0, "mdi:ev-station"),
+    ("ki_hanklevarmer_effekt_w", "KI Håndklevarmer Effekt", 10, 500, 1, "W", 46, "mdi:radiator"),
     ("ki_stat_unngatte_topper", "KI Unngåtte Topper", 0, 9999, 1, "", 0, "mdi:shield-check"),
     ("ki_stat_shed_hendelser", "KI Utkoblinger", 0, 99999, 1, "", 0, "mdi:stairs-down"),
     ("ki_stat_flyttet_kwh", "KI Flyttet Energi", 0, 9999, 0.01, "kWh", 0, "mdi:swap-horizontal"),

@@ -14,6 +14,7 @@ from homeassistant.core import Event, callback
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    CONF_STROMPRIS,
     AKSJON_HELG_JA, AKSJON_HELG_NAA, AKSJON_HELG_NEI, AKSJON_HJEM_FORLENG, AKSJON_HJEM_JA, AKSJON_HJEM_NAA,
     AKSJON_HJEM_NEI, AKSJON_HJEM_SENERE, AKSJON_HYTTE_BLIR, AKSJON_HYTTE_DRAR, CONF_GARDINER, CONF_HANKLEVARMER, CONF_HANKLEVARMER_EFFEKT,
     CONF_UTE_TEMP, CONF_VAER,
@@ -379,6 +380,15 @@ class KiModuser:
     # ------------------------------------------------------------------
     #  Håndklevarmer
     # ------------------------------------------------------------------
+    @staticmethod
+    def _dt_iso(s):
+        if not s:
+            return None
+        try:
+            return dt_util.parse_datetime(s)
+        except (TypeError, ValueError):
+            return None
+
     def _publiser_hanklevarmer(self, naa: datetime) -> None:
         h = self.hub
         ent = h.cfg(CONF_HANKLEVARMER)
@@ -405,8 +415,38 @@ class KiModuser:
         else:
             nm = m1[0] if minutt < m1[0] else (k1[0] if minutt < k1[0] else m1[0])
             grunn = f"Av. Neste vindu kl. {nm // 60:02d}:{nm % 60:02d}."
+        # Besparelse: uten KI ville den stått på hele døgnet. Vi teller på-minutter per dag og
+        # regner differansen mot 24 t × nominell effekt (målt effekt hvis sensor finnes).
+        sp = self.m.setdefault("hank_sparing", {})
+        dag = naa.strftime("%Y-%m-%d")
+        if sp.get("dag") != dag:
+            if sp.get("dag"):   # rull gårsdagen inn i måneden
+                mnd = sp.setdefault("maned", {})
+                if mnd.get("id") != naa.strftime("%Y-%m"):
+                    mnd.clear(); mnd["id"] = naa.strftime("%Y-%m")
+                mnd["pa_min"] = mnd.get("pa_min", 0) + sp.get("pa_min", 0)
+                mnd["dager"] = mnd.get("dager", 0) + 1
+            sp["dag"] = dag; sp["pa_min"] = 0; sp["sist"] = naa.isoformat()
+        sist = self._dt_iso(sp.get("sist")) or naa
+        if pa:
+            sp["pa_min"] = sp.get("pa_min", 0) + (naa - sist).total_seconds() / 60
+        sp["sist"] = naa.isoformat()
+        w_nominell = h.num("ki_hanklevarmer_effekt_w", 46)
+        w_malt = h.f(eff) if eff else None
+        if w_malt and pa and w_malt > 5:
+            w_nominell = 0.9 * w_nominell + 0.1 * w_malt   # lær effekten sakte fra måling
+            h.sett("ki_hanklevarmer_effekt_w", round(w_nominell, 1))
+        pris = h.f(h.cfg(CONF_STROMPRIS), 1.5) or 1.5
+        min_i_dag = naa.hour * 60 + naa.minute
+        spart_kwh_dag = max(0.0, (min_i_dag - sp.get("pa_min", 0)) / 60 * w_nominell / 1000)
+        mnd = sp.get("maned", {})
+        spart_kwh_mnd = max(0.0, (mnd.get("dager", 0) * 1440 - mnd.get("pa_min", 0)) / 60 * w_nominell / 1000) + spart_kwh_dag
         h.sett_sensor("ki_hanklevarmer", "pa" if pa else "av", {
             "forklaring": grunn, "styr": styr, "i_vindu": i_vindu, "minutter_pa": minutter_pa, "maks_min": maks,
+            "effekt_nominell_w": round(w_nominell, 1), "pa_min_i_dag": round(sp.get("pa_min", 0)),
+            "spart_kwh_i_dag": round(spart_kwh_dag, 3), "spart_kr_i_dag": round(spart_kwh_dag * pris, 2),
+            "spart_kwh_maned": round(spart_kwh_mnd, 2), "spart_kr_maned": round(spart_kwh_mnd * pris, 1),
+            "spart_kr_ar": round(w_nominell / 1000 * (24 - (m1[1] - m1[0] + k1[1] - k1[0]) / 60) * 365 * pris, 0),
             "bryter": ent, "effekt_sensor": eff or "", "effekt_w": h.f(eff) if eff else None,
             "morgen": f"{h.tid_str('ki_hanklevarmer_morgen_start', '05:30')}–{h.tid_str('ki_hanklevarmer_morgen_slutt', '08:30')}",
             "kveld": f"{h.tid_str('ki_hanklevarmer_kveld_start', '19:00')}–{h.tid_str('ki_hanklevarmer_kveld_slutt', '22:00')}"})

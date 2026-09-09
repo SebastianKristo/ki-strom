@@ -142,6 +142,10 @@ Les `sensor.ki_beslutningslogg` noen dager. Ser resonnementet fornuftig ut, slå
 ## Kortet «KI Klima Pro»
 
 Ett kort med faner: **Oversikt · Soner · Energi · Vann og bad · Tanker · Oppsett · Avansert**.
+Håndklevarmeren viser hva KI sparer (`sensor.ki_hanklevarmer`: `spart_kwh_i_dag`, `spart_kr_maned`,
+`spart_kr_ar`) mot å la den stå på hele døgnet; effekten (`number.ki_hanklevarmer_effekt_w`, 46 W)
+læres fra målingen når den er på.
+
 «Vann og bad» har underfaner for **Bereder** (status, legionella med sist sikret / neste frist,
 prisstyring med døgnstripe som viser hvilke timer berederen kjører) og **Håndklevarmer**
 (dusjvinduer, sikkerhetsavstenging). Gardinstyringen ligger under *Oppsett* (vises bare når en gardin er valgt; det samme gjelder håndklevarmer og bereder-bryter).
@@ -262,8 +266,11 @@ graf for siste seks timer.
 
 ### Vinduer og dører
 
-Unntak: er forvarmingen mot vekking eller hjemkomst i gang, ignoreres et åpent vindu — rommet
-skal være riktig når det tas i bruk, og vinduet får heller lufte imens.
+Unntak for soverom (soner med personprofil): et åpent vindu senker bare mens personen **sover**.
+Er forvarmingen mot vekking i gang, eller personen er våken/oppe, holder rommet måltemperaturen
+selv med vinduet åpent — det skal være 22 °C når man våkner, og vinduet er da et valg, ikke en
+lekkasje. Forvarmingen starter dessuten tidligere når vinduet står åpent (regner med 40 % tregere
+oppvarming).
 
 Hver sone kan få én eller flere vindu-/dørsensorer (*Konfigurer → Soner → sonen → Vindu-/dørsensorer*).
 Står et vindu åpent lenger enn forsinkelsen (standard 3 min, så en rask lufting ikke trigger), settes
