@@ -488,10 +488,17 @@ class KiEngine:
             return t_helg, "Helgemodus", None
 
         person = self.person_for(konf)
+        # Automatisk soveromsmodus: søvnsensor overstyrer klokkeslettet. Sover → natt-temperatur nå
+        # (forvarming mot vekking gjelder fortsatt). Våken i sengetiden → dag-temperatur til hen sovner.
+        sover = h.sover(person) if person and person["type"] in ("barn", "ungdom") else None
         if person and person["type"] == "barn":
             k = person["key"]
             vekk = h.tid_min(f"ki_{k}_dag", "05:30")
             legg = h.tid_min(f"ki_{k}_natt", "19:00")
+            if sover is True:
+                return t_natt, f"{person['navn']} sover (registrert)", vekk
+            if sover is False and h.mellom(legg, vekk):
+                return t_dag, f"{person['navn']} er våken", None
             if h.mellom(legg, vekk):
                 return t_natt, "Sover", vekk
             hjemme = h.hjemme(person["entity"])
@@ -507,6 +514,10 @@ class KiEngine:
             helgevekking = dt_util.now().weekday() >= 5 or h.on(f"ki_{k}_ferie")
             vekking = h.tid_min(f"ki_{k}_vekking_helg" if helgevekking else f"ki_{k}_vekking", "07:00")
             legg = h.tid_min(f"ki_{k}_natt", "23:00")
+            if sover is True:
+                return t_natt, f"{person['navn']} sover (registrert)", vekking
+            if sover is False and h.mellom(legg, vekking):
+                return t_dag, f"{person['navn']} er våken", None
             if h.mellom(legg, vekking):
                 return t_natt, "Sover", vekking
             return t_dag, f"{person['navn']} — rommet brukes på dagtid", None

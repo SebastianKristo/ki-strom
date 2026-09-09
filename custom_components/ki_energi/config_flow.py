@@ -103,6 +103,7 @@ def skjema_personer_rader() -> dict:
         ut[vol.Optional(f"navn_{i}")] = _tekst()
         ut[vol.Optional(f"type_{i}", default="voksen")] = _persontype()
         ut[vol.Optional(f"tilstede_{i}")] = _ent(ALLE_DOMENER)
+        ut[vol.Optional(f"sover_{i}")] = _ent("binary_sensor")
     return ut
 
 
@@ -115,7 +116,8 @@ def personer_fra_rader(data: dict) -> list[dict]:
         key = oppdag.slug(navn)
         if any(p["key"] == key for p in ut):
             key = f"{key}_{i}"
-        ut.append({"key": key, "navn": navn, "type": data.get(f"type_{i}") or "voksen", "entity": data.get(f"tilstede_{i}") or ""})
+        ut.append({"key": key, "navn": navn, "type": data.get(f"type_{i}") or "voksen", "entity": data.get(f"tilstede_{i}") or "",
+                   "sover": data.get(f"sover_{i}") or ""})
     return ut
 
 
@@ -410,11 +412,12 @@ class KiEnergiOptionsFlow(config_entries.OptionsFlow):
             personer = self._personer()
             if any(p["key"] == key for p in personer):
                 key += "_2"
-            personer.append({"key": key, "navn": navn, "type": user_input["type"], "entity": user_input.get("tilstede") or ""})
+            personer.append({"key": key, "navn": navn, "type": user_input["type"], "entity": user_input.get("tilstede") or "",
+                             "sover": user_input.get("sover") or ""})
             return self._lagre({CONF_PERSONER: personer})
         return self.async_show_form(step_id="ny_person", data_schema=vol.Schema({
             vol.Required("navn"): _tekst(), vol.Required("type", default="voksen"): _persontype(),
-            vol.Optional("tilstede"): _ent(ALLE_DOMENER)}))
+            vol.Optional("tilstede"): _ent(ALLE_DOMENER), vol.Optional("sover"): _ent("binary_sensor")}))
 
     async def async_step_person(self, user_input=None):
         personer = self._personer()
@@ -425,15 +428,22 @@ class KiEnergiOptionsFlow(config_entries.OptionsFlow):
             if user_input.get("slett"):
                 personer = [x for x in personer if x["key"] != p["key"]]
             else:
-                p.update(navn=user_input["navn"].strip(), type=user_input["type"], entity=user_input.get("tilstede") or "")
+                p.update(navn=user_input["navn"].strip(), type=user_input["type"], entity=user_input.get("tilstede") or "",
+                         sover=user_input.get("sover") or "")
             return self._lagre({CONF_PERSONER: personer})
         skjema = vol.Schema({
             vol.Required("navn", default=p["navn"]): _tekst(),
             vol.Required("type", default=p["type"]): _persontype(),
             vol.Optional("tilstede"): _ent(ALLE_DOMENER),
+            vol.Optional("sover"): _ent("binary_sensor"),
             vol.Optional("slett", default=False): selector.BooleanSelector()})
-        return self.async_show_form(step_id="person", data_schema=self.add_suggested_values_to_schema(
-            skjema, {"tilstede": p.get("entity")} if p.get("entity") else {}),
+        forslag = {}
+        if p.get("entity"):
+            forslag["tilstede"] = p["entity"]
+        sover = p.get("sover") or (f"binary_sensor.{p['key']}_sover" if self.hass.states.get(f"binary_sensor.{p['key']}_sover") else "")
+        if sover:
+            forslag["sover"] = sover
+        return self.async_show_form(step_id="person", data_schema=self.add_suggested_values_to_schema(skjema, forslag),
             description_placeholders={"navn": p["navn"], "key": p["key"]})
 
     async def async_step_nettleie(self, user_input=None):

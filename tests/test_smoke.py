@@ -361,3 +361,37 @@ async def test_personer_generisk_og_vindu_forvarming(hass):
     l = [x for x in hass.states.get("sensor.ki_laster").attributes["laster"] if x["key"] == "emma"][0]
     assert l["person"] == "Emma" and l["person_type"] == "barn"
     assert l["handling"] != "vindu" and l["vindu"] is False   # vinduet ignoreres under forvarming
+
+
+async def test_auto_soveromsmodus(hass):
+    """Søvnsensor overstyrer klokkeslettet når bryteren er på; av → klokkeslett som før."""
+    from custom_components.ki_energi.const import CONF_PERSONER
+    data = dict(DEFAULT_CONFIG)
+    data[CONF_PERSONER] = [{"key": "ola", "navn": "Ola", "type": "ungdom", "entity": "", "sover": "binary_sensor.ola_sover"}]
+    data[CONF_SONER] = {"ola": dict(navn="Ola", rom="Ola", climate=["climate.ola"], effekt=[], type="panel", prio=3,
+                                    nominell=1.0, sol=False, profil="person:ola", aktiv=True)}
+    hass.states.async_set("sensor.strommaler_effekt", "1500"); hass.states.async_set("sensor.strommaler_imported_energy", "10")
+    hass.states.async_set("climate.ola", "heat", {"temperature": 21, "current_temperature": 20})
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options={})
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    hub = hass.data[DOMAIN][entry.entry_id]
+    konf = hub.soner()["ola"]
+    kveld = dt_util.now().replace(hour=21, minute=0)     # før leggetid 23:00
+    natt = dt_util.now().replace(hour=23, minute=30)     # etter leggetid
+    with patch("homeassistant.util.dt.now", return_value=kveld):
+        hass.states.async_set("binary_sensor.ola_sover", "on")
+        mal, grunn, frist = hub.engine.mal_temperatur("ola", konf)
+        assert "sover (registrert)" in grunn and mal < 21                   # sovnet tidlig → natt nå
+    with patch("homeassistant.util.dt.now", return_value=natt):
+        hass.states.async_set("binary_sensor.ola_sover", "off")
+        mal, grunn, frist = hub.engine.mal_temperatur("ola", konf)
+        assert "våken" in grunn and mal >= 21                               # oppe sent → dag
+        hass.states.async_set("binary_sensor.ola_sover", "unavailable")
+        mal, grunn, frist = hub.engine.mal_temperatur("ola", konf)
+        assert grunn == "Sover"                                              # sensor borte → klokkeslett
+        await hass.services.async_call("switch", "turn_off", {"entity_id": "switch.ki_auto_soveromsmodus"}, blocking=True)
+        hass.states.async_set("binary_sensor.ola_sover", "off")
+        mal, grunn, frist = hub.engine.mal_temperatur("ola", konf)
+        assert grunn == "Sover"                                              # bryter av → klokkeslett

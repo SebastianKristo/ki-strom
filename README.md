@@ -99,10 +99,10 @@ nytt og legg til integrasjonen som over.
 
 ### Kortet
 
-HACS-kategorien *Integration* installerer bare selve integrasjonen. Kopier
-`www/ki-klima-pro-card.js` til `/config/www/` og legg til ressursen
-`/local/ki-klima-pro-card.js?v=2.9.5` under Innstillinger → Dashboard → ⋮ → Ressurser
-(type *JavaScript-modul*). Tøm nettleser-cache.
+Kortet ligger i et eget HACS-repo: **[ki-klima-strom-kort](https://github.com/SebastianKristo/ki-klima-strom-kort)**.
+HACS → Frontend → Custom repositories → legg til URL-en som *Dashboard* → last ned. Ressursen
+legges til automatisk. I dashbordet: `type: custom:ki-klima-strom-kort` (gamle
+`custom:ki-klima-pro-card` fungerer også). Kortet versjoneres uavhengig av integrasjonen.
 
 ---
 
@@ -194,6 +194,12 @@ Husets folk legges inn med navn og type under *Konfigurer → Personer* (legg ti
 | **Barn** | `time.ki_<navn>_dag`, `_natt`, `_borte_fra`, `_borte_til` | Rommet holdes varmt fra opp til legg, senkes når barnet normalt er borte (barnehage/skole) eller sover. |
 | **Ungdom** | `time.ki_<navn>_vekking`, `_vekking_helg`, `_natt`, `switch.ki_<navn>_ferie` | Kaldt om natten, varmt til vekking — egen tid i helg og ferie. |
 | **Voksen** | ingen | Tilstedeværelse: stua reduseres når ingen voksne er hjemme, «alle borte» for helg/hytte. |
+
+Hver person kan ha en **søvnsensor** (f.eks. `binary_sensor.<navn>_sover` fra
+[KI Søvn](https://github.com/SebastianKristo/ki-sovn) — finnes den, brukes den automatisk). Med
+`switch.ki_auto_soveromsmodus` på (standard) styrer sensoren rommet i stedet for klokkeslettet:
+sover → natt-temperatur med én gang, våken i sengetiden → dag-temperatur til hen faktisk sovner.
+Forvarmingen mot vekking gjelder uansett. Svarer ikke sensoren, brukes klokkeslettene.
 
 En sone knyttes til en person ved å velge profilen «<navn>s rom». Kortet (Tider, døgnplan,
 Leggetid) følger personlisten. Eksisterende oppsett med Cybele/Sebastian/Rune fortsetter uendret —
@@ -592,7 +598,7 @@ Innlærte profiler, τ, overstyringer, logg og VVB-tilstand lagres i
 2. Start HA på nytt **én gang** så de gamle `input_*`- og `sensor.ki_*`-entitetene forsvinner
    (ellers får de nye suffiks `_2`).
 3. Installer integrasjonen som over. Veiviseren er forhåndsutfylt med entitetene fra det gamle oppsettet.
-4. Bytt kortressurs til `?v=2.0.0`. Kortet oversetter gamle `input_*`-ID-er og
+4. Installer kortet fra ki-klima-strom-kort. Kortet oversetter gamle `input_*`-ID-er og
    `pyscript.*`-tjenester automatisk, så eksisterende popup-konfigurasjon virker.
 5. Innstillingene dine (temperaturer, tider) må settes én gang på nytt — eller trykk
    *Standardverdier* i kortet for utgangspunktet.

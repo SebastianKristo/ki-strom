@@ -104,15 +104,27 @@ class KiHub:
                 if not isinstance(p, dict) or not p.get("key"):
                     continue
                 ut.append({"key": p["key"], "navn": p.get("navn") or p["key"].capitalize(),
-                           "entity": p.get("entity") or "", "type": p.get("type") or "voksen"})
+                           "entity": p.get("entity") or "", "type": p.get("type") or "voksen",
+                           "sover": p.get("sover") or ""})
             return ut
         ut = []
         for p in DEFAULT_PERSONER:
             ent = self.cfg(f"tilstede_{p['key']}")
             if ent is None:
                 continue
-            ut.append(dict(p, entity=ent or ""))
+            ut.append(dict(p, entity=ent or "", sover=""))
         return ut
+
+    def sover(self, person: dict) -> bool | None:
+        """Sover personen akkurat nå, ifølge søvnsensoren (f.eks. KI Søvn binary_sensor.<navn>_sover)?
+        None = ingen sensor valgt eller sensoren svarer ikke → fall tilbake på klokkeslett."""
+        if not self.on("ki_auto_soveromsmodus", True):
+            return None
+        ent = person.get("sover") or f"binary_sensor.{person['key']}_sover"
+        st = self.st(ent)
+        if st in ("on", "off"):
+            return st == "on"
+        return None
 
     def person(self, key: str) -> dict | None:
         return next((p for p in self.personer() if p["key"] == key), None)

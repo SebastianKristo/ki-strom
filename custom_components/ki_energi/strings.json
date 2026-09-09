@@ -36,7 +36,11 @@
           "tilstede_3": "Person 3 – tilstedeværelse",
           "navn_4": "Person 4 – navn",
           "type_4": "Person 4 – type",
-          "tilstede_4": "Person 4 – tilstedeværelse"
+          "tilstede_4": "Person 4 – tilstedeværelse",
+          "sover_1": "Person 1 – søvnsensor (valgfri, f.eks. KI Søvn)",
+          "sover_2": "Person 2 – søvnsensor (valgfri, f.eks. KI Søvn)",
+          "sover_3": "Person 3 – søvnsensor (valgfri, f.eks. KI Søvn)",
+          "sover_4": "Person 4 – søvnsensor (valgfri, f.eks. KI Søvn)"
         }
       },
       "nettleie": {
@@ -214,7 +218,8 @@
         "data": {
           "navn": "Navn",
           "type": "Type",
-          "tilstede": "Tilstedeværelse (person, device_tracker eller bryter)"
+          "tilstede": "Tilstedeværelse (person, device_tracker eller bryter)",
+          "sover": "Søvnsensor (binary_sensor som er på når personen sover — f.eks. KI Søvn). Finnes binary_sensor.<nøkkel>_sover, brukes den automatisk."
         }
       },
       "person": {
@@ -224,7 +229,8 @@
           "navn": "Navn",
           "type": "Type",
           "tilstede": "Tilstedeværelse",
-          "slett": "Slett personen"
+          "slett": "Slett personen",
+          "sover": "Søvnsensor (binary_sensor som er på når personen sover — f.eks. KI Søvn). Finnes binary_sensor.<nøkkel>_sover, brukes den automatisk."
         }
       }
     },

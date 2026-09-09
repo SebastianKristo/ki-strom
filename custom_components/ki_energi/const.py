@@ -294,6 +294,7 @@ SWITCHES = [
     ("ki_vindu_stopp", "KI Vindu Åpent Stopper Varme", True, "mdi:window-open-variant"),
     ("ki_tillat_dyrere_trinn", "KI Tillat Dyrere Kapasitetstrinn", False, "mdi:cash-lock-open"),
     ("ki_elbil_natt", "KI Elbil Lader Om Natten", False, "mdi:ev-station"),
+    ("ki_auto_soveromsmodus", "KI Automatisk Soveromsmodus", True, "mdi:sleep"),
     ("ki_nattsenk_aktiv", "KI Nattsenking Aktiv", True, "mdi:weather-night"),
     ("ki_nattsenk_okonomi", "KI Økonomisk Nattsenking", True, "mdi:cash-check"),
     ("ki_energi_varsler", "KI Energivarsler", True, "mdi:bell-outline"),
