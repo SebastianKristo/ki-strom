@@ -842,15 +842,28 @@ class KiEngine:
             h.nettleie.publiser(nv)
 
         endringer = []
-        if not skygge:
-            for p in plan:
-                if p.get("handling") in ("normal", "senket", "vindu") and p.get("settpunkt") is not None:
-                    skrevet = False
-                    for ent in p.get("climater") or [p["climate"]]:
-                        if await self.skriv_settpunkt(f"{p['key']}|{ent}", ent, p["settpunkt"]):
-                            skrevet = True
-                    if skrevet:
-                        endringer.append(f"{p['navn']} → {p['settpunkt']} °C")
+        naa_kl = dt_util.now().strftime("%H:%M")
+        for p in plan:
+            # Hvorfor får (ikke) termostaten et settpunkt? Vises i kortet under sonen.
+            if skygge:
+                p["skriving"] = "skyggemodus — ingenting skrives"
+            elif p.get("handling") == "manuell":
+                p["skriving"] = "KI styrer sonen er av"
+            elif p.get("handling") == "utilgjengelig":
+                p["skriving"] = "termostaten svarer ikke"
+            elif p.get("handling") not in ("normal", "senket", "vindu") or p.get("settpunkt") is None:
+                p["skriving"] = "ingen settpunkt å skrive"
+            else:
+                skrevet = False
+                for ent in p.get("climater") or [p["climate"]]:
+                    if await self.skriv_settpunkt(f"{p['key']}|{ent}", ent, p["settpunkt"]):
+                        skrevet = True
+                if skrevet:
+                    endringer.append(f"{p['navn']} → {p['settpunkt']} °C")
+                    self.st.setdefault("sist_skrevet_kl", {})[p["key"]] = f"{naa_kl} → {p['settpunkt']} °C"
+                p["skriving"] = (f"skrev {p['settpunkt']} °C kl. {naa_kl}" if skrevet
+                                 else f"termostaten står alt på {p['settpunkt']} °C"
+                                 + (f" (sist skrevet {self.st.get('sist_skrevet_kl', {}).get(p['key'])})" if self.st.get("sist_skrevet_kl", {}).get(p["key"]) else ""))
 
         if senket:
             self.st["rotasjon"] = self.st.get("rotasjon", 0) + 1
@@ -970,7 +983,7 @@ class KiEngine:
             entiteter=p.get("entiteter"), vindu=p.get("vindu", False), vindu_navn=p.get("vindu_navn", ""),
             leggetid=bool(self.leggetid_aktiv(p["key"])), profil=p.get("profil"),
             person=p.get("person"), person_type=p.get("person_type"), forvarm_start=p.get("forvarm_start"),
-            forvarm=p.get("forvarm", False))
+            forvarm=p.get("forvarm", False), skriving=p.get("skriving"))
             for p in plan]
         if h.vvb is not None:
             lastliste.append(dict(

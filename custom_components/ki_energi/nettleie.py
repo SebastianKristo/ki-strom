@@ -29,8 +29,8 @@ TARIFF_STANDARD: list[tuple[float, float]] = [(2, 150), (5, 250), (10, 420), (15
 TARIFF_STANDARD_TEKST = "2:150,5:250,10:420,15:585,20:755"
 
 TOL_MALT_SEK = 15          # prøve innen ±15 s av timegrensen regnes som målt
-MAKS_GAP_SEK = 61 * 60     # lengre hull enn dette interpoleres ikke — da er verdien «mangler».
-                           # (Registre som bare oppdateres hver time gir da «estimert», ikke «mangler».)
+MAKS_GAP_SEK = 3 * 3600    # lengre hull enn dette interpoleres ikke — da er verdien «mangler».
+                           # Registre som bare oppdateres hver time (eller sjeldnere) gir «estimert».
 VENT_PA_PROVE_SEK = 5 * 60 # så lenge venter vi på en forsinket prøve etter timeskiftet
 RESET_TOLERANSE = 0.5      # registeret falt mer enn dette → nullstilt/byttet måler
 

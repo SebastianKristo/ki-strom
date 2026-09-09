@@ -21,7 +21,7 @@
  * Config:  type: custom:ki-klima-pro-card
  */
 
-const KI_PRO_VERSJON = "2.9.3";
+const KI_PRO_VERSJON = "2.9.5";
 
 console.info(
   `%c KI-KLIMA-PRO-CARD %c ${KI_PRO_VERSJON} `,
@@ -308,9 +308,9 @@ class KiKlimaProCard extends HTMLElement {
   _hj(id) {
     return HJELP[id] ? `<span class="hjelp" data-handling="hjelp" data-id="${id}">?</span>` : "";
   }
-  _hjTekst(id) {
+  _hjTekst(id, ekstra = "") {
     return this._hjelpApen && this._hjelpApen.has(id)
-      ? `<div class="hjelptekst">${esc(HJELP[id])}</div>` : "";
+      ? `<div class="hjelptekst">${esc(HJELP[id] || "")}${ekstra ? `<div style="margin-top:6px">${esc(ekstra)}</div>` : ""}</div>` : "";
   }
 
   _st(id) { return this._hass.states[mapId(id)]; }
@@ -705,8 +705,9 @@ class KiKlimaProCard extends HTMLElement {
       ? Math.max(0, Math.min(100, (forventet / tillatt) * 100)) : 0;
     return `
       <div class="blokk">
-        <div class="hode"><span>Timebudsjett${this._hj("tillatt_effekt")}</span><span class="sub">${min} min igjen${kilde ? " · " + esc(kilde) : ""}</span></div>
-        ${this._hjTekst("tillatt_effekt")}
+        <div class="hode"><span>Timebudsjett${this._hj("tillatt_effekt")}</span><span class="sub">${min} min igjen</span></div>
+        ${this._hjTekst("tillatt_effekt", (kilde ? "Måling: " + kilde + ". " : "") + (this._a("sensor.ki_energi_status", "tak_aktivt", false)
+          ? "Regnestykket ga høyere tillatt effekt enn timegrensen fordi det er få minutter igjen av timen; verdien er kuttet ned til grensen." : ""))}
         <div class="tallrad">
           <div class="tall"><b>${nf(igjen, 2)}</b><span>kWh igjen</span></div>
           <div class="tall"><b>${nf(tillatt, 2)}</b><span>kW tillatt</span></div>
@@ -718,11 +719,6 @@ class KiKlimaProCard extends HTMLElement {
           <span>${isFinite(ledig) ? nf(ledig, 2) + " kW ledig" : ""}</span>
         </div>
         ${this._hjTekst("uregulert")}
-        ${this._a("sensor.ki_energi_status", "tak_aktivt", false)
-          ? `<div class="notat">Regnestykket ga høyere tillatt effekt enn timegrensen,
-             fordi det er få minutter igjen av timen. Verdien er derfor kuttet ned til
-             grensen — ovnene rekker ikke å nyttiggjøre seg en kortvarig topp uten at
-             varmen renner over i neste time.</div>` : ""}
       </div>`;
   }
 
@@ -802,8 +798,13 @@ class KiKlimaProCard extends HTMLElement {
         <div class="tall"><b>${isFinite(temp) ? nf(temp, 1) + "°" : "–"}</b><span>rom</span></div>
         <div class="tall"><b>${isFinite(sett) ? nf(sett, 1) + "°" : "–"}</b><span>settpunkt${clim.length > 1 ? " (" + clim.length + ")" : ""}</span></div>
       </div>
-      ${this._sub(id, "Siste 6 timer", `<div id="graf-sone-${esc(l.key)}" class="graf">${this._grafPlassholder()}</div>
-        <div class="tegnforklaring"><span><i class="l1"></i>Effekt (W)</span><span><i class="l2"></i>Temperatur (°C)</span></div>`)}`;
+      ${l.skriving ? `<div class="notat" style="padding-top:0"><ha-icon icon="mdi:pencil-outline" style="--mdc-icon-size:14px;vertical-align:-3px"></ha-icon> ${esc(l.skriving)}</div>` : ""}
+      ${this._sub(id, "Siste 6 timer", `
+        <div class="underfaner smaa">
+          <div class="underfane ${(this._soneGrafValg || {})[l.key] !== "effekt" ? "aktiv" : ""}" data-handling="sonegraf" data-key="${esc(l.key)}" data-hva="temp"><ha-icon icon="mdi:thermometer"></ha-icon>Temperatur</div>
+          <div class="underfane ${(this._soneGrafValg || {})[l.key] === "effekt" ? "aktiv" : ""}" data-handling="sonegraf" data-key="${esc(l.key)}" data-hva="effekt"><ha-icon icon="mdi:flash"></ha-icon>Effekt</div>
+        </div>
+        <div id="graf-sone-${esc(l.key)}" class="graf hoy">${this._grafPlassholder()}</div>`)}`;
   }
 
   // Tallfelt som rullevelger (native <select>: hjul på iPhone/Android, nedtrekk på desktop).
@@ -878,7 +879,7 @@ class KiKlimaProCard extends HTMLElement {
       <div class="blokk">
         <div class="hode"><span>Dynamisk grense${this._hj("dynamisk_grense")}</span>
           <span class="sub">${kr(N("registrert_trinn_kr", null))}/mnd${N("registrert_trinn_til", null) ? " · neste trinn ved " + nf(N("registrert_trinn_til"), 0) + " kW" : ""}</span></div>
-        ${this._hjTekst("dynamisk_grense")}
+        ${this._hjTekst("dynamisk_grense", [(N("datakvalitet_grunner", []) || []).join(". "), (N("reserve_grunner", []) || []).join(", ")].filter(Boolean).join(". "))}
         <div class="stor">${nf(grense, 2)} <small>kWh denne timen</small></div>
         <div class="konklusjon">${esc(N("hvorfor", grunn))}</div>
         <div class="tallrad">
@@ -904,7 +905,6 @@ class KiKlimaProCard extends HTMLElement {
           <div class="under"><span>Snitt ${nf(N("forventet_snitt", NaN), 2)} → ${kr(N("forventet_trinn_kr", null))}/mnd</span>
             <span>${N("okning_fastledd_kr", null) == null ? "økning ukjent" : N("okning_fastledd_kr") > 0 ? "+" + nf(N("okning_fastledd_kr"), 0) + " kr fastledd" : N("redusert_margin", false) ? "samme trinn, mindre rom" : N("hoyere_dognmaks", false) ? "ny døgnmaks, uendret topp 3" : "ingen endring"}</span></div>` : ""}`,
           false, `<span class="sub">${(N("topp_tre", []) || []).map((t) => nf(t.kwh, 2)).join(" / ") || "–"} kWh</span>`)}
-        <div class="notat">${(N("datakvalitet_grunner", []) || []).map(esc).join(". ")}${(N("datakvalitet_grunner", []) || []).length ? ". " : ""}${(N("reserve_grunner", []) || []).map(esc).join(", ")}</div>
       </div>` : "";
 
     return `
@@ -1800,13 +1800,17 @@ class KiKlimaProCard extends HTMLElement {
       }
       const tempAttr = g.temp && g.temp.startsWith("climate.");
       const temp = g.temp && !tempAttr ? this._serie(g.temp, 6) : [];
-      const serier = [];
-      if (sum.length) serier.push({ punkter: sum, klasse: "l1", navn: "Effekt" });
-      if (temp.length) serier.push({ punkter: temp, klasse: "l2", navn: "Temp", akse2: true });
+      const hva = (this._soneGrafValg || {})[key] || "temp";
+      const serier = hva === "effekt"
+        ? (sum.length ? [{ punkter: sum, klasse: "l-eff", navn: "Effekt" }] : [])
+        : (temp.length ? [{ punkter: temp, klasse: "l-temp", navn: "Temp" }] : []);
+      const opt = hva === "effekt" ? { enhet: " W", hoyde: 160, des: 0 } : { enhet: " °C", hoyde: 160, des: 1, fraNull: false };
       el.innerHTML = serier.length
-        ? this._svg(serier, { enhet: "" }) + `<div class="skrubb" hidden><div class="skrubblinje"></div><div class="skrubbtekst"></div></div>`
-        : `<div class="grafvent">Ingen historikk ennå${tempAttr ? " (temperatur ligger som attributt på termostaten og lagres ikke som egen serie)" : ""}</div>`;
-      this._monterSkrubb(el, serier.map((s) => ({ punkter: s.punkter, navn: s.navn })), "");
+        ? this._svg(serier, opt) + `<div class="skrubb" hidden><div class="skrubblinje"></div><div class="skrubbtekst"></div></div>`
+        : `<div class="grafvent">${hva === "effekt" ? "Ingen effekthistorikk ennå" : tempAttr
+            ? "Temperaturen ligger som attributt på termostaten og lagres ikke som egen serie — legg til en temperatursensor i sonen for graf"
+            : "Ingen temperaturhistorikk ennå"}</div>`;
+      this._monterSkrubb(el, serier.map((s) => ({ punkter: s.punkter, navn: s.navn })), hva === "effekt" ? " W" : " °C");
     });
     const timeGraf = this._rot.getElementById("graf-time");
     if (timeGraf) timeGraf.innerHTML = this._timeSoyler();
@@ -1817,7 +1821,7 @@ class KiKlimaProCard extends HTMLElement {
       const a = live("sensor.ki_uregulert_effekt", this._serie("sensor.ki_uregulert_effekt", 6).map((p) => ({ t: p.t, v: p.v / 1000 })));
       const b = live("sensor.ki_styrt_effekt", this._serie("sensor.ki_styrt_effekt", 6).map((p) => ({ t: p.t, v: p.v / 1000 })));
       effGraf.innerHTML = (a.length || b.length)
-        ? this._svg([{ punkter: a, klasse: "l1", navn: "Uregulert" }, { punkter: b, klasse: "l2", navn: "Styrt" }], { enhet: " kW" })
+        ? this._svg([{ punkter: a, klasse: "l1", navn: "Uregulert" }, { punkter: b, klasse: "l2", navn: "Styrt" }], { enhet: " kW", hoyde: 150, des: 1 })
           + `<div class="skrubb" hidden><div class="skrubblinje"></div><div class="skrubbtekst"></div></div>`
         : `<div class="grafvent">Ingen historikk ennå — sensorene er nye</div>`;
       this._monterSkrubb(effGraf, [{ punkter: a, navn: "Uregulert" }, { punkter: b, navn: "Styrt" }], " kW");
@@ -1852,31 +1856,44 @@ class KiKlimaProCard extends HTMLElement {
   }
 
   _svg(serier, opt = {}) {
-    const B = 340, H = 90, pad = 4;
+    const B = 360, H = opt.hoyde || 120, padL = 34, padR = 8, padT = 8, padB = 18;
     const alle = serier.flatMap((s) => s.punkter);
     if (!alle.length) return `<div class="grafvent">Ingen data</div>`;
     const t0 = Math.min(...alle.map((p) => p.t));
     const t1 = Math.max(...alle.map((p) => p.t));
     const prim = serier.filter((s) => !s.akse2).flatMap((s) => s.punkter);
-    let vMax = Math.max(...prim.map((p) => p.v), opt.grense || 0);
-    const vMin = Math.min(0, ...prim.map((p) => p.v));
+    const kilde = prim.length ? prim : alle;
+    let vMax = Math.max(...kilde.map((p) => p.v), opt.grense || 0);
+    let vMin = opt.fraNull === false ? Math.min(...kilde.map((p) => p.v)) : Math.min(0, ...kilde.map((p) => p.v));
+    if (opt.fraNull === false) { const m = (vMax - vMin) * 0.15 || 0.5; vMax += m; vMin -= m; }
+    else vMax = vMax * 1.08 || 1;
     if (vMax === vMin) vMax = vMin + 1;
-    const x = (t) => pad + ((t - t0) / Math.max(t1 - t0, 1)) * (B - 2 * pad);
-    const y = (v) => H - pad - ((v - vMin) / (vMax - vMin)) * (H - 2 * pad);
-    // sekundær akse (f.eks. temperatur) skaleres for seg selv
-    const sek = serier.filter((s) => s.akse2).flatMap((s) => s.punkter);
-    let s2Max = sek.length ? Math.max(...sek.map((p) => p.v)) + 0.5 : 1, s2Min = sek.length ? Math.min(...sek.map((p) => p.v)) - 0.5 : 0;
-    if (s2Max === s2Min) s2Max = s2Min + 1;
-    const y2 = (v) => H - pad - ((v - s2Min) / (s2Max - s2Min)) * (H - 2 * pad);
-
-    const linjer = serier.filter((s) => s.punkter.length).map((s) =>
-      `<polyline class="${s.klasse}" points="${s.punkter.map((p) => `${x(p.t).toFixed(1)},${(s.akse2 ? y2 : y)(p.v).toFixed(1)}`).join(" ")}"></polyline>`
-    ).join("");
+    const x = (t) => padL + ((t - t0) / Math.max(t1 - t0, 1)) * (B - padL - padR);
+    const y = (v) => H - padB - ((v - vMin) / (vMax - vMin)) * (H - padT - padB);
+    // rutenett + y-etiketter (4 nivåer)
+    const nivaer = [0, 1, 2, 3].map((i) => vMin + (vMax - vMin) * i / 3);
+    const grid = nivaer.map((v) => `<line class="grid" x1="${padL}" x2="${B - padR}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}"></line>
+      <text class="ytekst" x="${padL - 4}" y="${(y(v) + 3).toFixed(1)}" text-anchor="end">${nf(v, opt.des ?? 1)}</text>`).join("");
+    // x-etiketter: hele timer
+    const ticks = [];
+    const forsteTime = Math.ceil(t0 / 3600) * 3600;
+    for (let t = forsteTime; t <= t1; t += 3600) ticks.push(t);
+    const steg = ticks.length > 8 ? Math.ceil(ticks.length / 8) : 1;
+    const xtekst = ticks.filter((_, i) => i % steg === 0).map((t) => {
+      const d = new Date(t * 1000);
+      return `<line class="grid v" x1="${x(t).toFixed(1)}" x2="${x(t).toFixed(1)}" y1="${padT}" y2="${H - padB}"></line>
+        <text class="xtekst" x="${x(t).toFixed(1)}" y="${H - 5}" text-anchor="middle">${String(d.getHours()).padStart(2, "0")}</text>`;
+    }).join("");
+    const linjer = serier.filter((s) => s.punkter.length).map((s) => {
+      const pts = s.punkter.map((p) => `${x(p.t).toFixed(1)},${y(p.v).toFixed(1)}`).join(" ");
+      const forste = s.punkter[0], siste = s.punkter[s.punkter.length - 1];
+      const flate = s.fyll === false ? "" : `<polygon class="${s.klasse} flate" points="${x(forste.t).toFixed(1)},${y(vMin).toFixed(1)} ${pts} ${x(siste.t).toFixed(1)},${y(vMin).toFixed(1)}"></polygon>`;
+      return flate + `<polyline class="${s.klasse}" points="${pts}"></polyline>`;
+    }).join("");
     const grenselinje = isFinite(opt.grense) && opt.grense > 0
-      ? `<line class="grense" x1="${pad}" x2="${B - pad}" y1="${y(opt.grense)}" y2="${y(opt.grense)}"></line>` : "";
-
-    return `<svg viewBox="0 0 ${B} ${H}" preserveAspectRatio="none">${grenselinje}${linjer}</svg>
-      <div class="grafakse"><span>${nf(vMax, 1)}${opt.enhet || ""}</span><span>${nf(vMin, 1)}${opt.enhet || ""}</span></div>`;
+      ? `<line class="grense" x1="${padL}" x2="${B - padR}" y1="${y(opt.grense).toFixed(1)}" y2="${y(opt.grense).toFixed(1)}"></line>
+         <text class="ytekst rod" x="${B - padR}" y="${(y(opt.grense) - 3).toFixed(1)}" text-anchor="end">grense ${nf(opt.grense, 2)}</text>` : "";
+    return `<svg viewBox="0 0 ${B} ${H}" preserveAspectRatio="none" style="height:${H}px">${grid}${xtekst}${grenselinje}${linjer}</svg>`;
   }
 
   /* ---------------------------- Interaksjon ------------------- */
@@ -1906,6 +1923,10 @@ class KiKlimaProCard extends HTMLElement {
         this._mndValg = { fraId: el.dataset.fra, fra: m };
         this._tegn();
       }
+    } else if (h === "sonegraf") {
+      this._soneGrafValg = this._soneGrafValg || {};
+      this._soneGrafValg[el.dataset.key] = el.dataset.hva;
+      this._tegn();
     } else if (h === "subkollaps") {
       const sek = el.closest(".sub-seksjon");
       const lukket = sek && sek.classList.toggle("lukket");
@@ -2312,14 +2333,27 @@ class KiKlimaProCard extends HTMLElement {
         border:none; border-radius:75px; padding:9px 14px; text-align:center; }
       .tekst { width:100%; box-sizing:border-box; text-align:left; border-radius:16px; font-weight:400; }
 
-      .graf { position:relative; height:96px; margin:4px 0 2px; }
+      .graf { position:relative; height:150px; margin:4px 0 2px; }
       .graf svg { width:100%; height:90px; }
-      .graf polyline { fill:none; stroke-width:2; vector-effect:non-scaling-stroke; }
+      .graf polyline { fill:none; stroke-width:2.2; vector-effect:non-scaling-stroke; stroke-linejoin:round; }
+      .graf polygon.flate { stroke:none; opacity:.18; }
+      .graf polygon.l1 { fill: var(--active-big, var(--primary-color)); }
+      .graf polygon.l2 { fill: var(--orange, #fc6d09); }
+      .graf .l-temp { stroke: var(--red, #f44336); } .graf polygon.l-temp { fill: var(--red, #f44336); }
+      .graf .l-eff { stroke: var(--green, #4caf50); } .graf polygon.l-eff { fill: var(--green, #4caf50); }
+      .graf .grid { stroke: rgba(128,128,128,.22); stroke-width:1; vector-effect:non-scaling-stroke; }
+      .graf .grid.v { stroke-dasharray:2 4; }
+      .graf .ytekst, .graf .xtekst { font-size:10px; fill: currentColor; opacity:.55; font-variant-numeric:tabular-nums; }
+      .graf .ytekst.rod { fill: var(--red, #f44336); opacity:.9; }
+      .graf svg { width:100%; display:block; }
+      .graf.hoy { height:160px; }
+      .underfaner.smaa { margin:0 0 6px; }
+      .underfaner.smaa .underfane { padding:5px 10px; font-size:12px; }
       .graf .l1 { stroke: var(--active-big, var(--primary-color)); }
       .graf .l2 { stroke: var(--orange, #fc6d09); }
       .graf .grense { stroke: var(--red, #f44336); stroke-width:1; stroke-dasharray:4 4;
         vector-effect:non-scaling-stroke; }
-      .grafakse { position:absolute; top:0; right:2px; height:90px; display:flex;
+      .grafakse { display:none; position:absolute; top:0; right:2px; height:90px; display:flex;
         flex-direction:column; justify-content:space-between; font-size:10.5px; opacity:.45; }
       .grafvent { display:flex; align-items:center; justify-content:center; height:90px;
         font-size:12.5px; opacity:.5; text-align:center; padding:0 12px;

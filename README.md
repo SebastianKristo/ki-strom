@@ -101,7 +101,7 @@ nytt og legg til integrasjonen som over.
 
 HACS-kategorien *Integration* installerer bare selve integrasjonen. Kopier
 `www/ki-klima-pro-card.js` til `/config/www/` og legg til ressursen
-`/local/ki-klima-pro-card.js?v=2.9.3` under Innstillinger → Dashboard → ⋮ → Ressurser
+`/local/ki-klima-pro-card.js?v=2.9.5` under Innstillinger → Dashboard → ⋮ → Ressurser
 (type *JavaScript-modul*). Tøm nettleser-cache.
 
 ---
@@ -492,8 +492,8 @@ Fra 2.9.0 følger motoren Elvias faktiske modell i stedet for en fast timegrense
 
 * Energiregisteret (`Måling → Importert energi`) prøves ved hver oppdatering, med sensorens eget
   tidsstempel. Verdien ved en timegrense regnes som **målt** når en prøve ligger innenfor ±15 s,
-  ellers **estimert** ved lineær interpolering mellom nærmeste prøver (bare hvis hullet er under
-  20 min). Er hullet lengre, er timen **mangler** — den regnes ikke som null og differansen legges
+  ellers **estimert** ved lineær interpolering mellom nærmeste prøver (hull opptil 3 t, så
+  registre som bare oppdaterer seg hver time fungerer). Er hullet lengre, er timen **mangler** — den regnes ikke som null og differansen legges
   ikke på én time.
 * Ved omstart eller databrudd forsøker motoren å rekonstruere prøvene rundt timegrensene fra
   Home Assistants recorder. Lykkes det ikke, forblir timen «mangler».

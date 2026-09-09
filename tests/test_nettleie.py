@@ -138,14 +138,14 @@ def test_7d_langt_brudd_gir_mangler_ikke_null_og_ikke_alt_i_en_time():
     t0 = _ts(2026, 9, 8, 14)
     tm.prove(t0 - 10, 1000.0)
     tm.prove(t0 + 5, 1000.0)
-    # omstart: ingen prøver på 3 timer, så 12 kWh mer
-    tm.prove(t0 + 3 * 3600 + 5, 1012.0)
-    lukket = tm.oppdater(t0 + 3 * 3600 + 30)
-    assert [r["kvalitet"] for r in lukket] == ["mangler", "mangler", "mangler"]
+    # omstart: ingen prøver på 4 timer (over grensen på 3 t for interpolering), så 12 kWh mer
+    tm.prove(t0 + 4 * 3600 + 5, 1012.0)
+    lukket = tm.oppdater(t0 + 4 * 3600 + 30)
+    assert [r["kvalitet"] for r in lukket] == ["mangler"] * 4
     assert all(r["kwh"] is None for r in lukket)
     # neste time måles normalt igjen
-    tm.prove(t0 + 4 * 3600 + 5, 1015.0)
-    lukket = tm.oppdater(t0 + 4 * 3600 + 30)
+    tm.prove(t0 + 5 * 3600 + 5, 1015.0)
+    lukket = tm.oppdater(t0 + 5 * 3600 + 30)
     assert lukket[0]["kwh"] == pytest.approx(3.0) and lukket[0]["kvalitet"] == "malt"
 
 

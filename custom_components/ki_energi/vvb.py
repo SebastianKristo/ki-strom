@@ -39,6 +39,10 @@ class KiVvb:
         self.for_lenge_varslet = False
         self.sist_tvang: datetime | None = None
         self._allerede_varm_logget = False
+        self._vi_slo_pa: datetime | None = None
+        self._vi_slo_av = False
+        self._ekstern_av_til: datetime | None = None
+        self._ekstern_varslet: datetime | None = None
         self.billige_timer: list[int] = []
         self.billige_sist: datetime | None = None
         self._siste_bryter: str | None = None
@@ -223,6 +227,22 @@ class KiVvb:
 
         # Bryteren slått på → nullstill effektflagg
         bryter = h.st(self.bryter())
+        # Slått av av noe annet like etter at vi slo den på? Da slåss vi med en annen automasjon
+        # (gammel pakke, pyscript, en fysisk bryter). Ikke slå på igjen hvert minutt — vent 30 min og si fra.
+        if (bryter != "on" and self._siste_bryter == "on" and not self._vi_slo_av
+                and self._vi_slo_pa and (naa - self._vi_slo_pa) < timedelta(minutes=5)):
+            self._ekstern_av_til = naa + timedelta(minutes=30)
+            await h.logbook("KI VVB", "Berederen ble slått av av noe annet like etter at KI slo den på. "
+                                      "Venter 30 min før nytt forsøk. Sjekk gamle automasjoner/pyscript for berederen.")
+            if h.engine is not None:
+                h.engine.logg_hendelse("Bereder: noe annet slår den av rett etter påslag — venter 30 min. Sjekk gamle automasjoner.")
+            if self._ekstern_varslet is None or (naa - self._ekstern_varslet) > timedelta(hours=12):
+                self._ekstern_varslet = naa
+                await h.varsle("Berederen styres av noe annet",
+                               "Noe slår av berederen sekunder etter at KI Energi slår den på. Se etter en gammel automasjon, "
+                               "pyscript eller en annen integrasjon som styrer samme bryter. KI venter 30 min mellom forsøk.",
+                               kategori="vvb")
+        self._vi_slo_av = False
         if bryter == "on" and self._siste_bryter != "on":
             h.sett("ki_vvb_har_trukket_effekt", False)
             h.sett("ki_vvb_oppvarming_startet", naa)
@@ -296,6 +316,7 @@ class KiVvb:
                 h.sett("ki_vvb_tvungen_syklus_aktiv", True)
                 self.sist_tvang = naa
                 if bryter != "on":
+                    self._vi_slo_pa = naa
                     await h.kall("switch", "turn_on", {"entity_id": self.bryter()})
                 await h.varsle("Legionellafrist passert",
                                f"Det er {self.dager_siden()} dager siden berederen sist nådde settpunktet. Tvinger oppvarming nå.",
@@ -310,11 +331,14 @@ class KiVvb:
 
         # Følg beslutning
         bv = self.bor_varme()
+        sperret = self._ekstern_av_til is not None and naa < self._ekstern_av_til
         if h.on("ki_vvb_prisstyring", True) or self.boost_aktiv() or h.on("ki_vvb_tvungen_syklus_aktiv") or self.forfalt():
-            if bv and bryter != "on":
+            if bv and bryter != "on" and not sperret:
+                self._vi_slo_pa = naa
                 await h.kall("switch", "turn_on", {"entity_id": self.bryter()})
                 await h.logbook("KI VVB", "På: " + self.forklaring())
             elif not bv and bryter == "on" and not self.var_aktiv and not self.forfalt():
+                self._vi_slo_av = True
                 await h.kall("switch", "turn_off", {"entity_id": self.bryter()})
                 await h.logbook("KI VVB", "Av: " + self.forklaring())
         self.var_bor_varme = bv
@@ -397,6 +421,7 @@ class KiVvb:
         if h.engine is not None:
             h.engine.logg_hendelse(f"Varmtvannsbereder mettet etter {minutter} min — legionella bekreftet.")
         if h.on("ki_vvb_prisstyring", True) and not h.on("ki_vvb_alltid_pa"):
+            self._vi_slo_av = True
             await h.kall("switch", "turn_off", {"entity_id": self.bryter()})
 
     def _doegn(self, raa: list, naa: datetime) -> list[dict]:
