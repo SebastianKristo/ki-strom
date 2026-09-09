@@ -306,7 +306,13 @@ class KiHub:
                 return
             if kategori and not self.on(f"ki_varsel_{kategori}", True):
                 return
-        data: dict[str, Any] = {}
+        ikoner = {"effekt": "mdi:flash-alert", "helg": "mdi:bag-suitcase", "hjemkomst": "mdi:home-import-outline",
+                  "sommer": "mdi:white-balance-sunny", "vvb": "mdi:water-boiler", "hanklevarmer": "mdi:radiator"}
+        data: dict[str, Any] = {
+            # Android viser ikonet i varselet; iOS ignorerer feltet uten å klage
+            "notification_icon": ikoner.get(kategori or "", "mdi:home-lightning-bolt"),
+            "group": f"ki_energi_{kategori or 'generelt'}",
+        }
         if aksjoner:
             data["actions"] = aksjoner
         if tag:

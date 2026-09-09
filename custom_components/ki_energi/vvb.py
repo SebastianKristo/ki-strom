@@ -38,6 +38,7 @@ class KiVvb:
         self.var_bor_varme: bool | None = None
         self.for_lenge_varslet = False
         self.sist_tvang: datetime | None = None
+        self._allerede_varm_logget = False
         self.billige_timer: list[int] = []
         self.billige_sist: datetime | None = None
         self._siste_bryter: str | None = None
@@ -255,13 +256,31 @@ class KiVvb:
             await self._metning(naa)
         self.var_mettet = mettet
 
-        # Ingen respons
-        ingen = self.ingen_respons()
-        if ingen and not h.on("ki_vvb_kritisk_varslet"):
-            h.sett("ki_vvb_kritisk_varslet", True)
-            await h.varsle("Varmtvannsbereder svarer ikke",
-                           f"Bryteren har stått på i {int(h.num('ki_vvb_maks_min_uten_effekt', 10))} minutter uten at "
-                           "effekten har steget. Sjekk sikring, kontaktor og element fysisk.", alltid=True, kategori="vvb")
+        # Bryter på, men ingen effekt: termostaten har allerede koblet ut — vannet er varmt.
+        # Det er det normale, ikke en feil. Regnes som metning (samme antakelse som ellers:
+        # termostaten står på 65–70 °C). Bare hvis bryteren har stått på et helt døgn uten at
+        # elementet noen gang trakk strøm, er noe galt (ingen bruker varmtvann på 24 t?).
+        ingen = False
+        if self.ingen_respons():
+            s0 = self._dt("ki_vvb_oppvarming_startet")
+            timer_pa = (naa - s0).total_seconds() / 3600 if s0 else 0
+            if timer_pa >= 24:
+                ingen = True
+                if not h.on("ki_vvb_kritisk_varslet"):
+                    h.sett("ki_vvb_kritisk_varslet", True)
+                    await h.varsle("Varmtvannsbereder svarer ikke",
+                                   "Bryteren har stått på i et døgn uten at elementet har trukket strøm en eneste gang. "
+                                   "Sjekk sikring, kontaktor og element.", alltid=True, kategori="vvb")
+            elif not self.var_mettet and not self._allerede_varm_logget:
+                self._allerede_varm_logget = True
+                h.sett("ki_vvb_siste_godkjente_syklus", naa)
+                h.sett("ki_vvb_tvungen_syklus_aktiv", False)
+                await h.logbook("KI VVB", "Bryteren ble slått på, men elementet trakk ingen strøm — termostaten var "
+                                          "allerede utkoblet. Vannet er på settpunkt; regnes som sikret.")
+                if h.engine is not None:
+                    h.engine.logg_hendelse("Bereder: allerede varm (termostaten utkoblet ved påslag) — regnes som sikret.")
+        if not self.ingen_respons():
+            self._allerede_varm_logget = False
 
         # Varer for lenge
         minutter = self.oppvarming_minutter()

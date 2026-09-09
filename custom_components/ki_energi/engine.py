@@ -575,16 +575,21 @@ class KiEngine:
             naa = self.romtemperatur(konf)
             avvik = (mal - naa) if naa is not None else 0.3
 
-            forvarm, forvarm_grunn = False, ""
+            forvarm, forvarm_grunn, forvarm_start = False, "", None
             if frist is not None and naa is not None and forvarming_pa:
                 _k, rate, _n = self._tau(key)
                 dagmal = self.dagmal(key, konf)
                 mangler = dagmal - naa
-                if mangler > 0.2 and rate > 0.05:
-                    behov = (mangler / rate) * 60.0
+                if mangler > 0.2:
+                    # Lært rate, men aldri under 0,3 °C/t (ellers blir «behov» absurd) og aldri
+                    # mer enn 10 t forvarming. Mangler læring brukes 1,2 °C/t.
+                    rate = max(0.3, rate if rate and rate > 0 else 1.2)
+                    behov = min((mangler / rate) * 60.0, 10 * 60.0)
                     if konf.get("type") == "gulv":
                         behov = max(behov, 45.0)      # gulv er tregt — start uansett tidlig
                     til_frist = (frist - h.naa_min()) % (24 * 60)
+                    start_min = (frist - int(behov) - 10) % (24 * 60)
+                    forvarm_start = f"{start_min // 60:02d}:{start_min % 60:02d}"
                     if til_frist <= behov + 10:
                         forvarm = True
                         forvarm_grunn = (f"Trenger ca. {int(behov)} min for å nå {dagmal:.1f} °C "
@@ -611,7 +616,7 @@ class KiEngine:
                 key=key, navn=konf["navn"], rom=konf["rom"], type=konf["type"],
                 prio=int(konf["prio"]), climate=konf["climate"], levende=levende, styrt=styrt,
                 mal=round(mal, 1), naa=round(naa, 1) if naa is not None else None,
-                avvik=round(avvik, 2), grunn=grunn, frist=frist, forvarm=forvarm,
+                avvik=round(avvik, 2), grunn=grunn, frist=frist, forvarm=forvarm, forvarm_start=forvarm_start,
                 forvarm_grunn=forvarm_grunn, sol_trekk=sol, trenger=trenger,
                 effekt=round(self.forventet_effekt(konf, trenger), 3),
                 helpere=[[konf.get(f), navn] for f, navn in ((Z_TEMP_DAG, "Dag"), (Z_TEMP_NATT, "Natt"), (Z_TEMP_BORTE, "Borte")) if konf.get(f)],
@@ -661,8 +666,9 @@ class KiEngine:
                                     f"{h.num('ki_vindu_temp', 12):.0f} °C til det lukkes")
             elif not last["trenger"]:
                 sol = f", solen bidrar med ca. {last['sol_trekk']} °C" if last["sol_trekk"] else ""
+                start = f". Forvarming starter ca. kl. {last['forvarm_start']}" if last.get("forvarm_start") and not last["forvarm"] else ""
                 p.update(handling="normal", settpunkt=last["mal"],
-                         forklaring=f"{last['grunn']}. Rommet er på måltemperatur{sol}")
+                         forklaring=f"{last['grunn']}. Rommet er på måltemperatur{sol}{start}")
             elif tilgjengelig >= last["effekt"] or last["prio"] == 1:
                 tilgjengelig -= last["effekt"]
                 p.update(handling="normal", settpunkt=last["mal"],
@@ -928,6 +934,9 @@ class KiEngine:
             "personer": [{"key": p["key"], "navn": p["navn"], "type": p["type"], "hjemme": h.hjemme(p["entity"]) if p["entity"] else None}
                          for p in h.personer()],
             "gardiner": bool(h.cfg(CONF_GARDINER)), "hanklevarmer": bool(h.cfg(CONF_HANKLEVARMER)),
+            "entiteter": {"total_effekt": h.cfg(CONF_TOTAL_EFFEKT) or "", "importert_energi": h.cfg(CONF_IMPORTERT_ENERGI) or "",
+                          "ute_temp": h.cfg(CONF_UTE_TEMP) or "", "vaer": h.cfg(CONF_VAER) or "",
+                          "topp1": h.cfg(CONF_TOPP1) or "", "topp2": h.cfg(CONF_TOPP2) or "", "topp3": h.cfg(CONF_TOPP3) or ""},
             "vvb_bryter": bool(h.cfg(CONF_VVB_BRYTER)), "vvb_effekt": bool(h.cfg(CONF_VVB_EFFEKT)),
             "grense_kwh": budsjett["grense"], "grense_grunn": budsjett["grense_grunn"],
             "forbrukt_kwh": budsjett["forbrukt"], "igjen_kwh": budsjett["igjen"],
@@ -950,7 +959,8 @@ class KiEngine:
             overstyrt=bool(self.overstyring(p["key"])), helpere=p.get("helpere"), styr=p.get("styr"),
             entiteter=p.get("entiteter"), vindu=p.get("vindu", False), vindu_navn=p.get("vindu_navn", ""),
             leggetid=bool(self.leggetid_aktiv(p["key"])), profil=p.get("profil"),
-            person=p.get("person"), person_type=p.get("person_type"))
+            person=p.get("person"), person_type=p.get("person_type"), forvarm_start=p.get("forvarm_start"),
+            forvarm=p.get("forvarm", False))
             for p in plan]
         if h.vvb is not None:
             lastliste.append(dict(
@@ -1143,6 +1153,8 @@ class KiEngine:
                     endring = (t - t0) / dt_timer
                     diff = t - ute
                     effekt = self.sone_effekt_w(konf) or 0.0
+                    if any(h.pa(e) for e in (konf.get("vindu") or [])):
+                        continue   # åpent vindu forgifter både k og oppvarmingsrate — lær ikke nå
                     rad = h.minne["tau"].get(key, {"k": 0.08, "varme_rate": 1.2, "n": 0})
                     if effekt < 30 and diff > 3 and endring < -0.05:
                         k = min(0.5, max(0.005, -endring / diff))
