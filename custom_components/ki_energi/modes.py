@@ -421,6 +421,9 @@ class KiModuser:
             self.hank_pa_siden = self.hank_pa_siden or naa
         else:
             self.hank_pa_siden = None
+        # Slått av manuelt midt i et dusjvindu? Da lar vi den være av til vinduet er over.
+        forrige_pa = getattr(self, "_hank_forrige_pa", None)
+        self._hank_forrige_pa = pa
 
         if not h.on("ki_styr_hanklevarmer", True):
             if not pa:
@@ -431,7 +434,13 @@ class KiModuser:
         i_vindu = (h.mellom(h.tid_min("ki_hanklevarmer_morgen_start", "05:30"), h.tid_min("ki_hanklevarmer_morgen_slutt", "08:30"), minutt)
                    or h.mellom(h.tid_min("ki_hanklevarmer_kveld_start", "19:00"), h.tid_min("ki_hanklevarmer_kveld_slutt", "22:00"), minutt))
         maks = h.num("ki_hanklevarmer_maks_pa_tid", 240)
-        if pa and self.hank_pa_siden and (naa - self.hank_pa_siden).total_seconds() / 60 > maks:
+        if i_vindu and forrige_pa and not pa and not getattr(self, "_hank_vi_slo_av", False):
+            self.m["hank_manuelt_av_i_vindu"] = True
+        self._hank_vi_slo_av = False
+        # Sikkerhetsavstengingen gjelder manuell bruk utenom dusjvinduene. I vinduet er det meningen at
+        # den står på, uansett hvor langt vinduet er.
+        if pa and not i_vindu and self.hank_pa_siden and (naa - self.hank_pa_siden).total_seconds() / 60 > maks:
+            self._hank_vi_slo_av = True
             await h.kall("switch", "turn_off", {"entity_id": ent})
             await h.logbook("KI Håndklevarmer", f"Slått av automatisk — har stått på lenger enn {int(maks)} min.")
             await h.varsle("Håndklevarmer slått av", f"Sto på lenger enn {int(maks)} min — slått av automatisk (sikkerhet).", kategori="hanklevarmer")
@@ -439,7 +448,7 @@ class KiModuser:
         # Vinduskantene: slå på/av bare ved selve overgangen, så manuell bruk innimellom respekteres
         starter = minutt in (h.tid_min("ki_hanklevarmer_morgen_start", "05:30"), h.tid_min("ki_hanklevarmer_kveld_start", "19:00"))
         slutter = minutt in (h.tid_min("ki_hanklevarmer_morgen_slutt", "08:30"), h.tid_min("ki_hanklevarmer_kveld_slutt", "22:00"))
-        if starter and not pa and i_vindu:
+        if i_vindu and not pa and (starter or not self.m.get("hank_manuelt_av_i_vindu")):
             # Effektvakt: utsett noen minutter i rød sone (45 W er lite, men prinsippet er likt)
             if h.sensor_state("ki_energi_status") in ("rod", "kritisk"):
                 self.m["hank_utsatt"] = True
@@ -450,7 +459,11 @@ class KiModuser:
             await h.kall("switch", "turn_on", {"entity_id": ent})
         elif slutter and pa:
             self.m.pop("hank_utsatt", None)
+            self.m.pop("hank_manuelt_av_i_vindu", None)
+            self._hank_vi_slo_av = True
             await h.kall("switch", "turn_off", {"entity_id": ent})
+        if not i_vindu:
+            self.m.pop("hank_manuelt_av_i_vindu", None)
 
     # ------------------------------------------------------------------
     #  Gardiner

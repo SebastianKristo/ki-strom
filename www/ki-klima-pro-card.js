@@ -21,7 +21,7 @@
  * Config:  type: custom:ki-klima-pro-card
  */
 
-const KI_PRO_VERSJON = "2.9.2";
+const KI_PRO_VERSJON = "2.9.3";
 
 console.info(
   `%c KI-KLIMA-PRO-CARD %c ${KI_PRO_VERSJON} `,
@@ -483,6 +483,8 @@ class KiKlimaProCard extends HTMLElement {
   // Følg personenes hjelpere dynamisk (de heter time.ki_<key>_… og switch.ki_<key>_ferie)
   _personEntiteter() {
     const ut = [];
+    // fysiske brytere kortet viser direkte
+    ["sensor.ki_hanklevarmer", "sensor.ki_bereder"].forEach((sid) => { const b = this._a(sid, "bryter", ""); if (b) ut.push(b); });
     this._personer.forEach((p) => {
       if (p.type === "barn") ut.push(...["dag", "natt", "borte_fra", "borte_til"].map((x) => `input_datetime.ki_${p.key}_${x}`));
       if (p.type === "ungdom") ut.push(`input_datetime.ki_${p.key}_vekking`, `input_datetime.ki_${p.key}_vekking_helg`, `input_datetime.ki_${p.key}_natt`, `input_boolean.ki_${p.key}_ferie`);
@@ -1026,7 +1028,7 @@ class KiKlimaProCard extends HTMLElement {
     const konfigurert = !!a("bryter", "");
     const ent = a("bryter", "switch.hanklevarmer");
     const styr = this._pa("input_boolean.ki_styr_hanklevarmer");
-    const pa = this._s("sensor.ki_hanklevarmer", "av") === "pa";
+    const pa = this._st(ent) ? this._st(ent).state === "on" : this._s("sensor.ki_hanklevarmer", "av") === "pa";
     const effekt = Number(a("effekt_w", NaN));
     const maks = Number(a("maks_min", this._n("input_number.ki_hanklevarmer_maks_pa_tid")));
     const minutter = Number(a("minutter_pa", 0));
@@ -1423,9 +1425,9 @@ class KiKlimaProCard extends HTMLElement {
         ["input_boolean.ki_helg_senk_gulvvarme", this._l("Helg senk gulvvarme"), "Gulvvarmen senkes også i helgemodus"],
         ["input_boolean.ki_sommer_auto", "Sommermodus automatisk", "Etter måned og utetemperatur"],
       ]],
-      ["Elbil", [
+      ...(this._har("elbil") ? [["Elbil", [
         ["input_boolean.ki_elbil_natt", "Elbil lader om natten", "Laderen er ikke smart — motoren holder av effekt i ladevinduet"],
-      ]],
+      ]]] : []),
       ["Vann og bad", [
         ...(this._har("vvb_bryter") ? [["input_boolean.ki_vvb_prisstyring", "VVB prisstyring", "Velger de billigste timene"],
                                       ["input_boolean.ki_vvb_alltid_pa", "VVB alltid på", "Kobler ut prisstyringen"]] : []),
@@ -1508,13 +1510,14 @@ class KiKlimaProCard extends HTMLElement {
           <div class="bryter ${this._pa(`input_boolean.ki_${p.key}_ferie`) ? "on" : ""}" data-handling="veksle" data-entity="input_boolean.ki_${p.key}_ferie"><span></span></div>
         </div>
       </div>`).join("")}
+      ${this._har("elbil") ? `
       <div class="blokk">
         <div class="hode"><span>Elbil</span><span class="sub">${this._tidKort("input_datetime.ki_elbil_fra")}–${this._tidKort("input_datetime.ki_elbil_til")}</span></div>
         ${this._dognplan([{ navn: "Lading", spenn: [["input_datetime.ki_elbil_fra", "input_datetime.ki_elbil_til", "s", "Elbil"]] }])}
         ${this._tidPar("Lader fra", "input_datetime.ki_elbil_fra", "Til", "input_datetime.ki_elbil_til")}
         ${this._stepperRad("input_number.ki_elbil_effekt_kw", "Ladeeffekt", 1, " kW")}
         <div class="notat">5 A på tre faser (400 V) ≈ 3,5 kW, på én fase (230 V) ≈ 1,2 kW. Når lastprofilen har lært natten, teller halvparten.</div>
-      </div>
+      </div>` : ""}
       <div class="blokk">
         <div class="hode"><span>Stue og vindu</span></div>
         ${this._tidRad("input_datetime.ki_stue_reduksjon_fra", "Stue reduksjon fra")}

@@ -9,15 +9,16 @@
         }
       },
       "utstyr": {
-        "title": "Utstyr",
-        "description": "Alt her er valgfritt. Bereder med bryter gir prisstyring og legionellasikring; bare effektsensor gir måling. Hvitevarer: effektsensorer for komfyr, oppvaskmaskin osv. som motoren skal ta hensyn til.",
+        "title": "Utstyr og funksjoner",
+        "description": "Alt er valgfritt. Det du ikke velger her, vises heller ikke i kortet: ingen bereder-bryter = ingen prisstyring, ingen gardin = ingen gardinblokk, ingen håndklevarmer = ingen underfane, elbil av = ingen elbil-innstillinger.",
         "data": {
           "vvb_bryter": "Varmtvannsbereder – bryter/relé",
           "vvb_effekt": "Varmtvannsbereder – effektsensor (W)",
           "hanklevarmer": "Håndklevarmer – bryter",
           "hanklevarmer_effekt": "Håndklevarmer – effektsensor (W)",
           "gardiner": "Gardiner i stua (cover)",
-          "hvitevarer": "Effektsensorer for komfyr, oppvaskmaskin osv. (flere)"
+          "hvitevarer": "Effektsensorer for komfyr, oppvaskmaskin osv. (flere)",
+          "har_elbil": "Elbillader i huset (viser elbil-innstillingene; motoren holder av ladeeffekt)"
         }
       },
       "personer": {
@@ -119,15 +120,16 @@
         }
       },
       "utstyr": {
-        "title": "Utstyr",
-        "description": "Varmtvann, håndklevarmer, gardiner og store uregulerte laster. Alt er valgfritt.",
+        "title": "Utstyr og funksjoner",
+        "description": "Alt er valgfritt. Det du ikke velger her, vises heller ikke i kortet: ingen bereder-bryter = ingen prisstyring, ingen gardin = ingen gardinblokk, ingen håndklevarmer = ingen underfane, elbil av = ingen elbil-innstillinger.",
         "data": {
           "vvb_bryter": "Varmtvannsbereder – bryter/relé",
           "vvb_effekt": "Varmtvannsbereder – effektsensor (W)",
           "hanklevarmer": "Håndklevarmer – bryter",
           "hanklevarmer_effekt": "Håndklevarmer – effektsensor (W)",
           "gardiner": "Gardiner i stua (cover)",
-          "hvitevarer": "Effektsensorer for komfyr, oppvaskmaskin osv. (flere)"
+          "hvitevarer": "Effektsensorer for komfyr, oppvaskmaskin osv. (flere)",
+          "har_elbil": "Elbillader i huset (viser elbil-innstillingene; motoren holder av ladeeffekt)"
         }
       },
       "personer": {

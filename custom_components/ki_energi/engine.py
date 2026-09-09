@@ -21,7 +21,7 @@ from homeassistant.core import callback
 from homeassistant.util import dt as dt_util
 
 from .const import (
-    CONF_VVB_BRYTER, CONF_HANKLEVARMER,
+    CONF_VVB_BRYTER, CONF_HANKLEVARMER, CONF_HAR_ELBIL,
     CONF_GARDINER,
     CONF_ENERGILEDD_DAG, CONF_ENERGILEDD_NATT, CONF_GLASS_M2, CONF_HANKLEVARMER_EFFEKT,
     CONF_HVITEVARER, CONF_IMPORTERT_ENERGI, CONF_PRESET, PRESETS, PROFIL_LEGACY, CONF_STROMPRIS,
@@ -116,11 +116,21 @@ class KiEngine:
         kwh, kv = h.nettleie.forelopig_time()
         if kwh is None:
             return None, ""
+        # Registre som oppdaterer seg sjelden: legg til øyeblikkseffekt × tid siden siste prøve,
+        # ellers står «brukt» på 0 til neste oppdatering.
+        tillegg = ""
+        siste = h.nettleie.siste_prove_ts()
+        if siste is not None:
+            alder_s = dt_util.utcnow().timestamp() - siste
+            if alder_s > 120:
+                total_kw = (h.f(h.cfg(CONF_TOTAL_EFFEKT), 0.0) or 0.0) / 1000.0
+                kwh += total_kw * alder_s / 3600.0
+                tillegg = f" + anslag for {int(alder_s // 60)} min siden registeret sist oppdaterte seg"
         if kv == "forelopig_estimert":
-            return kwh, "timesmåling mot energiregisteret — nullpunktet ved timeskiftet er interpolert (estimert)"
+            return kwh, "timesmåling mot energiregisteret — nullpunktet ved timeskiftet er interpolert (estimert)" + tillegg
         if kv == "forelopig_delvis":
-            return kwh, "timesmåling fra første prøve etter oppstart — forbruket før den er ikke med (delvis)"
-        return kwh, "timesmåling mot energiregisteret (nullpunkt målt ved timeskiftet)"
+            return kwh, "timesmåling fra første prøve etter oppstart — forbruket før den er ikke med (delvis)" + tillegg
+        return kwh, "timesmåling mot energiregisteret (nullpunkt målt ved timeskiftet)" + tillegg
 
     # ------------------------------------------------------------------
     #  Budsjett
@@ -235,7 +245,7 @@ class KiEngine:
             if n < 10 and r > 0:
                 ekstra += r * 0.5
                 grunner.append("frokostvinduet")
-        if h.on("ki_elbil_natt") and h.num("ki_elbil_effekt_kw", 0) > 0 \
+        if h.cfg(CONF_HAR_ELBIL, False) and h.on("ki_elbil_natt") and h.num("ki_elbil_effekt_kw", 0) > 0 \
                 and h.mellom(h.tid_min("ki_elbil_fra", "22:00"), h.tid_min("ki_elbil_til", "06:00"), t):
             kw = h.num("ki_elbil_effekt_kw", 0)
             _p, n = self.profil_hent(self.profilnokkel(dt_util.now() + timedelta(minutes=minutter_frem)))
@@ -933,7 +943,7 @@ class KiEngine:
             "hustype": "fritidsbolig" if h.fritidsbolig() else "bolig",
             "personer": [{"key": p["key"], "navn": p["navn"], "type": p["type"], "hjemme": h.hjemme(p["entity"]) if p["entity"] else None}
                          for p in h.personer()],
-            "gardiner": bool(h.cfg(CONF_GARDINER)), "hanklevarmer": bool(h.cfg(CONF_HANKLEVARMER)),
+            "gardiner": bool(h.cfg(CONF_GARDINER)), "hanklevarmer": bool(h.cfg(CONF_HANKLEVARMER)), "elbil": bool(h.cfg(CONF_HAR_ELBIL, False)),
             "entiteter": {"total_effekt": h.cfg(CONF_TOTAL_EFFEKT) or "", "importert_energi": h.cfg(CONF_IMPORTERT_ENERGI) or "",
                           "ute_temp": h.cfg(CONF_UTE_TEMP) or "", "vaer": h.cfg(CONF_VAER) or "",
                           "topp1": h.cfg(CONF_TOPP1) or "", "topp2": h.cfg(CONF_TOPP2) or "", "topp3": h.cfg(CONF_TOPP3) or ""},

@@ -366,6 +366,10 @@ class KiNettleie:
         return lukket
 
     # -- avledede verdier -----------------------------------------------
+    def siste_prove_ts(self) -> float | None:
+        p = self.maler.m.get("prover") or []
+        return p[-1][0] if p else None
+
     def forelopig_time(self) -> tuple[float | None, str]:
         h = self.hub
         eid = h.cfg(CONF_IMPORTERT_ENERGI)

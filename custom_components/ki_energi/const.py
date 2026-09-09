@@ -44,6 +44,7 @@ CONF_GLASS_M2 = "glass_m2"
 CONF_STUE_AREAL = "stue_areal_m2"
 CONF_SONER = "soner"
 CONF_HUSTYPE = "hustype"      # bolig | fritidsbolig
+CONF_HAR_ELBIL = "har_elbil"  # vis/bruk elbil-innstillingene
 CONF_PERSONER = "personer"    # liste av {key, navn, entity, type}; type: barn | ungdom | voksen
 PERSONTYPER = {
     "barn": "Barn — fast opp/legg og borte på dagtid (barnehage/skole)",
@@ -239,6 +240,7 @@ PRESETS: dict[str, dict] = {
             CONF_TILSTEDE_CYBELE: "person.cybele", CONF_TILSTEDE_SEBASTIAN: "person.sebastian", CONF_TILSTEDE_RUNE: "person.rune",
             CONF_TOTAL_EFFEKT: "sensor.hytte_strommaler_effekt", CONF_IMPORTERT_ENERGI: "sensor.hytte_strommaler_imported_energy",
             CONF_UTE_TEMP: "sensor.hytte_utetemperatur", CONF_VAER: "weather.forecast_home",
+            CONF_HAR_ELBIL: True,
         },
         "soner": DEFAULT_SONER_HYTTE,
         "personer": [dict(p, entity=f"person.{p['key']}") for p in DEFAULT_PERSONER],

@@ -13,7 +13,7 @@ from . import oppdag
 from .const import (
     CONF_AREAL, CONF_BYGGEAR, CONF_ENERGILEDD_DAG, CONF_ENERGILEDD_NATT, CONF_GARDINER,
     CONF_GLASS_M2, CONF_HANKLEVARMER, CONF_HANKLEVARMER_EFFEKT, CONF_HVITEVARER,
-    CONF_HUSTYPE, CONF_PERSONER, CONF_PRESET, DEFAULT_PERSONER, PERSONTYPER, PRESETS, PROFIL_LEGACY,
+    CONF_HAR_ELBIL, CONF_HUSTYPE, CONF_PERSONER, CONF_PRESET, DEFAULT_PERSONER, PERSONTYPER, PRESETS, PROFIL_LEGACY,
     CONF_IMPORTERT_ENERGI, CONF_KAPASITETSTRINN, CONF_NORDPOOL, CONF_NORGESPRIS_AKTIV, CONF_SONER,
     CONF_STROMPRIS, CONF_STUE_AREAL, CONF_TILSTEDE_CYBELE, CONF_TILSTEDE_RUNE,
     CONF_TILSTEDE_SEBASTIAN, CONF_TOPP1, CONF_TOPP2, CONF_TOPP3, CONF_TOTAL_EFFEKT, CONF_UTE_TEMP,
@@ -81,6 +81,7 @@ SKJEMA_UTSTYR = {
     vol.Optional(CONF_HANKLEVARMER_EFFEKT): _ent("sensor", device_class="power"),
     vol.Optional(CONF_GARDINER): _ent("cover"),
     vol.Optional(CONF_HVITEVARER): _ent("sensor", multiple=True, device_class="power"),
+    vol.Optional(CONF_HAR_ELBIL, default=False): selector.BooleanSelector(),
 }
 SKJEMA_PERSONER = {
     vol.Optional(CONF_TILSTEDE_CYBELE): _ent(ALLE_DOMENER),
@@ -225,7 +226,8 @@ class KiEnergiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             self._data.update(_rens(user_input, SKJEMA_UTSTYR))
             return await self.async_step_personer()
         return self.async_show_form(step_id="utstyr", data_schema=self.add_suggested_values_to_schema(
-            vol.Schema(SKJEMA_UTSTYR), self._forslag(CONF_VVB_BRYTER, CONF_VVB_EFFEKT, CONF_HANKLEVARMER, CONF_HANKLEVARMER_EFFEKT)))
+            vol.Schema(SKJEMA_UTSTYR), {**self._forslag(CONF_VVB_BRYTER, CONF_VVB_EFFEKT, CONF_HANKLEVARMER, CONF_HANKLEVARMER_EFFEKT),
+                                        CONF_HAR_ELBIL: bool(PRESETS.get(self._data.get(CONF_PRESET, "oslo"), PRESETS["oslo"])["config"].get(CONF_HAR_ELBIL, False))}))
 
     async def async_step_personer(self, user_input=None):
         preset = PRESETS.get(self._data.get(CONF_PRESET, "oslo"), PRESETS["oslo"])
