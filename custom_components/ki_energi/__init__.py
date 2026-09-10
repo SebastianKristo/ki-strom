@@ -21,6 +21,8 @@ from .engine import KiEngine
 from .hub import KiHub
 from .modes import KiModuser
 from .nettleie import KiNettleie
+from .sparing import KiSparing
+from .prognose import KiPrognoselaering
 from .vvb import KiVvb
 
 _LOGGER = logging.getLogger(__name__)
@@ -96,6 +98,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hub.vvb = KiVvb(hub)
     hub.moduser = KiModuser(hub)
     hub.nettleie = KiNettleie(hub)
+    hub.sparing = KiSparing(hub)
+    hub.prognose = KiPrognoselaering(hub)
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = hub
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -158,7 +162,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if not hass.data[DOMAIN]:
         for tj in ("overstyr", "fjern_overstyring", "nullstill_laering", "vvb_boost", "vvb_avbryt_boost",
                    "vvb_tving_syklus", "hjemkomst", "hjemkomst_ferdig", "helg_sporsmal", "sett_standardverdier", "tick",
-                   "leggetid", "sett_prio"):
+                   "leggetid", "sett_prio", "nullstill_prognoselaering"):
             hass.services.async_remove(DOMAIN, tj)
     return ok
 
@@ -256,6 +260,13 @@ def _registrer_tjenester(hass: HomeAssistant) -> None:
         if hub:
             await hub.engine.leggetid(call.data["sone"], bool(call.data.get("avbryt", False)))
 
+    async def nullstill_prognoselaering(call: ServiceCall):
+        hub = _hub(hass)
+        if hub and hub.prognose is not None:
+            hub.prognose.nullstill()
+            if hub.engine is not None:
+                hub.engine.logg_hendelse("Prognoselæringen er nullstilt — fast reserve gjelder til nytt grunnlag er samlet.")
+
     async def sett_prio(call: ServiceCall):
         hub = _hub(hass)
         if hub:
@@ -271,6 +282,7 @@ def _registrer_tjenester(hass: HomeAssistant) -> None:
     hass.services.async_register(DOMAIN, "overstyr", overstyr, schema=SCHEMA_OVERSTYR)
     hass.services.async_register(DOMAIN, "leggetid", leggetid,
                                  schema=vol.Schema({vol.Required("sone"): str, vol.Optional("avbryt", default=False): bool}))
+    hass.services.async_register(DOMAIN, "nullstill_prognoselaering", nullstill_prognoselaering, schema=SCHEMA_STANDARD)
     hass.services.async_register(DOMAIN, "sett_prio", sett_prio,
                                  schema=vol.Schema({vol.Required("sone"): str, vol.Required("prio"): vol.Coerce(int)}))
     hass.services.async_register(DOMAIN, "fjern_overstyring", fjern_overstyring, schema=SCHEMA_SONE)

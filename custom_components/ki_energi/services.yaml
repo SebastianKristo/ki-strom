@@ -119,3 +119,7 @@ sett_prio:
         number:
           min: 1
           max: 5
+
+nullstill_prognoselaering:
+  name: Nullstill prognoselæring
+  description: Sletter lærte prognosefeil og marginer (bare den adaptive reserven). Fast reserve gjelder til nytt grunnlag er samlet.

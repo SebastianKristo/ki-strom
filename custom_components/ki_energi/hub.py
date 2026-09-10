@@ -15,7 +15,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .const import (
-    CONF_HUSTYPE, CONF_PERSONER, CONF_PRESET, DEFAULT_PERSONER, PRESETS,
+    CONF_HUSTYPE, CONF_PERSONER, CONF_PRESET, LEGACY_PERSONER, PRESETS,
     CONF_SONER, DEFAULT_CONFIG, DEFAULT_SONER, DOMAIN, Z_AKTIV, Z_PROFIL,
     Z_TEMP_BORTE, Z_TEMP_DAG, Z_TEMP_NATT,
 )
@@ -37,9 +37,11 @@ class KiHub:
         self.store = Store(hass, STORE_VERSION, f"{DOMAIN}.{entry.entry_id}.minne")
         self.minne: dict[str, Any] = {
             "profil": {}, "tau": {}, "state": {"overstyringer": {}, "rotasjon": 0},
-            "logg": [], "vvb": {}, "moduser": {}, "nettleie": {},
+            "logg": [], "vvb": {}, "moduser": {}, "nettleie": {}, "sparing": {}, "prognose": {},
         }
         self.nettleie = None
+        self.sparing = None
+        self.prognose = None
         self.engine = None
         self.vvb = None
         self.moduser = None
@@ -108,11 +110,11 @@ class KiHub:
                            "sover": p.get("sover") or ""})
             return ut
         ut = []
-        for p in DEFAULT_PERSONER:
+        for p in LEGACY_PERSONER:
             ent = self.cfg(f"tilstede_{p['key']}")
-            if ent is None:
+            if not ent:
                 continue
-            ut.append(dict(p, entity=ent or "", sover=""))
+            ut.append({"key": p["key"], "navn": p["key"].capitalize(), "type": p["type"], "entity": ent, "sover": ""})
         return ut
 
     def sover(self, person: dict) -> bool | None:
@@ -128,35 +130,6 @@ class KiHub:
 
     def person(self, key: str) -> dict | None:
         return next((p for p in self.personer() if p["key"] == key), None)
-
-    def vekking_frist(self, person: dict) -> int | None:
-        """Neste faktiske vekkealarm for personen fra KI Søvn & Vekking (sensor.<prefix>_neste_alarm),
-        som minutter siden midnatt — bare hvis alarmen går innen 24 t og ikke hoppes over.
-        None = ingen vekkealarm koblet til personen → bruk klokkeslettene i KI Energi."""
-        sover_ent = person.get("sover") or f"binary_sensor.{person['key']}_sover"
-        kandidater = (sover_ent, f"binary_sensor.{person['key']}_sovn_sover")
-        naa = dt_util.now()
-        beste = None
-        for st in self.hass.states.async_all("sensor"):
-            a = st.attributes
-            if a.get("integrasjon") != "ki_sovn" or a.get("type") != "vekking":
-                continue
-            if a.get("person") not in kandidater:
-                continue
-            if a.get("hopper_over") or not a.get("neste_tidspunkt"):
-                continue
-            try:
-                when = dt_util.parse_datetime(a["neste_tidspunkt"])
-            except (TypeError, ValueError):
-                continue
-            if when is None:
-                continue
-            when = dt_util.as_local(when)
-            if when <= naa or (when - naa) > timedelta(hours=24):
-                continue
-            if beste is None or when < beste:
-                beste = when
-        return beste.hour * 60 + beste.minute if beste else None
 
     def voksne_hjemme(self) -> bool | None:
         """True hvis minst én voksen er hjemme, False hvis alle kjente voksne er borte, None hvis ukjent."""

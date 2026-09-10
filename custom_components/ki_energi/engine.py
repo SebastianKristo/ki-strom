@@ -46,6 +46,8 @@ class KiEngine:
         self.hjemkomst_forklaring = ""
         self.vindu_apent_siden: dict[str, datetime] = {}
         self.nettleie_vurdering: dict | None = None
+        self._senket_forrige: dict[str, float] = {}
+        self._sist_frigitt: datetime | None = None
 
     # ------------------------------------------------------------------
     #  Små hjelpere
@@ -352,10 +354,6 @@ class KiEngine:
         """Når sonen normalt skal være varm igjen (minutter siden midnatt)."""
         h = self.hub
         p = self.person_for(konf)
-        if p:
-            alarm = h.vekking_frist(p)
-            if alarm is not None:
-                return alarm
         if p and p["type"] == "barn":
             return h.tid_min(f"ki_{p['key']}_dag", "05:30")
         if p and p["type"] == "ungdom":
@@ -499,11 +497,8 @@ class KiEngine:
             k = person["key"]
             vekk = h.tid_min(f"ki_{k}_dag", "05:30")
             legg = h.tid_min(f"ki_{k}_natt", "19:00")
-            alarm = h.vekking_frist(person)
-            if alarm is not None:
-                vekk = alarm   # ekte vekkealarm fra KI Søvn & Vekking går foran klokkeslettet
             if sover is True:
-                return t_natt, f"{person['navn']} sover (registrert)" + (" — varm til vekkingen" if alarm is not None else ""), vekk
+                return t_natt, f"{person['navn']} sover (registrert)", vekk
             if sover is False and h.mellom(legg, vekk):
                 return t_dag, f"{person['navn']} er våken", None
             if h.mellom(legg, vekk):
@@ -521,11 +516,8 @@ class KiEngine:
             helgevekking = dt_util.now().weekday() >= 5 or h.on(f"ki_{k}_ferie")
             vekking = h.tid_min(f"ki_{k}_vekking_helg" if helgevekking else f"ki_{k}_vekking", "07:00")
             legg = h.tid_min(f"ki_{k}_natt", "23:00")
-            alarm = h.vekking_frist(person)
-            if alarm is not None:
-                vekking = alarm   # ekte vekkealarm fra KI Søvn & Vekking går foran klokkeslettet
             if sover is True:
-                return t_natt, f"{person['navn']} sover (registrert)" + (" — varm til vekkingen" if alarm is not None else ""), vekking
+                return t_natt, f"{person['navn']} sover (registrert)", vekking
             if sover is False and h.mellom(legg, vekking):
                 return t_dag, f"{person['navn']} er våken", None
             if h.mellom(legg, vekking):
@@ -537,15 +529,8 @@ class KiEngine:
             if hjemme is False and er_dag:
                 t_borte = h.num(konf.get(Z_TEMP_BORTE) or "", t_dag - 2.0)
                 return t_borte, f"{person['navn']} er borte", None
-            sover_v = h.sover(person)
-            alarm = h.vekking_frist(person)
-            frist = alarm if alarm is not None else dag_start
-            if sover_v is True:
-                return t_natt, f"{person['navn']} sover (registrert)" + (" — varm til vekkingen" if alarm is not None else ""), frist
-            if sover_v is False and not er_dag:
-                return t_dag, f"{person['navn']} er våken", None
             if not er_dag:
-                return t_natt, "Natt", frist
+                return t_natt, "Natt", dag_start
             return t_dag, "Dag", None
 
         if profil == "stue":
@@ -687,10 +672,23 @@ class KiEngine:
         s += ((sum(ord(c) for c in last["key"]) + rotasjon) % 7) * 2
         return s
 
-    def fordel(self, laster: list[dict], budsjett: dict, prognose_uregulert: float, vvb_kw: float) -> tuple[list[dict], float]:
+    def fordel(self, laster: list[dict], budsjett: dict, prognose_uregulert: float, vvb_kw: float,
+               margin_kw: float | None = None) -> tuple[list[dict], float]:
+        """Fordeler tillatt effekt på lastene.
+
+        `margin_kw` er usikkerhetsmarginen for timen omregnet til kW (kWh / timer igjen). Er den None,
+        gjelder den faste reserven `ki_reserve_uregulert_kwh`. Bare én av dem trekkes fra — aldri begge.
+        """
         h = self.hub
-        tilgjengelig = (budsjett["tillatt_snitt"] - prognose_uregulert - vvb_kw
-                        - h.num("ki_reserve_uregulert_kwh", 0.35))
+        reserve_kw = margin_kw if margin_kw is not None else h.num("ki_reserve_uregulert_kwh", 0.35)
+        tilgjengelig = budsjett["tillatt_snitt"] - prognose_uregulert - vvb_kw - reserve_kw
+        # Gradvis gjenoppvarming: soner som var senket forrige tick slippes én om gangen (etter prioritet,
+        # med et intervall), så ikke alle ovnene slår inn samtidig — typisk rett etter et timeskifte.
+        gradvis = h.on("ki_gradvis_gjenoppvarming", True)
+        intervall = timedelta(minutes=h.num("ki_gjenoppvarming_intervall_min", 3))
+        naa = dt_util.utcnow()
+        frigitt_denne_runden = False
+        romslig = tilgjengelig - sum(l["effekt"] for l in laster if l.get("trenger")) > 1.0
         rotasjon = self.st.get("rotasjon", 0)
         shed_gulv = h.num("ki_shed_gulv_maks", 3.0)
         shed_panel = h.num("ki_shed_panel_maks", 2.0)
@@ -706,20 +704,31 @@ class KiEngine:
                 p.update(handling="manuell", settpunkt=None,
                          forklaring="Sonen står på manuell i klimakortet")
             elif last["vindu"]:
-                senere = (f". Forvarming mot vekkingen starter likevel ca. kl. {last['forvarm_start']}"
-                          if last.get("forvarm_start") else "")
                 p.update(handling="vindu", settpunkt=round(h.num("ki_vindu_temp", 12), 1),
                          forklaring=f"{last['vindu_navn']} er åpent — varmen holdes på "
-                                    f"{h.num('ki_vindu_temp', 12):.0f} °C til det lukkes{senere}")
+                                    f"{h.num('ki_vindu_temp', 12):.0f} °C til det lukkes")
             elif not last["trenger"]:
                 sol = f", solen bidrar med ca. {last['sol_trekk']} °C" if last["sol_trekk"] else ""
                 start = f". Forvarming starter ca. kl. {last['forvarm_start']}" if last.get("forvarm_start") and not last["forvarm"] else ""
                 p.update(handling="normal", settpunkt=last["mal"],
                          forklaring=f"{last['grunn']}. Rommet er på måltemperatur{sol}{start}")
             elif tilgjengelig >= last["effekt"] or last["prio"] == 1:
-                tilgjengelig -= last["effekt"]
-                p.update(handling="normal", settpunkt=last["mal"],
-                         forklaring=last["forvarm_grunn"] or last["grunn"])
+                var_senket = last["key"] in self._senket_forrige
+                if (gradvis and var_senket and last["prio"] != 1 and not romslig
+                        and (frigitt_denne_runden or (self._sist_frigitt and naa - self._sist_frigitt < intervall))):
+                    # venter på tur — holdes på samme senkede settpunkt som sist
+                    trinn = self._senket_forrige.get(last["key"], 0.5)
+                    p.update(handling="senket", settpunkt=round(last["mal"] - trinn, 1), senket=trinn, venter=True,
+                             forklaring=f"Venter på tur i gjenoppvarmingen ({trinn:.1f} °C under mål) — slippes om litt")
+                    tilgjengelig = max(tilgjengelig - last["effekt"] * 0.3, 0.0)
+                else:
+                    if gradvis and var_senket and not romslig:
+                        frigitt_denne_runden = True
+                        self._sist_frigitt = naa
+                    tilgjengelig -= last["effekt"]
+                    p.update(handling="normal", settpunkt=last["mal"],
+                             forklaring=(last["forvarm_grunn"] or last["grunn"])
+                             + (" — varmen er tilbake (gradvis gjenoppvarming)" if var_senket else ""))
             else:
                 maks = shed_gulv if last["type"] == "gulv" else min(shed_panel, 1.0) if last["type"] == "varmepumpe" else shed_panel
                 mangel = last["effekt"] - max(tilgjengelig, 0.0)
@@ -729,6 +738,7 @@ class KiEngine:
                                      f"{max(budsjett['igjen'], 0):.2f} kWh igjen av {budsjett['grense']:.2f}"))
                 tilgjengelig = max(tilgjengelig - last["effekt"] * 0.3, 0.0)
             plan.append(p)
+        self._senket_forrige = {p["key"]: p.get("senket", 0.5) for p in plan if p.get("handling") == "senket"}
         return plan, round(tilgjengelig, 2)
 
     # ------------------------------------------------------------------
@@ -791,7 +801,7 @@ class KiEngine:
         h = self.hub
         if self.st.get("preset_satt"):
             return
-        preset = PRESETS.get(h.cfg(CONF_PRESET, "oslo"))
+        preset = PRESETS.get(h.cfg(CONF_PRESET, "bolig"))
         if not preset:
             self.st["preset_satt"] = True
             return
@@ -820,7 +830,15 @@ class KiEngine:
 
         # Timemåler: prøv registeret, lukk ferdige timer (og rekonstruer ved hull)
         if h.nettleie is not None:
-            for rad in await h.nettleie.oppdater():
+            lukkede = await h.nettleie.oppdater()
+            if h.prognose is not None and lukkede:
+                try:
+                    n_obs = h.prognose.evaluer(lukkede)
+                    if n_obs:
+                        self.logg_hendelse(f"Prognoselæring: {n_obs} prognose(r) evaluert mot fullført time.")
+                except Exception as e:  # noqa: BLE001
+                    _LOGGER.debug("ki_energi: prognoseevaluering feilet: %s", e)
+            for rad in lukkede:
                 lok = dt_util.as_local(datetime.fromtimestamp(rad["start"], tz=timezone.utc))
                 if rad["kwh"] is None:
                     self.logg_hendelse(f"Timen {lok:%d.%m. %H}:00–{(lok.hour + 1) % 24:02d}:00 mangler måling — telles ikke som null.")
@@ -863,12 +881,21 @@ class KiEngine:
             vvb_kw, vvb_grunn, vvb_ma = h.vvb.reservasjon()
 
         laster = self.bygg_laster()
-        plan, ledig = self.fordel(laster, budsjett, prognose, vvb_kw)
+        margin = h.prognose.margin(budsjett["minutter_igjen"]) if h.prognose is not None else None
+        margin_kw = (margin["kwh"] / max(budsjett["timer_igjen"], 0.02)) if margin else None
+        plan, ledig = self.fordel(laster, budsjett, prognose, vvb_kw, margin_kw)
 
         styrt_kw = sum(p["effekt"] for p in plan if p.get("handling") == "normal")
         forventet = round(prognose + vvb_kw + styrt_kw, 2)
         farge = self.sone_farge(forventet, budsjett["tillatt_snitt"])
         senket = [p for p in plan if p.get("handling") == "senket"]
+
+        # Prognoselæring: frys prognosen for timen (inkl. planlagt styring) og publiser marginen
+        if h.prognose is not None and margin is not None:
+            kilde = budsjett.get("kilde", "") or ""
+            datakvalitet = "mangler" if budsjett.get("usikker") else "forelopig_delvis" if "delvis" in kilde else "ok"
+            h.prognose.registrer(budsjett, forventet, plan, datakvalitet, styrt_kw, vvb_kw, margin["kwh"])
+            h.prognose.publiser(margin, budsjett, forventet)
 
         # Nettleie: forventet sluttforbruk for timen etter planen → topp tre, trinn, fastledd
         nv = None
@@ -955,6 +982,9 @@ class KiEngine:
             f"Forventer {forventet:.2f} kW nå ({prognose:.2f} kW uregulert + {styrt_kw:.2f} kW styrt), "
             f"{prog[15]:.1f} kW om 15 min og {prog[60]:.1f} kW om en time.",
         ]
+        if margin is not None:
+            tanker.append(f"Usikkerhetsmargin for timen: {margin['kwh']:.2f} kWh ({margin['status']}, "
+                          f"{margin['n']} obs.) — trekkes fra tilgjengelig effekt. {margin.get('grunn', '')}".strip())
         if nv is not None:
             if nv.get("dagens_maks_kwh") is not None:
                 tanker.append(f"Nettleie: dagens døgnmaks er {nv['dagens_maks_kwh']:.2f} kWh (kl. {nv['dagens_maks_time']}); "
@@ -1020,7 +1050,7 @@ class KiEngine:
             entiteter=p.get("entiteter"), vindu=p.get("vindu", False), vindu_navn=p.get("vindu_navn", ""),
             leggetid=bool(self.leggetid_aktiv(p["key"])), profil=p.get("profil"),
             person=p.get("person"), person_type=p.get("person_type"), forvarm_start=p.get("forvarm_start"),
-            forvarm=p.get("forvarm", False), skriving=p.get("skriving"))
+            forvarm=p.get("forvarm", False), skriving=p.get("skriving"), venter=p.get("venter", False))
             for p in plan]
         if h.vvb is not None:
             lastliste.append(dict(
@@ -1033,6 +1063,11 @@ class KiEngine:
 
         self.beredskap()
         self.besparelse()
+        if h.sparing is not None:
+            try:
+                h.sparing.tick()
+            except Exception as e:  # noqa: BLE001
+                _LOGGER.debug("ki_energi: sparing feilet: %s", e)
 
         signatur = farge + "|" + hoved + "|" + ",".join(p["key"] + str(p.get("settpunkt")) for p in senket)
         if endringer or ((senket or farge in ("rod", "kritisk")) and signatur != self.logg_signatur):

@@ -2,7 +2,7 @@
 
 # KI Energi
 
-**Selvlærende energi- og klimastyring for Home Assistant — laget for norske rekkehus med Elvia-nettleie.**
+**Selvlærende energi- og klimastyring for Home Assistant — laget for norske hjem med kapasitetsbasert nettleie.**
 
 [![Legg til i HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=SebastianKristo&repository=ki-strom&category=integration)
 [![Legg til integrasjon](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=ki_energi)
@@ -56,6 +56,7 @@ offisielle [Nord Pool-integrasjonen](https://www.home-assistant.io/integrations/
 - [Varmtvann og legionella](#varmtvann-og-legionella)
 - [Eksempler](#eksempler)
 - [Entiteter](#entiteter)
+- [Sparing](#sparing)
 - [Nettleie etter døgnmaks](#nettleie-etter-døgnmaks)
 - [Tjenester](#tjenester)
 - [Oppgradering til 2.9.0](#oppgradering-til-290)
@@ -113,13 +114,13 @@ Home Assistant (device_class, enhet, navn), og du bytter bare det som er feil.
 
 | Steg | Hva skjer | Automatisk |
 |---|---|---|
-| **1 Velg hus** | Bolig i Oslo, hytta på Toten, eller tomt oppsett | — |
+| **1 Velg hus** | Bolig, fritidsbolig eller tomt oppsett | — |
 | **2 Måling** | Effektmåler (W) og energiregister (kWh) | Finner hovedmåleren (høyest effekt, «ams/meter/måler» i navnet) og det akkumulerte importregisteret. Avviser dagsforbruk-sensorer med forklaring. |
 | **3 Utstyr** | Bereder, håndklevarmer, gardiner, hvitevarer — alt valgfritt | Gjenkjenner bereder/håndklevarmer på navn. Velgerne viser bare effektsensorer der det trengs. |
 | **4 Personer** | Navn, type og tilstedeværelse per person (inntil fire her, flere under Konfigurer) | Finner `person.*` eller hjemme/borte-brytere med navnet i. |
 | **5 Nettleie** | Toppsensorer, energiledd, Norgespris, Nord Pool — alt valgfritt | Finner Strømkalkulator-/Elvia-sensorer og Nord Pool (`raw_today`). |
 | **6 Hus og varsler** | Hustype, areal, byggeår, glass, telefoner | Telefoner fra `notify.mobile_app_*`. |
-| **7 Soner** | **Lag soner fra områdene mine** | Ett rom per HA-område med termostat: alle termostater i området i samme sone, effektsensorer summert, vindussensorer koblet på. Type (panel/gulv/varmepumpe) og profil (stue, bad = konstant, Cybele, Sebastian, gang = sjelden) gjettes fra navnet. |
+| **7 Soner** | **Lag soner fra områdene mine** | Ett rom per HA-område med termostat: alle termostater i området i samme sone, effektsensorer summert, vindussensorer koblet på. Type (panel/gulv/varmepumpe) og profil (stue, bad = konstant, personrom, gang = sjelden) gjettes fra navnet. |
 
 Menyen under **Konfigurer** viser status øverst («8 soner. Ikke satt opp: spotpris») og har
 «Lag soner fra områdene mine» så du kan hente inn nye rom senere uten å miste innstillingene i de
@@ -206,7 +207,7 @@ sover → natt-temperatur med én gang, våken i sengetiden → dag-temperatur t
 Forvarmingen mot vekking gjelder uansett. Svarer ikke sensoren, brukes klokkeslettene.
 
 En sone knyttes til en person ved å velge profilen «<navn>s rom». Kortet (Tider, døgnplan,
-Leggetid) følger personlisten. Eksisterende oppsett med Cybele/Sebastian/Rune fortsetter uendret —
+Leggetid) følger personlisten. Eksisterende oppsett fra før personlisten fortsetter uendret —
 samme entitets-ID-er. Nye oppsett fra «Tomt oppsett» har ingen personer før du legger dem inn.
 
 ## Soner og profiler
@@ -219,7 +220,7 @@ effekten. Ved oppgradering til 2.9.0 slås soner med samme rom, type og profil s
 (`number.ki_temp_stue_dag/natt`) beholdes.
 
 Integrasjonen starter med ti soner (bad, kjøkken gulv/panel, stue, gang, do, vaskegang,
-Cybele, Sebastian, Rune). Under **Konfigurer → Soner** kan hver sone endres, deaktiveres
+personrom). Under **Konfigurer → Soner** kan hver sone endres, deaktiveres
 eller slettes, og nye legges til.
 
 | Felt | Betydning |
@@ -242,8 +243,7 @@ eller slettes, og nye legges til.
 | `konstant` | Holdes på settpunkt hele døgnet (bad) |
 | `gulv_natt` | Gulvvarme med nattsenking hvis lønnsomt (kjøkken) |
 | `sjelden` | Aggressiv sparing (do, vaskegang) |
-| `cybele` | Egen dag/natt/borte-tid, forvarming til vekking 05:30 |
-| `sebastian` | Hjemme på dagtid, egen vekking hverdag/helg, ferie-bryter |
+| `person:<navn>` | Personrom — barn (opp/legg/borte), ungdom (vekking hverdag/helg, ferie) |
 
 Hver sone får `switch.ki_styr_<sone>` (skal motoren styre denne?) og
 `number.ki_temp_<sone>_dag/natt`.
@@ -252,8 +252,8 @@ Hver sone får `switch.ki_styr_<sone>` (skal motoren styre denne?) og
 
 ### Leggetid og prioritet fra kortet
 
-Øverst på *Oversikt* ligger **Leggetid**: én knapp for Cybeles og Sebastians rom. Trykker du
-«Sebastian» når han legger seg, senkes rommet til natt-temperatur med én gang og varmes opp igjen
+Øverst på *Oversikt* ligger **Leggetid**: én knapp per personrom (barn/ungdom). Trykker du
+navnet når personen legger seg, senkes rommet til natt-temperatur med én gang og varmes opp igjen
 til hans vanlige vekketid (tjeneste `ki_energi.leggetid`). Prioritet mellom soner settes under
 *Konfigurer → Soner*, eller med tjenesten `ki_energi.sett_prio` (lagres i minnet og overstyrer
 konfigurasjonen).
@@ -285,8 +285,8 @@ Første steg i oppsettet er å velge hus:
 
 | Preset | Hustype | Innhold |
 |---|---|---|
-| **Bolig — rekkehus i Oslo** | bolig | Standardoppsettet: panelovner og gulvvarme, bereder med relé, håndklevarmer, helg/hjemkomst som beskrevet under. |
-| **Fritidsbolig — hytta på Toten** | fritidsbolig | 100 m² fra 1960, varmepumpe i stua (type *varmepumpe*: billigst, senkes sist), gulvvarme kjøkken/bad/inngang, oljefyr i inngangen (samme sone som gulvet), panelovner på tre soverom, bereder som bare måles, elbillader 5 A om natten. Frosttemperaturer 8/10/12 °C, mål under 5 kW, absolutt grense 9,5 kWh. |
+| **Bolig** | bolig | Standardoppsettet: panelovner og gulvvarme, bereder med relé, håndklevarmer, helg/hjemkomst som beskrevet under. |
+| **Fritidsbolig** | fritidsbolig | Varmepumpe i stua (type *varmepumpe*: billigst, senkes sist), gulvvarme kjøkken/bad/inngang (to varmekilder i samme sone), panelovner på soverom, bereder som bare måles, elbillader om natten. Frosttemperaturer 8/10/12 °C, mål under 5 kW, absolutt grense 9,5 kWh. |
 | **Tomt oppsett** | bolig | Ingen soner, ingen forslag. |
 
 Alle entitets-ID-er i presetet er forslag og redigeres i stegene som følger. Hjelperverdiene
@@ -298,7 +298,7 @@ etterpå. Hustypen kan byttes senere under *Konfigurer → Hus og varsler*.
 * **Tom hytte = frostsikring.** Når ingen er der i «Helg auto etter»-timer (3 t i presetet),
   uansett ukedag, settes `switch.ki_helgemodus` (vises som «Tom hytte (frostsikring)» i kortet):
   panelovner 8 °C, gulvvarme 10 °C, bad 12 °C.
-* **Fredag kl. 10** spør den *«Kommer dere til Toten i dag?»* når hytta er tom. «Ja, vi kommer»
+* **Fredag kl. 10** spør den *«Kommer dere til hytta i dag?»* når hytta er tom. «Ja, vi kommer»
   starter oppvarmingen med én gang, med mål om varm hytte til `ki_hjemkomst_tid` (17:00) — sone
   for sone innenfor effektbudsjettet, gulvvarme først, varmepumpen alltid, panelovnene sist.
   «Nei» eller ikke svar gjør ingenting; frostsikringen står. (Torsdagsspørsmålet kan slås på i
@@ -309,7 +309,7 @@ etterpå. Hustypen kan byttes senere under *Konfigurer → Hus og varsler*.
   i «Helg auto etter»-timer.
 * Kommer ingen innen tre timer etter planlagt ankomst, går hytta tilbake til frostsikring.
 * Kommer noen (person-entiteter «home» i hyttas Home Assistant), avsluttes ankomst og vanlige
-  dag/natt-temperaturer gjelder. Sebastian og Cybele har samme profiler som hjemme (kaldt om
+  dag/natt-temperaturer gjelder. Personene har samme profiler som hjemme (kaldt om
   natten, varmt til vekking).
 * **Bereder uten bryter** regnes som uregulert last og læres inn i lastprofilen. Legionella
   bekreftes likevel: når effektmålingen viser en sammenhengende oppvarming på minst
@@ -319,7 +319,7 @@ etterpå. Hustypen kan byttes senere under *Konfigurer → Hus og varsler*.
 * **Elbil** (`switch.ki_elbil_natt`, `number.ki_elbil_effekt_kw`, `time.ki_elbil_fra/til`):
   motoren holder av ladeeffekten i ladevinduet når den planlegger varme, så bil + forvarming ikke
   havner i samme time. Når profilen har lært natten, teller halvparten.
-* Nettleien regnes likt som hjemme (Elvia også på Toten): mål under 5 kW, og absolutt grense
+* Nettleien regnes likt som hjemme: mål under 5 kW, og absolutt grense
   9,5 kWh sikrer at én time aldri passerer 10 kW-trinnet selv ved full oppvarming fra kaldt.
 
 ## Moduser: helg, hjemkomst, sommer
@@ -454,7 +454,7 @@ Nye entiteter: `sensor.ki_prognose` (15/30/60/120 min), `sensor.ki_besparelse`,
 `number.ki_gardin_ute_grense`, `number.ki_trinn_kostnad_diff` (reserve når tabellen ikke dekker),
 `number.ki_mal_trinn_kw`, `number.ki_reserve_topp_kwh`, `switch.ki_tillat_dyrere_trinn`,
 `text.ki_tariff_tabell`, `sensor.ki_nettleie`, `number.ki_stat_spart_kr`,
-`number.ki_stat_komfortavvik`, `time.ki_hjemkomst_tid`, `time.ki_cybele_borte_fra/til`.
+`number.ki_stat_komfortavvik`, `time.ki_hjemkomst_tid`, `time.ki_<person>_borte_fra/til`.
 
 Fjernet (den gamle DEL 1 «effektvakt»): `ki_motor_overtar`, `ki_shed_niva`,
 `ki_effektgrense_kwh`, hysterese/stagger/preheat-tallene, `ki_klima_hovedbryter`,
@@ -496,6 +496,21 @@ Knappene i varslene (`KI_HELG_JA/NEI`, `KI_HJEM_JA/SENERE/FORLENG/NAA`) fanges a
 integrasjonen via `mobile_app_notification_action`; ingen egne automasjoner trengs.
 
 ---
+
+## Sparing
+
+`sensor.ki_sparing` (og *Energi → KI sparer* i kortet) viser hva KI Energi anslås å spare denne
+måneden, per post:
+
+| Post | Hvordan det regnes |
+|---|---|
+| Varmestyring | Motorens egen statistikk: energi flyttet til billigere nettleie × differansen i energiledd, unngåtte topper priset som 1/3 av trinnkostnad, ca. 10 % spart kWh av det som flyttes. |
+| Gardiner | Varmetap gjennom glasset = U (1,2 W/m²K) × glassareal × (inne − ute). Lukket gardin om natten regnes som 30 % mindre tap. Står gardinene åpne om natten i gardinsesongen, vises det samme som **«kunne spart»**. |
+| Håndklevarmer | Mot å stå på hele døgnet, med lært effekt. |
+| Bereder | kWh varmet i nattvinduet × forskjellen mellom energiledd dag og natt. |
+
+Alt er anslag uten kontrollgruppe og merket slik i sensoren (`merknad`). Poster for utstyr du ikke
+har, vises ikke.
 
 ## Nettleie etter døgnmaks
 
@@ -562,8 +577,61 @@ søylegraf over månedens døgnmakser ligger i en nedtrekksdel): dagens døgnmak
 topp tre med datoer og kilde, registrert snitt og trinn, forventet sluttforbruk, forventet topp
 tre og trinn, økning i fastledd, reserve og datakvalitet — registrert og prognose adskilt.
 
+### Reserver — to forskjellige ting
+
+| Reserve | Enhet | Hvor den virker | Innstilling |
+|---|---|---|---|
+| **Strategisk reserve** | kWh på *dagens døgnmaks* | Bare i `nettleie.vurder()`: rommet for i dag = 3·(mål − reserve) − de to høyeste andre dagene. Påvirker **timegrensen**. | `number.ki_reserve_topp_kwh` (0,30) + påslag for usikker historikk |
+| **Usikkerhetsmargin for timen** | kWh på *sluttforbruket i inneværende klokketime* | Bare i `engine.fordel()`: marginen ÷ timer igjen trekkes fra tilgjengelig effekt før varmen fordeles. Påvirker **hva som senkes nå**. | Lært (under), ellers fast `number.ki_reserve_uregulert_kwh` (0,35 kW) |
+
+De telles aldri sammen: timemarginen går ikke inn i nettleie-regnestykket (en lært timefeil ville
+ellers blitt tredoblet på månedssnittet), og i `fordel()` trekkes enten den lærte eller den faste
+reserven — ikke begge. Registrerte målinger, døgnmakser og trinn røres ikke av noen av dem.
+
+### Adaptiv reserve — læring av prognosefeil
+
+`switch.ki_adaptiv_reserve` (på som standard), `sensor.ki_prognoselaering`, kortblokken
+*Avansert → Prognose og reserver*.
+
+* **Frosne prognoser.** Ved ca. 60, 45, 30 og 15 min igjen av timen fryses et øyeblikk:
+  opprettet, hvilken time (UTC-nøkkel — entydig også ved sommertid), tid igjen, målt forbruk
+  hittil, forventet sluttforbruk (brukt + planlagt effekt × tid igjen, altså *inkludert* motorens
+  planlagte styring), datakvalitet, modellversjon og forutsetninger (hvilke soner som var senket,
+  styrt effekt, bereder, skyggemodus). De overskrives aldri.
+* **Evaluering.** Når timemåleren lukker timen med kvalitet målt/estimert:
+  `prognosefeil = faktisk − forventet` per horisont (positiv = undervurdert). Timer som mangler,
+  registerbrudd og prognoser med ukjent nullpunkt («delvis») utelates og telles i
+  `n_utelatt_kvalitet`.
+* **Egne tiltak.** Valgt løsning: prognosen inkluderer planlagt styring, og senker motoren en
+  sone *etter* at en prognose ble laget, merkes den prognosen som **påvirket** og holdes utenfor
+  kalibreringen (`n_pavirket`). Vi konstruerer ikke et «forbruk uten tiltak». Er mer enn 40 % av
+  observasjonene påvirket, holdes marginen minst på fast nivå (status *usikkert grunnlag*), så
+  motoren ikke blir overmodig fordi de vanskelige timene mangler.
+* **Margin.** Vektet 80-persentil av de signerte feilene (gulv 0), nyere observasjoner veier mer
+  (halveringstid 14 dager). Per horisont; per segment (natt/morgen/dag/kveld × hverdag/helg) når
+  segmentet har ≥ 12 observasjoner, ellers hele horisonten når den har ≥ `number.ki_prognose_min_obs`
+  (8). Under det: fast reserve (status *lærer*). Glattes asymmetrisk: opp med α = 0,5, ned med
+  α = 0,1 — ingen pendling. Begrenset av `number.ki_prognose_margin_min/maks` (0–1,5 kWh).
+  Gyldige, uventede topper beholdes i læringen; målerfeil er alt filtrert vekk av timemåleren.
+* **Intervall og dekning.** Når grunnlaget tillater det vises P20–P80 av feilen som et empirisk
+  prognoseintervall — merket som ikke en garanti — og andelen observasjoner som faktisk havnet
+  innenfor marginen som ble brukt (`dekning_observert`).
+* **Skyggemodus** samler observasjoner og regner margin uten å styre.
+* Lagres i integrasjonens minne (maks 400 observasjoner, 48 timers frosne prognoser). Nullstill
+  bare denne læringen med `ki_energi.nullstill_prognoselaering`. Slås funksjonen av, gjelder den
+  faste reserven; innstillingene bevares ved oppgradering.
+
+### Gradvis gjenoppvarming
+
+`switch.ki_gradvis_gjenoppvarming` (på): når grensen letter — typisk rett etter et timeskifte —
+slippes senkede soner én om gangen etter prioritet, med `number.ki_gjenoppvarming_intervall_min`
+(3 min) mellom hver, så ikke alle ovnene slår inn samtidig og lager en ny topp. Soner som venter
+vises som «Venter på tur». Er det rikelig rom (> 1 kW over det som trengs), slippes alle med én gang.
+
 ### Begrensninger
 
+* Den adaptive marginen lærer av timefeil; en statistisk modell for døgnmakser resten av måneden
+  er ikke laget.
 * Prognosen for timen bygger på motorens lastprofil; den er et anslag, ikke en sikker kostnad.
 * Reserven er en enkel regel (grunnreserve + påslag), ikke en statistisk modell av resten av
   måneden. Den skjelner mellom «ingen økning med dagens topper» og «mindre rom framover», men

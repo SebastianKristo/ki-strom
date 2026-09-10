@@ -137,7 +137,7 @@ async def test_options_flow(hass):
 async def test_config_flow(hass):
     r = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
     assert r["type"] == "form" and r["step_id"] == "user"
-    r = await hass.config_entries.flow.async_configure(r["flow_id"], {"preset": "oslo"})
+    r = await hass.config_entries.flow.async_configure(r["flow_id"], {"preset": "bolig"})
     assert r["step_id"] == "maling"
     # feil sensor-type gir feilmelding, riktige går videre
     hass.states.async_set("sensor.a", "1200", {"unit_of_measurement": "W", "device_class": "power"})
@@ -183,6 +183,8 @@ async def test_skyggemodus_styrer_ingenting_og_nettleie_publiseres(hass):
     # eksterne topper uten dato i testoppsettet → usikker
     assert a["datakvalitet"] == "usikker" and a["udaterte_topper"] == 3
     assert hass.states.get("sensor.ki_energi_status").attributes.get("skyggemodus") is True
+    sp = hass.states.get("sensor.ki_sparing")
+    assert sp is not None and "poster" in sp.attributes and set(sp.attributes["poster"]) == {"motor", "gardiner", "hanklevarmer", "bereder"}
     await hub.vvb.tick(); await hass.async_block_till_done()
     assert len(hass.states.get("sensor.ki_vvb_billige_timer").attributes.get("doegn") or []) == 24
 
@@ -224,13 +226,17 @@ async def test_preset_toten_fritidsbolig(hass):
     """Hytte-preset: frostverdier legges inn, helg = tom hytte uansett ukedag, torsdagssvar planlegger fredag."""
     from custom_components.ki_energi.const import PRESETS, DEFAULT_SONER_HYTTE, CONF_PRESET, CONF_HUSTYPE, AKSJON_HELG_JA
     from datetime import datetime
-    p = PRESETS["toten"]
+    p = PRESETS["hytte"]
     data = dict(DEFAULT_CONFIG); data.update(p["config"])
-    data[CONF_PRESET] = "toten"; data[CONF_HUSTYPE] = "fritidsbolig"
+    data[CONF_PRESET] = "hytte"; data[CONF_HUSTYPE] = "fritidsbolig"
     data[CONF_SONER] = {k: dict(v) for k, v in DEFAULT_SONER_HYTTE.items()}
+    from custom_components.ki_energi.const import CONF_PERSONER
+    data[CONF_PERSONER] = [{"key": "barn", "navn": "Barn", "type": "barn", "entity": "person.barn"},
+                           {"key": "ungdom", "navn": "Ungdom", "type": "ungdom", "entity": "person.ungdom"},
+                           {"key": "voksen", "navn": "Voksen", "type": "voksen", "entity": "person.voksen"}]
     hass.states.async_set("sensor.hytte_strommaler_effekt", "1200"); hass.states.async_set("sensor.hytte_strommaler_imported_energy", "500")
     hass.states.async_set("sensor.hytte_utetemperatur", "-8"); hass.states.async_set("sensor.hytte_bereder_effekt", "0")
-    for pid in ("person.cybele", "person.sebastian", "person.rune"):
+    for pid in ("person.barn", "person.ungdom", "person.voksen"):
         hass.states.async_set(pid, "not_home")
     for s in DEFAULT_SONER_HYTTE.values():
         for c in s["climate"]:
@@ -278,7 +284,7 @@ async def test_preset_toten_fritidsbolig(hass):
     plan = hub.dt("ki_hjemkomst_planlagt")
     assert plan.date() == fredag.date() and plan.hour == 17
     # søndag: alle er der, «Ja, vi drar» → armert; siste drar → frost
-    for pid in ("person.cybele", "person.sebastian", "person.rune"):
+    for pid in ("person.barn", "person.ungdom", "person.voksen"):
         hass.states.async_set(pid, "home")
     sondag = fredag + timedelta(days=2)
     with patch("homeassistant.util.dt.now", return_value=sondag):
@@ -286,7 +292,7 @@ async def test_preset_toten_fritidsbolig(hass):
         assert hass.states.get("switch.ki_helgemodus").state == "off"
         await m._handling(AKSJON_HYTTE_DRAR); await hass.async_block_till_done()
         assert m.m.get("helg_ved_avreise") is True
-        for pid in ("person.cybele", "person.sebastian", "person.rune"):
+        for pid in ("person.barn", "person.ungdom", "person.voksen"):
             hass.states.async_set(pid, "not_home")
         await m.tick(); await hass.async_block_till_done()
     assert hass.states.get("switch.ki_helgemodus").state == "on"
@@ -294,7 +300,7 @@ async def test_preset_toten_fritidsbolig(hass):
     with patch("homeassistant.util.dt.now", return_value=torsdag):
         await m._handling(AKSJON_HELG_JA); await hass.async_block_till_done()
     with patch("homeassistant.util.dt.now", return_value=torsdag):
-        mal, grunn, frist = hub.engine.mal_temperatur("sebastian", hub.soner()["sebastian"])
+        mal, grunn, frist = hub.engine.mal_temperatur("soverom_ungdom", hub.soner()["soverom_ungdom"])
     assert mal == 8.0 and frist is None
 
 
@@ -395,3 +401,30 @@ async def test_auto_soveromsmodus(hass):
         hass.states.async_set("binary_sensor.ola_sover", "off")
         mal, grunn, frist = hub.engine.mal_temperatur("ola", konf)
         assert grunn == "Sover"                                              # bryter av → klokkeslett
+
+
+async def test_prognoselaering_i_motoren_og_gradvis_gjenoppvarming(hass):
+    """Sensoren publiseres, marginen telles én gang (fordel), strategisk reserve står urørt i nettleie,
+    og senkede soner slippes gradvis."""
+    entry = await _setup(hass)
+    hub = hass.data[DOMAIN][entry.entry_id]
+    await hub.engine.tick(); await hass.async_block_till_done()
+    pl = hass.states.get("sensor.ki_prognoselaering")
+    assert pl is not None and pl.state == "laerer"
+    a = pl.attributes
+    assert a["strategisk_reserve_kwh"] == 0.3 and a["kilde"] == "fast"
+    assert a["kwh"] == pytest.approx(0.35 * a["horisont"] / 60, abs=0.15)   # fast reserve × tid igjen (ca.)
+    # nettleie bruker bare den strategiske reserven (ikke timemarginen)
+    nv = hub.engine.nettleie_vurdering
+    assert nv["reserve_kwh"] >= 0.3 and "prognose" not in " ".join(nv["reserve_grunner"])
+    # gradvis gjenoppvarming: to senkede soner → maks én slippes per runde
+    laster = hub.engine.bygg_laster()
+    kandidater = [l for l in laster if l["levende"] and l["styrt"] and l["key"] != "vvb"][:2]
+    hub.engine._senket_forrige = {l["key"]: 1.0 for l in kandidater}
+    for l in laster:
+        l["trenger"] = l["key"] in {k["key"] for k in kandidater}
+        l["vindu"] = False
+    b = dict(hub.engine.budsjett()); b["tillatt_snitt"] = sum(l["effekt"] for l in kandidater) + 0.5 + 0.35
+    plan, _ = hub.engine.fordel(laster, b, 0.0, 0.0, None)
+    handlinger = {p["key"]: p.get("venter", False) for p in plan if p["key"] in {k["key"] for k in kandidater}}
+    assert sum(1 for v in handlinger.values() if v) == 1, handlinger                 # én venter, én slippes

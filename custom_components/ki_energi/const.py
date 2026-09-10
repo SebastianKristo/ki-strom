@@ -51,11 +51,16 @@ PERSONTYPER = {
     "ungdom": "Ungdom/student — vekking hverdag og helg, egen leggetid, feriebryter",
     "voksen": "Voksen — bare tilstedeværelse",
 }
-# Standardpersoner for presets. Nøklene cybele/sebastian/rune gir samme entitets-ID-er som før.
+# Standardpersoner for nye oppsett — generiske; navn og entiteter fylles inn i veiviseren.
 DEFAULT_PERSONER = [
-    {"key": "cybele", "navn": "Cybele", "type": "barn", "entity": "switch.cybele_posisjon_hjemme_borte"},
-    {"key": "sebastian", "navn": "Sebastian", "type": "ungdom", "entity": "switch.sebastian_posisjon_hjemme_borte"},
-    {"key": "rune", "navn": "Rune", "type": "voksen", "entity": "switch.rune_posisjon_hjemme_borte"},
+    {"key": "barn", "navn": "Barn", "type": "barn", "entity": ""},
+    {"key": "ungdom", "navn": "Ungdom", "type": "ungdom", "entity": ""},
+    {"key": "voksen", "navn": "Voksen", "type": "voksen", "entity": ""},
+]
+# Eldre oppsett (før personlisten) hadde tre faste tilstedeværelsesfelt. Nøklene beholdes så
+# entitets-ID-ene deres ikke endres; navnet utledes av nøkkelen.
+LEGACY_PERSONER = [
+    {"key": "cybele", "type": "barn"}, {"key": "sebastian", "type": "ungdom"}, {"key": "rune", "type": "voksen"},
 ]
 # Hjelpere som lages per person, etter type: (suffiks, navn, standard, ikon)
 PERSON_TIDER = {
@@ -96,8 +101,8 @@ PROFIL_TEKST = {
     "konstant": "Konstant (holdes på settpunkt hele døgnet, f.eks. bad)",
     "gulv_natt": "Gulvvarme med nattsenking hvis lønnsomt (f.eks. kjøkken)",
     "sjelden": "Sjelden brukt (aggressiv sparestrategi, f.eks. do og vaskegang)",
-    "cybele": "Person med tidlig leggetid og fravær på dagtid",
-    "sebastian": "Student (hjemme på dagtid, egen vekking hverdag/helg)",
+    "cybele": "Barn (eldre profilnavn)",
+    "sebastian": "Ungdom (eldre profilnavn)",
 }
 
 DEFAULT_SONER: dict[str, dict] = {
@@ -120,19 +125,19 @@ DEFAULT_SONER: dict[str, dict] = {
         temp="", type="panel", prio=3, nominell=1.0, sol=False, profil="fellesrom", aktiv=True,
         temp_dag="ki_temp_kjokken_panelovn_dag", temp_natt="ki_temp_kjokken_panelovn_natt",
         temp_borte=""),
-    "cybele": dict(
-        navn="Cybele panelovn", rom="Cybele", climate="climate.cybele_panelovn",
-        effekt="sensor.cybele_panelovn_current_power",
-        duty="sensor.cybele_panelovn_control_signal",
-        temp="", type="panel", prio=3, nominell=1.0, sol=False, profil="person:cybele", aktiv=True,
-        temp_dag="ki_temp_cybele_dag", temp_natt="ki_temp_cybele_natt",
-        temp_borte="ki_temp_cybele_borte"),
-    "sebastian": dict(
-        navn="Sebastian panelovn", rom="Sebastian", climate="climate.sebastian_panelovn",
-        effekt="sensor.sebastian_panelovn_stikkontakt_power", duty="",
+    "soverom_barn": dict(
+        navn="Soverom barn", rom="Soverom barn", climate="climate.soverom_barn",
+        effekt="sensor.soverom_barn_effekt",
+        duty="",
+        temp="", type="panel", prio=3, nominell=1.0, sol=False, profil="person:barn", aktiv=True,
+        temp_dag="ki_temp_soverom_barn_dag", temp_natt="ki_temp_soverom_barn_natt",
+        temp_borte="ki_temp_soverom_barn_borte"),
+    "soverom_ungdom": dict(
+        navn="Soverom ungdom", rom="Soverom ungdom", climate="climate.soverom_ungdom",
+        effekt="sensor.soverom_ungdom_effekt", duty="",
         temp="sensor.panelovn_temperature", type="panel", prio=3, nominell=0.8, sol=False,
-        profil="person:sebastian", aktiv=True,
-        temp_dag="ki_temp_sebastian_dag", temp_natt="ki_temp_sebastian_natt", temp_borte=""),
+        profil="person:ungdom", aktiv=True,
+        temp_dag="ki_temp_soverom_ungdom_dag", temp_natt="ki_temp_soverom_ungdom_natt", temp_borte=""),
     "kjokken_gulv": dict(
         navn="Kjøkken gulvvarme", rom="Kjøkken", climate="climate.kjokken_gulvvarme",
         effekt="sensor.kjokken_gulvvarme_power", duty="",
@@ -167,9 +172,7 @@ DEFAULT_CONFIG = {
     CONF_HANKLEVARMER: "switch.hanklevarmer",
     CONF_HANKLEVARMER_EFFEKT: "sensor.hanklevarmer_power",
     CONF_GARDINER: "",
-    CONF_TILSTEDE_CYBELE: "switch.cybele_posisjon_hjemme_borte",
-    CONF_TILSTEDE_SEBASTIAN: "switch.sebastian_posisjon_hjemme_borte",
-    CONF_TILSTEDE_RUNE: "switch.rune_posisjon_hjemme_borte",
+    CONF_TILSTEDE_CYBELE: "", CONF_TILSTEDE_SEBASTIAN: "", CONF_TILSTEDE_RUNE: "",
     CONF_TOPP1: "sensor.nettleie_elvia_toppforbruk",
     CONF_TOPP2: "sensor.nettleie_elvia_toppforbruk_2",
     CONF_TOPP3: "sensor.nettleie_elvia_toppforbruk_3",
@@ -180,9 +183,9 @@ DEFAULT_CONFIG = {
     CONF_NORGESPRIS_AKTIV: "binary_sensor.norgespris_norgespris_aktiv_na",
     CONF_NORDPOOL: "",
     CONF_HVITEVARER: [],
-    CONF_VARSEL_MOTTAKERE: ["mobile_app_sebastian_iphone_17_pro", "mobile_app_sebastian_oneplus_15"],
+    CONF_VARSEL_MOTTAKERE: [],
     CONF_AREAL: 120,
-    CONF_BYGGEAR: 1980,
+    CONF_BYGGEAR: 1990,
     CONF_GLASS_M2: 20,
     CONF_STUE_AREAL: 40,
 }
@@ -208,42 +211,41 @@ DEFAULT_SONER_HYTTE: dict[str, dict] = {
         effekt=["sensor.hytte_inngang_gulv_effekt", "sensor.hytte_inngang_oljefyr_effekt"],
         duty="", temp="", type="gulv", prio=4, nominell=1.6, sol=False, profil="sjelden", aktiv=True,
         temp_dag="ki_temp_trappegang_dag", temp_natt="ki_temp_trappegang_natt", temp_borte=""),
-    "cybele": dict(
-        navn="Cybele soverom", rom="Cybele", climate=["climate.hytte_cybele_panelovn"], effekt=["sensor.hytte_cybele_panelovn_effekt"],
-        duty="", temp="", type="panel", prio=2, nominell=1.0, sol=False, profil="person:cybele", aktiv=True,
-        temp_dag="ki_temp_cybele_dag", temp_natt="ki_temp_cybele_natt", temp_borte="ki_temp_cybele_borte"),
-    "sebastian": dict(
-        navn="Sebastian soverom", rom="Sebastian", climate=["climate.hytte_sebastian_panelovn"], effekt=["sensor.hytte_sebastian_panelovn_effekt"],
-        duty="", temp="", type="panel", prio=3, nominell=1.0, sol=False, profil="person:sebastian", aktiv=True,
-        temp_dag="ki_temp_sebastian_dag", temp_natt="ki_temp_sebastian_natt", temp_borte=""),
-    "rune": dict(
-        navn="Rune soverom", rom="Rune", climate=["climate.hytte_rune_panelovn"], effekt=["sensor.hytte_rune_panelovn_effekt"],
+    "soverom_barn": dict(
+        navn="Soverom barn", rom="Soverom barn", climate=["climate.hytte_soverom_barn"], effekt=["sensor.hytte_soverom_barn_effekt"],
+        duty="", temp="", type="panel", prio=2, nominell=1.0, sol=False, profil="person:barn", aktiv=True,
+        temp_dag="ki_temp_soverom_barn_dag", temp_natt="ki_temp_soverom_barn_natt", temp_borte="ki_temp_soverom_barn_borte"),
+    "soverom_ungdom": dict(
+        navn="Soverom ungdom", rom="Soverom ungdom", climate=["climate.hytte_soverom_ungdom"], effekt=["sensor.hytte_soverom_ungdom_effekt"],
+        duty="", temp="", type="panel", prio=3, nominell=1.0, sol=False, profil="person:ungdom", aktiv=True,
+        temp_dag="ki_temp_soverom_ungdom_dag", temp_natt="ki_temp_soverom_ungdom_natt", temp_borte=""),
+    "soverom_voksen": dict(
+        navn="Soverom voksen", rom="Soverom voksen", climate=["climate.hytte_soverom_voksen"], effekt=["sensor.hytte_soverom_voksen_effekt"],
         duty="", temp="", type="panel", prio=4, nominell=1.0, sol=False, profil="fellesrom", aktiv=True,
         temp_dag="ki_temp_stue_dag", temp_natt="ki_temp_stue_natt", temp_borte=""),
 }
 
 # (nøkkel → {navn, hustype, beskrivelse, config-overstyringer, soner, hjelperverdier satt én gang})
 PRESETS: dict[str, dict] = {
-    "oslo": {
-        "navn": "Bolig — rekkehus i Oslo (standard)", "hustype": "bolig",
-        "beskrivelse": "120 m² rekkehus fra 1980, panelovner og gulvvarme, bereder med relé, håndklevarmer.",
+    "bolig": {
+        "navn": "Bolig (standard)", "hustype": "bolig",
+        "beskrivelse": "Panelovner og gulvvarme, bereder med relé, håndklevarmer, helg og hjemkomst.",
         "config": {}, "soner": DEFAULT_SONER, "verdier": {}, "personer": DEFAULT_PERSONER,
     },
-    "toten": {
-        "navn": "Fritidsbolig — hytta på Toten", "hustype": "fritidsbolig",
-        "beskrivelse": "100 m² fra 1960 (etterisolert), varmepumpe i stua, gulvvarme på kjøkken/bad/inngang, "
-                       "oljefyr i inngangen, panelovner på soverom, bereder som bare måles, elbillader 5 A om natten.",
+    "hytte": {
+        "navn": "Fritidsbolig", "hustype": "fritidsbolig",
+        "beskrivelse": "Frostsikring når ingen er der, oppvarming før ankomst, varmepumpe i stua, gulvvarme, "
+                       "panelovner på soverom, bereder som bare måles, elbillader om natten.",
         "config": {
-            CONF_AREAL: 100, CONF_BYGGEAR: 1960, CONF_GLASS_M2: 12, CONF_STUE_AREAL: 30,
+            CONF_AREAL: 100, CONF_BYGGEAR: 1970, CONF_GLASS_M2: 12, CONF_STUE_AREAL: 30,
             CONF_VVB_BRYTER: "", CONF_VVB_EFFEKT: "sensor.hytte_bereder_effekt",
             CONF_HANKLEVARMER: "", CONF_HANKLEVARMER_EFFEKT: "", CONF_GARDINER: "",
-            CONF_TILSTEDE_CYBELE: "person.cybele", CONF_TILSTEDE_SEBASTIAN: "person.sebastian", CONF_TILSTEDE_RUNE: "person.rune",
             CONF_TOTAL_EFFEKT: "sensor.hytte_strommaler_effekt", CONF_IMPORTERT_ENERGI: "sensor.hytte_strommaler_imported_energy",
             CONF_UTE_TEMP: "sensor.hytte_utetemperatur", CONF_VAER: "weather.forecast_home",
             CONF_HAR_ELBIL: True,
         },
         "soner": DEFAULT_SONER_HYTTE,
-        "personer": [dict(p, entity=f"person.{p['key']}") for p in DEFAULT_PERSONER],
+        "personer": DEFAULT_PERSONER,
         "verdier": {
             # tom hytte = frostsikring, ikke 16 °C
             "ki_temp_helg": 8.0, "ki_temp_helg_gulvvarme": 10.0, "ki_temp_helg_bad": 12.0, "ki_helg_senk_gulvvarme": True,
@@ -295,6 +297,8 @@ SWITCHES = [
     ("ki_tillat_dyrere_trinn", "KI Tillat Dyrere Kapasitetstrinn", False, "mdi:cash-lock-open"),
     ("ki_elbil_natt", "KI Elbil Lader Om Natten", False, "mdi:ev-station"),
     ("ki_auto_soveromsmodus", "KI Automatisk Soveromsmodus", True, "mdi:sleep"),
+    ("ki_adaptiv_reserve", "KI Adaptiv Reserve", True, "mdi:school-outline"),
+    ("ki_gradvis_gjenoppvarming", "KI Gradvis Gjenoppvarming", True, "mdi:stairs-up"),
     ("ki_nattsenk_aktiv", "KI Nattsenking Aktiv", True, "mdi:weather-night"),
     ("ki_nattsenk_okonomi", "KI Økonomisk Nattsenking", True, "mdi:cash-check"),
     ("ki_energi_varsler", "KI Energivarsler", True, "mdi:bell-outline"),
@@ -320,11 +324,6 @@ NUMBERS = [
     ("ki_temp_bad", "KI Temp Bad Gulvvarme", 18, 28, 0.5, "°C", 24, "mdi:shower"),
     ("ki_temp_do", "KI Temp Do Gulvvarme", 12, 25, 0.5, "°C", 20, "mdi:toilet"),
     ("ki_temp_vaskegang", "KI Temp Vaskegang Gulvvarme", 5, 28, 0.5, "°C", 20, "mdi:washing-machine"),
-    ("ki_temp_cybele_dag", "KI Temp Cybele Dag", 16, 25, 0.5, "°C", 22, "mdi:bed"),
-    ("ki_temp_cybele_natt", "KI Temp Cybele Natt", 16, 24, 0.5, "°C", 20, "mdi:bed"),
-    ("ki_temp_cybele_borte", "KI Temp Cybele Borte", 5, 28, 0.5, "°C", 20, "mdi:home-export-outline"),
-    ("ki_temp_sebastian_dag", "KI Temp Sebastian Dag", 15, 25, 0.5, "°C", 22, "mdi:bed"),
-    ("ki_temp_sebastian_natt", "KI Temp Sebastian Natt", 12, 22, 0.5, "°C", 17, "mdi:bed"),
     ("ki_temp_helg", "KI Temp Helgemodus Panelovner", 10, 20, 0.5, "°C", 16, "mdi:bag-suitcase"),
     ("ki_temp_helg_gulvvarme", "KI Temp Helg Gulvvarme", 12, 24, 0.5, "°C", 18, "mdi:heating-coil"),
     ("ki_temp_helg_bad", "KI Temp Helg Bad", 12, 26, 0.5, "°C", 22, "mdi:shower"),
@@ -368,6 +367,10 @@ NUMBERS = [
     ("ki_reserve_topp_kwh", "KI Reserve Mot Neste Trinn", 0, 1.5, 0.05, "kWh", 0.3, "mdi:shield-half-full"),
     ("ki_elbil_effekt_kw", "KI Elbil Ladeeffekt", 0, 22, 0.1, "kW", 0, "mdi:ev-station"),
     ("ki_hanklevarmer_effekt_w", "KI Håndklevarmer Effekt", 10, 500, 1, "W", 46, "mdi:radiator"),
+    ("ki_prognose_margin_min", "KI Prognosemargin Minimum", 0, 1, 0.05, "kWh", 0.0, "mdi:arrow-collapse-down"),
+    ("ki_prognose_margin_maks", "KI Prognosemargin Maksimum", 0.2, 3, 0.05, "kWh", 1.5, "mdi:arrow-collapse-up"),
+    ("ki_prognose_min_obs", "KI Prognose Minste Grunnlag", 4, 60, 1, "", 8, "mdi:counter"),
+    ("ki_gjenoppvarming_intervall_min", "KI Gjenoppvarming Intervall", 1, 15, 1, "min", 3, "mdi:timer-outline"),
     ("ki_stat_unngatte_topper", "KI Unngåtte Topper", 0, 9999, 1, "", 0, "mdi:shield-check"),
     ("ki_stat_shed_hendelser", "KI Utkoblinger", 0, 99999, 1, "", 0, "mdi:stairs-down"),
     ("ki_stat_flyttet_kwh", "KI Flyttet Energi", 0, 9999, 0.01, "kWh", 0, "mdi:swap-horizontal"),
@@ -433,6 +436,8 @@ SENSORS = [
     ("ki_hvitevarer_effekt", "KI Hvitevarer Effekt", "mdi:stove", "W", "power", "measurement"),
     ("ki_time_energi", "KI Energi Denne Timen", "mdi:counter", "kWh", "energy", "total"),
     ("ki_nettleie", "KI Nettleie", "mdi:transmission-tower", None, None, None),
+    ("ki_sparing", "KI Sparing", "mdi:piggy-bank-outline", "kr", None, None),
+    ("ki_prognoselaering", "KI Prognoselæring", "mdi:school-outline", None, None, None),
     ("ki_estimert_timesforbruk", "KI Estimert Timesforbruk", "mdi:chart-line", "kWh", None, "measurement"),
     ("ki_vvb_legionella_status", "KI VVB Legionella Status", "mdi:water-boiler", None, None, None),
     ("ki_vvb_forklaring", "KI VVB Forklaring", "mdi:text-long", None, None, None),
@@ -467,3 +472,7 @@ AKSJON_HJEM_NAA = "KI_HJEM_NAA"
 AKSJON_HJEM_FORLENG = "KI_HJEM_FORLENG"
 AKSJON_HYTTE_DRAR = "KI_HYTTE_DRAR"
 AKSJON_HYTTE_BLIR = "KI_HYTTE_BLIR"
+
+# Eldre preset-nøkler
+PRESETS["oslo"] = PRESETS["bolig"]
+PRESETS["toten"] = PRESETS["hytte"]

@@ -13,7 +13,7 @@ from . import oppdag
 from .const import (
     CONF_AREAL, CONF_BYGGEAR, CONF_ENERGILEDD_DAG, CONF_ENERGILEDD_NATT, CONF_GARDINER,
     CONF_GLASS_M2, CONF_HANKLEVARMER, CONF_HANKLEVARMER_EFFEKT, CONF_HVITEVARER,
-    CONF_HAR_ELBIL, CONF_HUSTYPE, CONF_PERSONER, CONF_PRESET, DEFAULT_PERSONER, PERSONTYPER, PRESETS, PROFIL_LEGACY,
+    CONF_HAR_ELBIL, CONF_HUSTYPE, CONF_PERSONER, CONF_PRESET, LEGACY_PERSONER, PERSONTYPER, PRESETS, PROFIL_LEGACY,
     CONF_IMPORTERT_ENERGI, CONF_KAPASITETSTRINN, CONF_NORDPOOL, CONF_NORGESPRIS_AKTIV, CONF_SONER,
     CONF_STROMPRIS, CONF_STUE_AREAL, CONF_TILSTEDE_CYBELE, CONF_TILSTEDE_RUNE,
     CONF_TILSTEDE_SEBASTIAN, CONF_TOPP1, CONF_TOPP2, CONF_TOPP3, CONF_TOTAL_EFFEKT, CONF_UTE_TEMP,
@@ -180,7 +180,7 @@ class KiEnergiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def _forslag(self, *keys):
         """Forslag til feltverdier. Rekkefølge: preset → standard → automatisk gjenkjenning.
         En preset-/standardverdi som ikke finnes i denne Home Assistant-en byttes ut med det vi fant."""
-        preset = PRESETS.get(self._data.get(CONF_PRESET, "oslo"), PRESETS["oslo"])
+        preset = PRESETS.get(self._data.get(CONF_PRESET, "bolig"), PRESETS["bolig"])
         funnet = getattr(self, "_funnet", None)
         if funnet is None:
             funnet = self._funnet = oppdag.forslag_alle(self.hass)
@@ -205,9 +205,9 @@ class KiEnergiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             self._data[CONF_HUSTYPE] = PRESETS[user_input[CONF_PRESET]]["hustype"]
             return await self.async_step_maling()
         return self.async_show_form(step_id="user", data_schema=vol.Schema({
-            vol.Required(CONF_PRESET, default="oslo"): selector.SelectSelector(selector.SelectSelectorConfig(
+            vol.Required(CONF_PRESET, default="bolig"): selector.SelectSelector(selector.SelectSelectorConfig(
                 options=[selector.SelectOptionDict(value=k, label=p["navn"] + (" — " + p["beskrivelse"] if p["beskrivelse"] else ""))
-                         for k, p in PRESETS.items()], mode="list"))}))
+                         for k, p in PRESETS.items() if k in ("bolig", "hytte", "tom")], mode="list"))}))
 
     async def async_step_maling(self, user_input=None):
         feil = {}
@@ -229,10 +229,10 @@ class KiEnergiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return await self.async_step_personer()
         return self.async_show_form(step_id="utstyr", data_schema=self.add_suggested_values_to_schema(
             vol.Schema(SKJEMA_UTSTYR), {**self._forslag(CONF_VVB_BRYTER, CONF_VVB_EFFEKT, CONF_HANKLEVARMER, CONF_HANKLEVARMER_EFFEKT),
-                                        CONF_HAR_ELBIL: bool(PRESETS.get(self._data.get(CONF_PRESET, "oslo"), PRESETS["oslo"])["config"].get(CONF_HAR_ELBIL, False))}))
+                                        CONF_HAR_ELBIL: bool(PRESETS.get(self._data.get(CONF_PRESET, "bolig"), PRESETS["bolig"])["config"].get(CONF_HAR_ELBIL, False))}))
 
     async def async_step_personer(self, user_input=None):
-        preset = PRESETS.get(self._data.get(CONF_PRESET, "oslo"), PRESETS["oslo"])
+        preset = PRESETS.get(self._data.get(CONF_PRESET, "bolig"), PRESETS["bolig"])
         if user_input is not None:
             self._data[CONF_PERSONER] = personer_fra_rader(user_input)
             return await self.async_step_nettleie()
@@ -257,7 +257,7 @@ class KiEnergiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_hus(self, user_input=None):
         skjema = skjema_hus(self.hass)
-        preset = PRESETS.get(self._data.get(CONF_PRESET, "oslo"), PRESETS["oslo"])
+        preset = PRESETS.get(self._data.get(CONF_PRESET, "bolig"), PRESETS["bolig"])
         if user_input is not None:
             self._data.update(_rens(user_input, skjema))
             return await self.async_step_soner_auto()
@@ -270,7 +270,7 @@ class KiEnergiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_soner_auto(self, user_input=None):
         """Siste steg: lag soner fra Home Assistant-områdene (én per rom med termostat), eller bruk presetets."""
-        preset = PRESETS.get(self._data.get(CONF_PRESET, "oslo"), PRESETS["oslo"])
+        preset = PRESETS.get(self._data.get(CONF_PRESET, "bolig"), PRESETS["bolig"])
         funnet = oppdag.soner_fra_omrader(self.hass)
         if user_input is not None:
             valgt = user_input.get("soner") or []
@@ -385,9 +385,9 @@ class KiEnergiOptionsFlow(config_entries.OptionsFlow):
         if isinstance(liste, list):
             return [dict(p) for p in liste]
         ut = []
-        for p in DEFAULT_PERSONER:
-            if f"tilstede_{p['key']}" in g:
-                ut.append(dict(p, entity=g.get(f"tilstede_{p['key']}") or ""))
+        for p in LEGACY_PERSONER:
+            if g.get(f"tilstede_{p['key']}"):
+                ut.append({"key": p["key"], "navn": p["key"].capitalize(), "type": p["type"], "entity": g.get(f"tilstede_{p['key']}"), "sover": ""})
         return ut
 
     async def async_step_personer(self, user_input=None):
