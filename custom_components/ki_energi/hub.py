@@ -129,6 +129,35 @@ class KiHub:
     def person(self, key: str) -> dict | None:
         return next((p for p in self.personer() if p["key"] == key), None)
 
+    def vekking_frist(self, person: dict) -> int | None:
+        """Neste faktiske vekkealarm for personen fra KI Søvn & Vekking (sensor.<prefix>_neste_alarm),
+        som minutter siden midnatt — bare hvis alarmen går innen 24 t og ikke hoppes over.
+        None = ingen vekkealarm koblet til personen → bruk klokkeslettene i KI Energi."""
+        sover_ent = person.get("sover") or f"binary_sensor.{person['key']}_sover"
+        kandidater = (sover_ent, f"binary_sensor.{person['key']}_sovn_sover")
+        naa = dt_util.now()
+        beste = None
+        for st in self.hass.states.async_all("sensor"):
+            a = st.attributes
+            if a.get("integrasjon") != "ki_sovn" or a.get("type") != "vekking":
+                continue
+            if a.get("person") not in kandidater:
+                continue
+            if a.get("hopper_over") or not a.get("neste_tidspunkt"):
+                continue
+            try:
+                when = dt_util.parse_datetime(a["neste_tidspunkt"])
+            except (TypeError, ValueError):
+                continue
+            if when is None:
+                continue
+            when = dt_util.as_local(when)
+            if when <= naa or (when - naa) > timedelta(hours=24):
+                continue
+            if beste is None or when < beste:
+                beste = when
+        return beste.hour * 60 + beste.minute if beste else None
+
     def voksne_hjemme(self) -> bool | None:
         """True hvis minst én voksen er hjemme, False hvis alle kjente voksne er borte, None hvis ukjent."""
         kjent = [self.hjemme(p["entity"]) for p in self.personer() if p["type"] == "voksen" and p["entity"]]

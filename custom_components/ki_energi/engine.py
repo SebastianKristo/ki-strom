@@ -352,6 +352,10 @@ class KiEngine:
         """Når sonen normalt skal være varm igjen (minutter siden midnatt)."""
         h = self.hub
         p = self.person_for(konf)
+        if p:
+            alarm = h.vekking_frist(p)
+            if alarm is not None:
+                return alarm
         if p and p["type"] == "barn":
             return h.tid_min(f"ki_{p['key']}_dag", "05:30")
         if p and p["type"] == "ungdom":
@@ -495,8 +499,11 @@ class KiEngine:
             k = person["key"]
             vekk = h.tid_min(f"ki_{k}_dag", "05:30")
             legg = h.tid_min(f"ki_{k}_natt", "19:00")
+            alarm = h.vekking_frist(person)
+            if alarm is not None:
+                vekk = alarm   # ekte vekkealarm fra KI Søvn & Vekking går foran klokkeslettet
             if sover is True:
-                return t_natt, f"{person['navn']} sover (registrert)", vekk
+                return t_natt, f"{person['navn']} sover (registrert)" + (" — varm til vekkingen" if alarm is not None else ""), vekk
             if sover is False and h.mellom(legg, vekk):
                 return t_dag, f"{person['navn']} er våken", None
             if h.mellom(legg, vekk):
@@ -514,8 +521,11 @@ class KiEngine:
             helgevekking = dt_util.now().weekday() >= 5 or h.on(f"ki_{k}_ferie")
             vekking = h.tid_min(f"ki_{k}_vekking_helg" if helgevekking else f"ki_{k}_vekking", "07:00")
             legg = h.tid_min(f"ki_{k}_natt", "23:00")
+            alarm = h.vekking_frist(person)
+            if alarm is not None:
+                vekking = alarm   # ekte vekkealarm fra KI Søvn & Vekking går foran klokkeslettet
             if sover is True:
-                return t_natt, f"{person['navn']} sover (registrert)", vekking
+                return t_natt, f"{person['navn']} sover (registrert)" + (" — varm til vekkingen" if alarm is not None else ""), vekking
             if sover is False and h.mellom(legg, vekking):
                 return t_dag, f"{person['navn']} er våken", None
             if h.mellom(legg, vekking):
@@ -527,8 +537,15 @@ class KiEngine:
             if hjemme is False and er_dag:
                 t_borte = h.num(konf.get(Z_TEMP_BORTE) or "", t_dag - 2.0)
                 return t_borte, f"{person['navn']} er borte", None
+            sover_v = h.sover(person)
+            alarm = h.vekking_frist(person)
+            frist = alarm if alarm is not None else dag_start
+            if sover_v is True:
+                return t_natt, f"{person['navn']} sover (registrert)" + (" — varm til vekkingen" if alarm is not None else ""), frist
+            if sover_v is False and not er_dag:
+                return t_dag, f"{person['navn']} er våken", None
             if not er_dag:
-                return t_natt, "Natt", dag_start
+                return t_natt, "Natt", frist
             return t_dag, "Dag", None
 
         if profil == "stue":
@@ -689,9 +706,11 @@ class KiEngine:
                 p.update(handling="manuell", settpunkt=None,
                          forklaring="Sonen står på manuell i klimakortet")
             elif last["vindu"]:
+                senere = (f". Forvarming mot vekkingen starter likevel ca. kl. {last['forvarm_start']}"
+                          if last.get("forvarm_start") else "")
                 p.update(handling="vindu", settpunkt=round(h.num("ki_vindu_temp", 12), 1),
                          forklaring=f"{last['vindu_navn']} er åpent — varmen holdes på "
-                                    f"{h.num('ki_vindu_temp', 12):.0f} °C til det lukkes")
+                                    f"{h.num('ki_vindu_temp', 12):.0f} °C til det lukkes{senere}")
             elif not last["trenger"]:
                 sol = f", solen bidrar med ca. {last['sol_trekk']} °C" if last["sol_trekk"] else ""
                 start = f". Forvarming starter ca. kl. {last['forvarm_start']}" if last.get("forvarm_start") and not last["forvarm"] else ""
