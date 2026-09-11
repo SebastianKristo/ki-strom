@@ -45,7 +45,8 @@ CONF_STUE_AREAL = "stue_areal_m2"
 CONF_SONER = "soner"
 CONF_HUSTYPE = "hustype"      # bolig | fritidsbolig
 CONF_HAR_ELBIL = "har_elbil"  # vis/bruk elbil-innstillingene
-CONF_PERSONER = "personer"    # liste av {key, navn, entity, type}; type: barn | ungdom | voksen
+CONF_PERSONER = "personer"
+CONF_LYSREGLER = "lysregler"  # liste av lysregler (glemt lys / nattdemping)    # liste av {key, navn, entity, type}; type: barn | ungdom | voksen
 PERSONTYPER = {
     "barn": "Barn — fast opp/legg og borte på dagtid (barnehage/skole)",
     "ungdom": "Ungdom/student — vekking hverdag og helg, egen leggetid, feriebryter",
@@ -438,6 +439,7 @@ SENSORS = [
     ("ki_nettleie", "KI Nettleie", "mdi:transmission-tower", None, None, None),
     ("ki_sparing", "KI Sparing", "mdi:piggy-bank-outline", "kr", None, None),
     ("ki_prognoselaering", "KI Prognoselæring", "mdi:school-outline", None, None, None),
+    ("ki_lys", "KI Lys", "mdi:lightbulb-group-outline", None, None, None),
     ("ki_estimert_timesforbruk", "KI Estimert Timesforbruk", "mdi:chart-line", "kWh", None, "measurement"),
     ("ki_vvb_legionella_status", "KI VVB Legionella Status", "mdi:water-boiler", None, None, None),
     ("ki_vvb_forklaring", "KI VVB Forklaring", "mdi:text-long", None, None, None),

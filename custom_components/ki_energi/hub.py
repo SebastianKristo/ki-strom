@@ -37,11 +37,12 @@ class KiHub:
         self.store = Store(hass, STORE_VERSION, f"{DOMAIN}.{entry.entry_id}.minne")
         self.minne: dict[str, Any] = {
             "profil": {}, "tau": {}, "state": {"overstyringer": {}, "rotasjon": 0},
-            "logg": [], "vvb": {}, "moduser": {}, "nettleie": {}, "sparing": {}, "prognose": {},
+            "logg": [], "vvb": {}, "moduser": {}, "nettleie": {}, "sparing": {}, "prognose": {}, "lys": {},
         }
         self.nettleie = None
         self.sparing = None
         self.prognose = None
+        self.lys = None
         self.engine = None
         self.vvb = None
         self.moduser = None

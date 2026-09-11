@@ -56,6 +56,7 @@ offisielle [Nord Pool-integrasjonen](https://www.home-assistant.io/integrations/
 - [Varmtvann og legionella](#varmtvann-og-legionella)
 - [Eksempler](#eksempler)
 - [Entiteter](#entiteter)
+- [Lys — glemte lys og nattdemping](#lys--glemte-lys-og-nattdemping)
 - [Sparing](#sparing)
 - [Nettleie etter døgnmaks](#nettleie-etter-døgnmaks)
 - [Tjenester](#tjenester)
@@ -497,6 +498,21 @@ integrasjonen via `mobile_app_notification_action`; ingen egne automasjoner tren
 
 ---
 
+## Lys — glemte lys og nattdemping
+
+*Konfigurer → Lys* lager regler, hver med egen bryter `switch.ki_lys_<navn>` (vises under
+*Oppsett → Lys* i kortet, sammen med status og besparelse):
+
+| Type | Oppførsel |
+|---|---|
+| **Glemt lys** med nærværssensor | Slås av først når rommet har vært tomt i `fravaer_min` (5). Er sensoren «på», får lyset stå — vi slår aldri av lys noen bruker. |
+| **Glemt lys** uten sensor | Slås av etter `maks_pa_min` (30) sammenhengende på, bare i tidsvinduet (standard 08–22). Passer for vaskerom, boder o.l. |
+| **Nattdemping** | Lysstyrken settes til `natt_prosent` ved natt og `dag_prosent` ved dag (husets natt-/dagtid eller eget vindu) — én gang per overgang. Manuell endring etterpå respekteres til neste overgang. |
+
+Besparelsen anslås fra `effekt_w` per regel (glemt: som om lyset hadde stått på til vinduet
+stengte, maks 2 t; demping: differansen mellom dag- og nattnivå) og inngår i `sensor.ki_sparing`.
+`sensor.ki_lys` viser status per regel.
+
 ## Sparing
 
 `sensor.ki_sparing` (og *Energi → KI sparer* i kortet) viser hva KI Energi anslås å spare denne
@@ -507,6 +523,7 @@ måneden, per post:
 | Varmestyring | Motorens egen statistikk: energi flyttet til billigere nettleie × differansen i energiledd, unngåtte topper priset som 1/3 av trinnkostnad, ca. 10 % spart kWh av det som flyttes. |
 | Gardiner | Varmetap gjennom glasset = U (1,2 W/m²K) × glassareal × (inne − ute). Lukket gardin om natten regnes som 30 % mindre tap. Står gardinene åpne om natten i gardinsesongen, vises det samme som **«kunne spart»**. |
 | Håndklevarmer | Mot å stå på hele døgnet, med lært effekt. |
+| Lys | Glemte lys slått av og nattdemping, fra oppgitt effekt per regel. |
 | Bereder | kWh varmet i nattvinduet × forskjellen mellom energiledd dag og natt. |
 
 Alt er anslag uten kontrollgruppe og merket slik i sensoren (`merknad`). Poster for utstyr du ikke

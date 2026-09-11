@@ -109,7 +109,8 @@
           "nettleie": "Nettleie og pris",
           "hus": "Hus og varsler",
           "soner": "Soner",
-          "soner_auto": "Lag soner fra områdene mine"
+          "soner_auto": "Lag soner fra områdene mine",
+          "lys": "Lys — glemte lys og nattdemping"
         },
         "description": "{status}"
       },
@@ -231,6 +232,48 @@
           "tilstede": "Tilstedeværelse",
           "slett": "Slett personen",
           "sover": "Søvnsensor (binary_sensor som er på når personen sover — f.eks. KI Søvn). Finnes binary_sensor.<nøkkel>_sover, brukes den automatisk."
+        }
+      },
+      "lys": {
+        "title": "Lys",
+        "description": "Regler som slår av glemte lys eller demper lys om natten. Hver regel får en egen bryter (switch.ki_lys_<navn>) i kortet under Oppsett → Lys.",
+        "data": {
+          "regel": "Regel"
+        }
+      },
+      "ny_lysregel": {
+        "title": "Ny lysregel",
+        "description": "Lys som noen faktisk bruker, slås ikke av: med nærværssensor kreves fravær; uten sensor kreves lang sammenhengende på-tid, og bare innenfor tidsvinduet.",
+        "data": {
+          "navn": "Navn (f.eks. «Vaskerom» eller «Inngang bordlampe»)",
+          "type": "Type",
+          "light": "Lys (eller bryter)",
+          "presence": "Bevegelses-/nærværssensor (valgfri — uten den brukes maks på-tid)",
+          "fravaer_min": "Glemt: minutter uten bevegelse før lyset slås av",
+          "maks_pa_min": "Glemt uten sensor: minutter sammenhengende på før det slås av",
+          "fra": "Tidsvindu fra (HH:MM). Glemt: standard 08:00. Demping: standard husets natt",
+          "til": "Tidsvindu til (HH:MM). Glemt: standard 22:00",
+          "natt_prosent": "Demping: lysstyrke om natten (%)",
+          "dag_prosent": "Demping: lysstyrke om dagen (%)",
+          "effekt_w": "Anslått effekt (W) — til besparelsen",
+          "slett": "Slett regelen"
+        }
+      },
+      "lysregel": {
+        "title": "{navn}",
+        "data": {
+          "navn": "Navn (f.eks. «Vaskerom» eller «Inngang bordlampe»)",
+          "type": "Type",
+          "light": "Lys (eller bryter)",
+          "presence": "Bevegelses-/nærværssensor (valgfri — uten den brukes maks på-tid)",
+          "fravaer_min": "Glemt: minutter uten bevegelse før lyset slås av",
+          "maks_pa_min": "Glemt uten sensor: minutter sammenhengende på før det slås av",
+          "fra": "Tidsvindu fra (HH:MM). Glemt: standard 08:00. Demping: standard husets natt",
+          "til": "Tidsvindu til (HH:MM). Glemt: standard 22:00",
+          "natt_prosent": "Demping: lysstyrke om natten (%)",
+          "dag_prosent": "Demping: lysstyrke om dagen (%)",
+          "effekt_w": "Anslått effekt (W) — til besparelsen",
+          "slett": "Slett regelen"
         }
       }
     },

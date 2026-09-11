@@ -13,7 +13,7 @@ from . import oppdag
 from .const import (
     CONF_AREAL, CONF_BYGGEAR, CONF_ENERGILEDD_DAG, CONF_ENERGILEDD_NATT, CONF_GARDINER,
     CONF_GLASS_M2, CONF_HANKLEVARMER, CONF_HANKLEVARMER_EFFEKT, CONF_HVITEVARER,
-    CONF_HAR_ELBIL, CONF_HUSTYPE, CONF_PERSONER, CONF_PRESET, LEGACY_PERSONER, PERSONTYPER, PRESETS, PROFIL_LEGACY,
+    CONF_HAR_ELBIL, CONF_HUSTYPE, CONF_LYSREGLER, CONF_PERSONER, CONF_PRESET, LEGACY_PERSONER, PERSONTYPER, PRESETS, PROFIL_LEGACY,
     CONF_IMPORTERT_ENERGI, CONF_KAPASITETSTRINN, CONF_NORDPOOL, CONF_NORGESPRIS_AKTIV, CONF_SONER,
     CONF_STROMPRIS, CONF_STUE_AREAL, CONF_TILSTEDE_CYBELE, CONF_TILSTEDE_RUNE,
     CONF_TILSTEDE_SEBASTIAN, CONF_TOPP1, CONF_TOPP2, CONF_TOPP3, CONF_TOTAL_EFFEKT, CONF_UTE_TEMP,
@@ -339,7 +339,7 @@ class KiEnergiOptionsFlow(config_entries.OptionsFlow):
                 if not any(self.hass.states.get(c) for c in (s.get("climate") if isinstance(s.get("climate"), list) else [s.get("climate")]) if c)]
         status = f"{len(soner)} soner" + (f" — termostat svarer ikke i: {', '.join(dode)}" if dode else "") \
             + (f". Ikke satt opp: {', '.join(mangler)}" if mangler else ". Alt er koblet.")
-        return self.async_show_menu(step_id="init", menu_options=["maling", "utstyr", "personer", "nettleie", "hus", "soner", "soner_auto"],
+        return self.async_show_menu(step_id="init", menu_options=["maling", "utstyr", "personer", "nettleie", "hus", "soner", "soner_auto", "lys"],
                                     description_placeholders={"status": status})
 
     async def async_step_soner_auto(self, user_input=None):
@@ -453,6 +453,69 @@ class KiEnergiOptionsFlow(config_entries.OptionsFlow):
         return await self._enkelt_skjema("hus", skjema_hus(self.hass), user_input)
 
     # -- soner -----------------------------------------------------------
+    # ---------------- lysregler ----------------
+    def _lysregler(self) -> list[dict]:
+        return [dict(r) for r in (self._gjeldende().get(CONF_LYSREGLER) or []) if isinstance(r, dict)]
+
+    async def async_step_lys(self, user_input=None):
+        regler = self._lysregler()
+        if user_input is not None:
+            valg = user_input["regel"]
+            if valg == "__ny__":
+                return await self.async_step_ny_lysregel()
+            self._lys_key = valg
+            return await self.async_step_lysregel()
+        valg = [selector.SelectOptionDict(value=r["key"], label=f"{r.get('navn') or r['key']} — {'nattdemping' if r.get('type') == 'demp' else 'glemt lys'} — {r.get('light', '')}")
+                for r in regler]
+        valg.append(selector.SelectOptionDict(value="__ny__", label="＋ Legg til lysregel"))
+        return self.async_show_form(step_id="lys", data_schema=vol.Schema({
+            vol.Required("regel"): selector.SelectSelector(selector.SelectSelectorConfig(options=valg, mode="list"))}))
+
+    def _lysskjema(self, r: dict | None = None) -> vol.Schema:
+        r = r or {}
+        return vol.Schema({
+            vol.Required("navn", default=r.get("navn", "")): _tekst(),
+            vol.Required("type", default=r.get("type", "glemt")): selector.SelectSelector(selector.SelectSelectorConfig(
+                options=[selector.SelectOptionDict(value="glemt", label="Glemt lys — slå av når ingen bruker rommet"),
+                         selector.SelectOptionDict(value="demp", label="Nattdemping — lavere lysstyrke om natten")], mode="dropdown")),
+            vol.Required("light", default=r.get("light", "")): _ent(["light", "switch"]),
+            vol.Optional("presence", default=r.get("presence", "")): _ent("binary_sensor"),
+            vol.Optional("fravaer_min", default=r.get("fravaer_min", 5)): _num(1, 120, 1, "min"),
+            vol.Optional("maks_pa_min", default=r.get("maks_pa_min", 30)): _num(1, 600, 1, "min"),
+            vol.Optional("fra", default=r.get("fra", "")): _tekst(),
+            vol.Optional("til", default=r.get("til", "")): _tekst(),
+            vol.Optional("natt_prosent", default=r.get("natt_prosent", 25)): _num(1, 100, 1, "%"),
+            vol.Optional("dag_prosent", default=r.get("dag_prosent", 80)): _num(1, 100, 1, "%"),
+            vol.Optional("effekt_w", default=r.get("effekt_w", 10)): _num(1, 500, 1, "W"),
+            vol.Optional("slett", default=False): selector.BooleanSelector(),
+        })
+
+    async def async_step_ny_lysregel(self, user_input=None):
+        if user_input is not None:
+            regler = self._lysregler()
+            key = oppdag.slug(user_input["navn"]) or "lys"
+            if any(r["key"] == key for r in regler):
+                key += f"_{len(regler) + 1}"
+            ny = {k: v for k, v in user_input.items() if k != "slett"}
+            ny["key"] = key
+            regler.append(ny)
+            return self._lagre({CONF_LYSREGLER: regler})
+        return self.async_show_form(step_id="ny_lysregel", data_schema=self._lysskjema())
+
+    async def async_step_lysregel(self, user_input=None):
+        regler = self._lysregler()
+        r = next((x for x in regler if x["key"] == self._lys_key), None)
+        if r is None:
+            return await self.async_step_lys()
+        if user_input is not None:
+            if user_input.get("slett"):
+                regler = [x for x in regler if x["key"] != r["key"]]
+            else:
+                r.update({k: v for k, v in user_input.items() if k != "slett"})
+            return self._lagre({CONF_LYSREGLER: regler})
+        return self.async_show_form(step_id="lysregel", data_schema=self._lysskjema(r),
+                                    description_placeholders={"navn": r.get("navn") or r["key"]})
+
     async def async_step_soner(self, user_input=None):
         soner = self._soner()
         if user_input is not None:

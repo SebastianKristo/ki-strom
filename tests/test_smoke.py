@@ -184,7 +184,7 @@ async def test_skyggemodus_styrer_ingenting_og_nettleie_publiseres(hass):
     assert a["datakvalitet"] == "usikker" and a["udaterte_topper"] == 3
     assert hass.states.get("sensor.ki_energi_status").attributes.get("skyggemodus") is True
     sp = hass.states.get("sensor.ki_sparing")
-    assert sp is not None and "poster" in sp.attributes and set(sp.attributes["poster"]) == {"motor", "gardiner", "hanklevarmer", "bereder"}
+    assert sp is not None and "poster" in sp.attributes and set(sp.attributes["poster"]) == {"motor", "gardiner", "hanklevarmer", "bereder", "lys"}
     await hub.vvb.tick(); await hass.async_block_till_done()
     assert len(hass.states.get("sensor.ki_vvb_billige_timer").attributes.get("doegn") or []) == 24
 
@@ -428,3 +428,57 @@ async def test_prognoselaering_i_motoren_og_gradvis_gjenoppvarming(hass):
     plan, _ = hub.engine.fordel(laster, b, 0.0, 0.0, None)
     handlinger = {p["key"]: p.get("venter", False) for p in plan if p["key"] in {k["key"] for k in kandidater}}
     assert sum(1 for v in handlinger.values() if v) == 1, handlinger                 # én venter, én slippes
+
+
+async def test_lysregler(hass):
+    """Glemt lys: med sensor slås av etter fravær, ikke mens noen er der; uten sensor etter maks på-tid.
+    Demping: settes ved overgang, manuell endring respekteres. Bryter per regel."""
+    from custom_components.ki_energi.const import CONF_LYSREGLER
+    data = dict(DEFAULT_CONFIG)
+    data[CONF_LYSREGLER] = [
+        {"key": "soverom", "navn": "Soverom", "type": "glemt", "light": "light.sov", "presence": "binary_sensor.sov_bev", "fravaer_min": 5},
+        {"key": "vaskerom", "navn": "Vaskerom", "type": "glemt", "light": "light.vask", "maks_pa_min": 30},
+        {"key": "inngang", "navn": "Inngang", "type": "demp", "light": "light.inng", "natt_prosent": 25, "dag_prosent": 80},
+    ]
+    hass.states.async_set("sensor.strommaler_effekt", "1500"); hass.states.async_set("sensor.strommaler_imported_energy", "10")
+    for l in ("light.sov", "light.vask"):
+        hass.states.async_set(l, "on")
+    hass.states.async_set("light.inng", "on", {"brightness": 204})
+    hass.states.async_set("binary_sensor.sov_bev", "on")
+    kall = []
+    async def fake(call): kall.append((call.service, call.data.get("entity_id"), call.data.get("brightness_pct")))
+    hass.services.async_register("light", "turn_off", fake); hass.services.async_register("light", "turn_on", fake)
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options={})
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    hub = hass.data[DOMAIN][entry.entry_id]
+    for k in ("soverom", "vaskerom", "inngang"):
+        assert hass.states.get(f"switch.ki_lys_{k}") is not None
+    dag = dt_util.now().replace(hour=14, minute=0)
+    with patch("homeassistant.util.dt.now", return_value=dag):
+        await hub.lys.tick(); await hass.async_block_till_done()
+        st = {r["key"]: r for r in hass.states.get("sensor.ki_lys").attributes["regler"]}
+        assert st["soverom"]["status"] == "i_bruk" and st["vaskerom"]["status"] == "venter"
+        assert ("turn_off", "light.sov", None) not in kall
+        # noen forlot rommet for 10 min siden
+        hass.states.async_set("binary_sensor.sov_bev", "off")
+        hass.states.get("binary_sensor.sov_bev")  # last_changed = nå
+        hub.lys.m["pa_siden"]["vaskerom"] = (dag - timedelta(minutes=45)).isoformat()
+    with patch("homeassistant.util.dt.now", return_value=dag + timedelta(minutes=10)):
+        await hub.lys.tick(); await hass.async_block_till_done()
+    assert ("turn_off", "light.sov", None) in kall and ("turn_off", "light.vask", None) in kall
+    # demping: dag 80 % — allerede 80 → ingen kall; natt → 25 %
+    assert not any(k[1] == "light.inng" for k in kall)
+    natt = dt_util.now().replace(hour=23, minute=30)
+    with patch("homeassistant.util.dt.now", return_value=natt):
+        await hub.lys.tick(); await hass.async_block_till_done()
+    assert ("turn_on", "light.inng", 25) in kall
+    # bryter av → regelen gjør ingenting
+    await hass.services.async_call("switch", "turn_off", {"entity_id": "switch.ki_lys_vaskerom"}, blocking=True)
+    hass.states.async_set("light.vask", "on"); hub.lys.m["pa_siden"]["vaskerom"] = (dag - timedelta(minutes=90)).isoformat()
+    hass.states.async_set("light.sov", "off"); hass.states.async_set("light.inng", "off")
+    n = len(kall)
+    with patch("homeassistant.util.dt.now", return_value=dag):
+        await hub.lys.tick(); await hass.async_block_till_done()
+    assert len(kall) == n

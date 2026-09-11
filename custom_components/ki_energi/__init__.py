@@ -23,6 +23,7 @@ from .modes import KiModuser
 from .nettleie import KiNettleie
 from .sparing import KiSparing
 from .prognose import KiPrognoselaering
+from .lys import KiLys
 from .vvb import KiVvb
 
 _LOGGER = logging.getLogger(__name__)
@@ -100,6 +101,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hub.nettleie = KiNettleie(hub)
     hub.sparing = KiSparing(hub)
     hub.prognose = KiPrognoselaering(hub)
+    hub.lys = KiLys(hub)
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = hub
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -108,6 +110,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     async def _tick(_now=None):
         await hub.moduser.tick()
         await hub.vvb.tick()
+        try:
+            await hub.lys.tick()
+        except Exception as e:  # noqa: BLE001
+            _LOGGER.debug("ki_energi: lys-tick feilet: %s", e)
         await hub.engine.tick()
 
     async def _laering(_now=None):

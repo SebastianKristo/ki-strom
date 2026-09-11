@@ -39,6 +39,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     for p in hub.personer():
         for suffiks, navn, std, ikon in PERSON_BRYTERE.get(p["type"], []):
             entiteter.append(KiSwitch(hub, f"ki_{p['key']}_{suffiks}", f"KI {p['navn']} {navn}", std, ikon))
+    from .const import CONF_LYSREGLER  # noqa: PLC0415
+    for r in (hub.cfg(CONF_LYSREGLER) or []):
+        if isinstance(r, dict) and r.get("key"):
+            entiteter.append(KiSwitch(hub, f"ki_lys_{r['key']}", f"KI Lys {r.get('navn') or r['key']}", True, "mdi:lightbulb-auto-outline"))
     # Én "KI styrer"-bryter per sone
     for key, konf in hub.soner().items():
         entiteter.append(KiSwitch(hub, f"ki_styr_{key}", f"KI Styrer {konf['navn']}", True, "mdi:robot"))

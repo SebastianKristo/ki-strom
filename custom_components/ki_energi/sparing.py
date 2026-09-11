@@ -112,6 +112,8 @@ class KiSparing:
         hank_kwh = float(hank.attributes.get("spart_kwh_maned", 0) or 0) if hank is not None else 0.0
         gard_kwh = sum_("gardin_kwh"); gard_pot = sum_("gardin_potensial_kwh")
         vvb_kwh = sum_("vvb_natt_kwh")
+        lys = h.hass.states.get("sensor.ki_lys")
+        lys_kwh = float(lys.attributes.get("spart_kwh_maned", 0) or 0) if lys is not None else 0.0
         poster = {
             "motor": {"kwh": round(motor_kwh, 2), "kr": round(motor_kr, 1), "tekst": "Flyttet varme til billigere timer, unngått topper"},
             "gardiner": {"kwh": round(gard_kwh, 2), "kr": round(gard_kwh * pris, 1),
@@ -120,6 +122,7 @@ class KiSparing:
             "hanklevarmer": {"kwh": round(hank_kwh, 2), "kr": round(hank_kr, 1), "tekst": "Av utenom dusjvinduene"},
             "bereder": {"kwh": round(vvb_kwh, 2), "kr": round(vvb_kwh * diff_nett, 1),
                         "tekst": "Varmet i nattariff i stedet for dagtariff"},
+            "lys": {"kwh": round(lys_kwh, 2), "kr": round(lys_kwh * pris, 1), "tekst": "Glemte lys slått av, nattdemping"},
         }
         total_kr = sum(p["kr"] for p in poster.values())
         total_kwh = sum(p["kwh"] for p in poster.values())
