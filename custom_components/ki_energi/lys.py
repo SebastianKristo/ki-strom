@@ -137,7 +137,7 @@ class KiLys:
                 st.update(status="venter", tekst=f"På i {pa_min:.0f} min — slår av etter {grense:.0f} (ingen sensor i rommet)")
                 return
             grunn = f"stått på i {pa_min:.0f} min uten sensor i rommet"
-        await h.kall("light", "turn_off", {"entity_id": r["light"]})
+        await h.kall(r["light"].split(".")[0], "turn_off", {"entity_id": r["light"]})
         # anslag: ville stått på til vinduet stengte, maks 2 t
         til = _min(r.get("til"), 22 * 60)
         rest_min = min(120, max(0, (til - (naa.hour * 60 + naa.minute)) % 1440))
@@ -148,6 +148,9 @@ class KiLys:
 
     async def _demp(self, r: dict, st: dict, lys, pa: bool, naa: datetime, effekt_w: float) -> None:
         h = self.hub
+        if not r["light"].startswith("light."):
+            st.update(status="ikke_dimbar", tekst="Bryter kan ikke dempes — velg et lys eller bruk «glemt lys»")
+            return
         natt = int(r.get("natt_prosent", 25) or 25)
         dag = int(r.get("dag_prosent", 80) or 80)
         i_natt = self._vindu(r, naa)

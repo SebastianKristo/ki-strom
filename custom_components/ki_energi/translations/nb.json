@@ -278,7 +278,11 @@
       }
     },
     "error": {
-      "finnes": "Nøkkelen er tom eller finnes allerede."
+      "finnes": "Nøkkelen er tom eller finnes allerede.",
+      "ugyldig_tid": "Ugyldig klokkeslett — bruk formatet TT:MM, eller la feltet stå tomt.",
+      "navn_mangler": "Regelen må ha et navn.",
+      "lys_mangler": "Velg lyset eller bryteren regelen gjelder.",
+      "kan_ikke_dempes": "Nattdemping krever et lys som kan dimmes. Velg et light.-objekt, eller bytt til «glemt lys»."
     },
     "abort": {
       "ingen_omrader": "Ingen områder med termostater. Sett område på termostatene under Innstillinger → Enheter."

@@ -278,7 +278,11 @@
       }
     },
     "error": {
-      "finnes": "Nøkkelen er tom eller finnes allerede."
+      "finnes": "Nøkkelen er tom eller finnes allerede.",
+      "ugyldig_tid": "Invalid time — use HH:MM, or leave the field empty.",
+      "navn_mangler": "The rule needs a name.",
+      "lys_mangler": "Pick the light or switch this rule applies to.",
+      "kan_ikke_dempes": "Dimming requires a dimmable light. Pick a light. entity, or switch to «forgotten light»."
     },
     "abort": {
       "ingen_omrader": "Ingen områder med termostater. Sett område på termostatene under Innstillinger → Enheter."

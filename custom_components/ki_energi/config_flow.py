@@ -40,6 +40,35 @@ def _tekst():
     return selector.TextSelector(selector.TextSelectorConfig())
 
 
+def _hhmm(verdi) -> str:
+    """Normaliser klokkeslett. '' → '' (bruk standard). Ugyldig → ValueError."""
+    if verdi in (None, ""):
+        return ""
+    tekst = str(verdi).strip()
+    if not tekst:
+        return ""
+    biter = tekst.split(":")
+    t = int(biter[0])
+    m = int(biter[1]) if len(biter) > 1 and biter[1] != "" else 0
+    if not (0 <= t < 24 and 0 <= m < 60):
+        raise ValueError(tekst)
+    return f"{t:02d}:{m:02d}"
+
+
+def _en(verdi) -> str:
+    """Entitetsvelger → enkel entity_id. Tåler liste og tom verdi."""
+    if isinstance(verdi, list):
+        return verdi[0] if verdi else ""
+    return verdi or ""
+
+
+LYS_FELT = ("navn", "type", "light", "presence", "fravaer_min", "maks_pa_min",
+            "fra", "til", "natt_prosent", "dag_prosent", "effekt_w")
+
+LYS_STANDARD = {"type": "glemt", "fravaer_min": 5, "maks_pa_min": 30, "fra": "", "til": "",
+                "natt_prosent": 25, "dag_prosent": 80, "effekt_w": 10}
+
+
 def _notify(hass=None):
     """Flervalg av notify-tjenester (mobile_app_* først). Egne verdier tillatt."""
     navn: list[str] = []
@@ -304,6 +333,7 @@ class KiEnergiOptionsFlow(config_entries.OptionsFlow):
     def __init__(self, entry: config_entries.ConfigEntry) -> None:
         self._entry = entry
         self._sone_key: str | None = None
+        self._lys_key: str | None = None
 
     # -- hjelpere --------------------------------------------------------
     def _gjeldende(self) -> dict:
@@ -471,49 +501,93 @@ class KiEnergiOptionsFlow(config_entries.OptionsFlow):
         return self.async_show_form(step_id="lys", data_schema=vol.Schema({
             vol.Required("regel"): selector.SelectSelector(selector.SelectSelectorConfig(options=valg, mode="list"))}))
 
-    def _lysskjema(self, r: dict | None = None) -> vol.Schema:
-        r = r or {}
-        return vol.Schema({
-            vol.Required("navn", default=r.get("navn", "")): _tekst(),
-            vol.Required("type", default=r.get("type", "glemt")): selector.SelectSelector(selector.SelectSelectorConfig(
+    def _lysskjema(self, r: dict | None = None, med_slett: bool = False) -> vol.Schema:
+        """Skjema for én lysregel.
+
+        Entitetsfeltene står uten `default`: en EntitySelector med default=""
+        blir avvist av cv.entity_id_or_uuid før steget kjører ("Entity is neither
+        a valid entity ID nor a valid UUID"). Lagrede verdier legges inn som
+        suggested_value i stedet, slik resten av flyten gjør.
+        """
+        felt: dict = {
+            vol.Required("navn"): _tekst(),
+            vol.Required("type"): selector.SelectSelector(selector.SelectSelectorConfig(
                 options=[selector.SelectOptionDict(value="glemt", label="Glemt lys — slå av når ingen bruker rommet"),
                          selector.SelectOptionDict(value="demp", label="Nattdemping — lavere lysstyrke om natten")], mode="dropdown")),
-            vol.Required("light", default=r.get("light", "")): _ent(["light", "switch"]),
-            vol.Optional("presence", default=r.get("presence", "")): _ent("binary_sensor"),
-            vol.Optional("fravaer_min", default=r.get("fravaer_min", 5)): _num(1, 120, 1, "min"),
-            vol.Optional("maks_pa_min", default=r.get("maks_pa_min", 30)): _num(1, 600, 1, "min"),
-            vol.Optional("fra", default=r.get("fra", "")): _tekst(),
-            vol.Optional("til", default=r.get("til", "")): _tekst(),
-            vol.Optional("natt_prosent", default=r.get("natt_prosent", 25)): _num(1, 100, 1, "%"),
-            vol.Optional("dag_prosent", default=r.get("dag_prosent", 80)): _num(1, 100, 1, "%"),
-            vol.Optional("effekt_w", default=r.get("effekt_w", 10)): _num(1, 500, 1, "W"),
-            vol.Optional("slett", default=False): selector.BooleanSelector(),
-        })
+            vol.Required("light"): _ent(["light", "switch"]),
+            vol.Optional("presence"): _ent(["binary_sensor", "input_boolean"]),
+            vol.Optional("fravaer_min"): _num(1, 120, 1, "min"),
+            vol.Optional("maks_pa_min"): _num(1, 600, 1, "min"),
+            vol.Optional("fra"): _tekst(),
+            vol.Optional("til"): _tekst(),
+            vol.Optional("natt_prosent"): _num(1, 100, 1, "%"),
+            vol.Optional("dag_prosent"): _num(1, 100, 1, "%"),
+            vol.Optional("effekt_w"): _num(1, 500, 1, "W"),
+        }
+        if med_slett:
+            felt[vol.Optional("slett", default=False)] = selector.BooleanSelector()
+        forslag = {**LYS_STANDARD, **{k: v for k, v in (r or {}).items() if v not in (None, "")}}
+        forslag = {k: v for k, v in forslag.items() if k in LYS_FELT and v not in (None, "")}
+        return self.add_suggested_values_to_schema(vol.Schema(felt), forslag)
+
+    def _les_lysregel(self, user_input: dict, r: dict | None = None) -> tuple[dict, dict]:
+        """Skjemadata → regel. Returnerer (regel, feil-per-felt)."""
+        ny = dict(r or {})
+        feil: dict[str, str] = {}
+        ny["navn"] = (user_input.get("navn") or "").strip()
+        ny["type"] = user_input.get("type", "glemt")
+        # Tomt felt sendes som manglende nøkkel, ikke "" — derfor .get uten fallback
+        # til gammel verdi: det er slik man får lov til å fjerne en sensor igjen.
+        ny["light"] = _en(user_input.get("light"))
+        ny["presence"] = _en(user_input.get("presence"))
+        for k in ("fravaer_min", "maks_pa_min", "natt_prosent", "dag_prosent", "effekt_w"):
+            v = user_input.get(k, LYS_STANDARD[k])
+            ny[k] = int(float(v)) if v not in (None, "") else LYS_STANDARD[k]
+        for k in ("fra", "til"):
+            try:
+                ny[k] = _hhmm(user_input.get(k))
+            except (ValueError, IndexError):
+                feil[k] = "ugyldig_tid"
+                ny[k] = r.get(k, "") if r else ""
+        if not ny["navn"]:
+            feil["navn"] = "navn_mangler"
+        if not ny["light"]:
+            feil["light"] = "lys_mangler"
+        if ny["type"] == "demp" and ny["light"].split(".")[0] != "light":
+            feil["light"] = "kan_ikke_dempes"
+        return ny, feil
 
     async def async_step_ny_lysregel(self, user_input=None):
+        feil: dict[str, str] = {}
+        forslag: dict = {}
         if user_input is not None:
-            regler = self._lysregler()
-            key = oppdag.slug(user_input["navn"]) or "lys"
-            if any(r["key"] == key for r in regler):
-                key += f"_{len(regler) + 1}"
-            ny = {k: v for k, v in user_input.items() if k != "slett"}
-            ny["key"] = key
-            regler.append(ny)
-            return self._lagre({CONF_LYSREGLER: regler})
-        return self.async_show_form(step_id="ny_lysregel", data_schema=self._lysskjema())
+            ny, feil = self._les_lysregel(user_input)
+            if not feil:
+                regler = self._lysregler()
+                key = oppdag.slug(ny["navn"]) or "lys"
+                if any(r["key"] == key for r in regler):
+                    key += f"_{len(regler) + 1}"
+                ny["key"] = key
+                regler.append(ny)
+                return self._lagre({CONF_LYSREGLER: regler})
+            forslag = ny
+        return self.async_show_form(step_id="ny_lysregel", data_schema=self._lysskjema(forslag), errors=feil)
 
     async def async_step_lysregel(self, user_input=None):
         regler = self._lysregler()
         r = next((x for x in regler if x["key"] == self._lys_key), None)
         if r is None:
             return await self.async_step_lys()
+        feil: dict[str, str] = {}
         if user_input is not None:
             if user_input.get("slett"):
-                regler = [x for x in regler if x["key"] != r["key"]]
-            else:
-                r.update({k: v for k, v in user_input.items() if k != "slett"})
-            return self._lagre({CONF_LYSREGLER: regler})
-        return self.async_show_form(step_id="lysregel", data_schema=self._lysskjema(r),
+                return self._lagre({CONF_LYSREGLER: [x for x in regler if x["key"] != r["key"]]})
+            ny, feil = self._les_lysregel(user_input, r)
+            if not feil:
+                ny["key"] = r["key"]
+                return self._lagre({CONF_LYSREGLER: [ny if x["key"] == r["key"] else x for x in regler]})
+            r = ny
+        return self.async_show_form(step_id="lysregel", data_schema=self._lysskjema(r, med_slett=True), errors=feil,
                                     description_placeholders={"navn": r.get("navn") or r["key"]})
 
     async def async_step_soner(self, user_input=None):
