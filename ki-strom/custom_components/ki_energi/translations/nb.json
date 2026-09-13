@@ -1,0 +1,291 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Velg hus",
+        "description": "Velg et ferdig oppsett. Alle entiteter og verdier kan endres i stegene som følger og senere under Konfigurer.",
+        "data": {
+          "preset": "Oppsett"
+        }
+      },
+      "utstyr": {
+        "title": "Utstyr og funksjoner",
+        "description": "Alt er valgfritt. Det du ikke velger her, vises heller ikke i kortet: ingen bereder-bryter = ingen prisstyring, ingen gardin = ingen gardinblokk, ingen håndklevarmer = ingen underfane, elbil av = ingen elbil-innstillinger.",
+        "data": {
+          "vvb_bryter": "Varmtvannsbereder – bryter/relé",
+          "vvb_effekt": "Varmtvannsbereder – effektsensor (W)",
+          "hanklevarmer": "Håndklevarmer – bryter",
+          "hanklevarmer_effekt": "Håndklevarmer – effektsensor (W)",
+          "gardiner": "Gardiner i stua (cover)",
+          "hvitevarer": "Effektsensorer for komfyr, oppvaskmaskin osv. (flere)",
+          "har_elbil": "Elbillader i huset (viser elbil-innstillingene; motoren holder av ladeeffekt)"
+        }
+      },
+      "personer": {
+        "title": "Personer",
+        "description": "Hvem bor her? Navn brukes i kortet og på hjelperne (f.eks. time.ki_<navn>_vekking). Barn: fast opp/legg og borte på dagtid. Ungdom: vekking hverdag/helg og feriebryter. Voksen: bare tilstedeværelse. La navn stå tomt for å hoppe over. Flere kan legges til senere.",
+        "data": {
+          "navn_1": "Person 1 – navn",
+          "type_1": "Person 1 – type",
+          "tilstede_1": "Person 1 – tilstedeværelse",
+          "navn_2": "Person 2 – navn",
+          "type_2": "Person 2 – type",
+          "tilstede_2": "Person 2 – tilstedeværelse",
+          "navn_3": "Person 3 – navn",
+          "type_3": "Person 3 – type",
+          "tilstede_3": "Person 3 – tilstedeværelse",
+          "navn_4": "Person 4 – navn",
+          "type_4": "Person 4 – type",
+          "tilstede_4": "Person 4 – tilstedeværelse",
+          "sover_1": "Person 1 – søvnsensor (valgfri, f.eks. KI Søvn)",
+          "sover_2": "Person 2 – søvnsensor (valgfri, f.eks. KI Søvn)",
+          "sover_3": "Person 3 – søvnsensor (valgfri, f.eks. KI Søvn)",
+          "sover_4": "Person 4 – søvnsensor (valgfri, f.eks. KI Søvn)"
+        }
+      },
+      "nettleie": {
+        "title": "Nettleie",
+        "description": "Alt er valgfritt. Motoren måler døgnmakser selv; toppsensorer fra Strømkalkulator gir bare startgrunnlag den første måneden. Nord Pool-sensor (med raw_today) trengs bare uten Norgespris.",
+        "data": {
+          "topp1": "Elvia toppforbruk 1 (kWh)",
+          "topp2": "Elvia toppforbruk 2 (kWh)",
+          "topp3": "Elvia toppforbruk 3 (kWh)",
+          "energiledd_dag": "Nettleie energiledd dag (kr/kWh)",
+          "energiledd_natt": "Nettleie energiledd natt/helg (kr/kWh)",
+          "strompris": "Strømpris per kWh (Norgespris eller spot)",
+          "kapasitetstrinn": "Kapasitetstrinn (vises i kortet)",
+          "norgespris_aktiv": "Norgespris aktiv nå (binary_sensor)",
+          "nordpool": "Nord Pool-sensor med raw_today/raw_tomorrow (kun for spotprisstyring av bereder)"
+        }
+      },
+      "hus": {
+        "title": "Hus",
+        "description": "Husets data brukes til solkompensasjon og standardverdier for treghet. Fritidsbolig: frostsikring når ingen er der, oppvarming før ankomst, spørsmål torsdag/fredag om helgen.",
+        "data": {
+          "areal_m2": "Boligareal (m²)",
+          "byggear": "Byggeår",
+          "glass_m2": "Glassflate i stua (m²)",
+          "stue_areal_m2": "Stuens areal (m²)",
+          "varsel_mottakere": "Varselmottakere (velg én eller flere enheter)",
+          "hustype": "Hustype"
+        }
+      },
+      "maling": {
+        "title": "Måling",
+        "description": "Målesensorene alt annet bygger på. Forslagene under er gjenkjent automatisk: {funnet}. Effektmåleren skal være hovedmålerens øyeblikkseffekt i W. Energiregisteret skal være akkumulert importert energi i kWh (state_class total_increasing) — ikke dagsforbruk.",
+        "data": {
+          "total_effekt": "Totaleffekt fra strømmåleren (W)",
+          "importert_energi": "Importert energi fra strømmåleren (kWh, akkumulert)",
+          "ute_temp": "Utetemperatur",
+          "vaer": "Værentitet (brukes til skydekke/solkompensasjon)"
+        }
+      },
+      "soner_auto": {
+        "title": "Soner",
+        "description": "{antall} område(r) med termostat funnet. En sone er et rom: alle termostater i området styres likt, effektsensorer i området summeres, vindussensorer kobles på. Type og profil gjettes fra navnet og kan endres etterpå under Konfigurer → Soner.",
+        "data": {
+          "kilde": "Hvor skal sonene komme fra?",
+          "soner": "Områder som skal bli soner"
+        }
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "KI Energi er allerede satt opp."
+    },
+    "error": {
+      "finnes_ikke": "Entiteten finnes ikke.",
+      "ikke_effekt": "Dette er ikke en effektsensor i W/kW. Velg hovedmålerens øyeblikkseffekt.",
+      "ikke_register": "Dette er ikke et akkumulert energiregister (kWh, total_increasing). Dagsforbruk-sensorer kan ikke brukes."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "KI Energi",
+        "menu_options": {
+          "maling": "Måling",
+          "utstyr": "Utstyr",
+          "personer": "Personer",
+          "nettleie": "Nettleie og pris",
+          "hus": "Hus og varsler",
+          "soner": "Soner",
+          "soner_auto": "Lag soner fra områdene mine",
+          "lys": "Lys — glemte lys og nattdemping"
+        },
+        "description": "{status}"
+      },
+      "maling": {
+        "title": "Måling",
+        "description": "",
+        "data": {
+          "total_effekt": "Totaleffekt fra strømmåleren (W)",
+          "importert_energi": "Importert energi fra strømmåleren (kWh, akkumulert)",
+          "ute_temp": "Utetemperatur",
+          "vaer": "Værentitet (brukes til skydekke/solkompensasjon)"
+        }
+      },
+      "utstyr": {
+        "title": "Utstyr og funksjoner",
+        "description": "Alt er valgfritt. Det du ikke velger her, vises heller ikke i kortet: ingen bereder-bryter = ingen prisstyring, ingen gardin = ingen gardinblokk, ingen håndklevarmer = ingen underfane, elbil av = ingen elbil-innstillinger.",
+        "data": {
+          "vvb_bryter": "Varmtvannsbereder – bryter/relé",
+          "vvb_effekt": "Varmtvannsbereder – effektsensor (W)",
+          "hanklevarmer": "Håndklevarmer – bryter",
+          "hanklevarmer_effekt": "Håndklevarmer – effektsensor (W)",
+          "gardiner": "Gardiner i stua (cover)",
+          "hvitevarer": "Effektsensorer for komfyr, oppvaskmaskin osv. (flere)",
+          "har_elbil": "Elbillader i huset (viser elbil-innstillingene; motoren holder av ladeeffekt)"
+        }
+      },
+      "personer": {
+        "title": "Personer",
+        "description": "Velg en person å endre, eller legg til en ny.",
+        "data": {
+          "person": "Person"
+        }
+      },
+      "nettleie": {
+        "title": "Nettleie",
+        "description": "Elvia-sensorene og strømpris. Toppforbruk 1–3 gir den dynamiske timegrensen.",
+        "data": {
+          "topp1": "Elvia toppforbruk 1 (kWh)",
+          "topp2": "Elvia toppforbruk 2 (kWh)",
+          "topp3": "Elvia toppforbruk 3 (kWh)",
+          "energiledd_dag": "Nettleie energiledd dag (kr/kWh)",
+          "energiledd_natt": "Nettleie energiledd natt/helg (kr/kWh)",
+          "strompris": "Strømpris per kWh (Norgespris eller spot)",
+          "kapasitetstrinn": "Kapasitetstrinn (vises i kortet)",
+          "norgespris_aktiv": "Norgespris aktiv nå (binary_sensor)",
+          "nordpool": "Nord Pool-sensor med raw_today/raw_tomorrow (kun for spotprisstyring av bereder)"
+        }
+      },
+      "hus": {
+        "title": "Hus",
+        "description": "Husets data brukes til solkompensasjon og standardverdier for treghet. Fritidsbolig: frostsikring når ingen er der, oppvarming før ankomst, spørsmål torsdag/fredag om helgen.",
+        "data": {
+          "areal_m2": "Boligareal (m²)",
+          "byggear": "Byggeår",
+          "glass_m2": "Glassflate i stua (m²)",
+          "stue_areal_m2": "Stuens areal (m²)",
+          "varsel_mottakere": "Varselmottakere (velg én eller flere enheter)",
+          "hustype": "Hustype"
+        }
+      },
+      "soner": {
+        "title": "Soner",
+        "description": "Velg en sone å redigere, eller legg til en ny.",
+        "data": {
+          "sone": "Sone"
+        }
+      },
+      "ny_sone": {
+        "title": "Ny sone",
+        "description": "Nøkkelen brukes i entitets-ID-er (små bokstaver, understrek).",
+        "data": {
+          "key": "Nøkkel",
+          "navn": "Navn"
+        }
+      },
+      "sone": {
+        "title": "Sone: {navn}",
+        "description": "Nøkkel: {key}. Endringer starter integrasjonen på nytt.",
+        "data": {
+          "navn": "Navn",
+          "rom": "Rom",
+          "climate": "Termostater i rommet (én eller flere)",
+          "effekt": "Effektsensorer (én per ovn) (W)",
+          "duty": "Control signal / duty cycle (%)",
+          "temp": "Romtemperatursensor (valgfri, ellers climate)",
+          "vindu": "Vindu-/dørsensorer (valgfri) — åpent = varmen settes ned",
+          "type": "Type",
+          "profil": "Styringsprofil",
+          "prio": "Prioritet (1 = viktigst)",
+          "nominell": "Nominell effekt (kW)",
+          "sol": "Påvirkes av solinnstråling",
+          "aktiv": "Aktiv",
+          "slett": "Slett denne sonen"
+        }
+      },
+      "soner_auto": {
+        "title": "Soner fra områder",
+        "description": "{antall} område(r) med termostat. Valgte områder blir soner; soner som alt finnes beholder type/prioritet/profil med mindre du krysser av for overskriv.",
+        "data": {
+          "soner": "Områder",
+          "overskriv": "Overskriv innstillinger i soner som alt finnes"
+        }
+      },
+      "ny_person": {
+        "title": "Ny person",
+        "data": {
+          "navn": "Navn",
+          "type": "Type",
+          "tilstede": "Tilstedeværelse (person, device_tracker eller bryter)",
+          "sover": "Søvnsensor (binary_sensor som er på når personen sover — f.eks. KI Søvn). Finnes binary_sensor.<nøkkel>_sover, brukes den automatisk."
+        }
+      },
+      "person": {
+        "title": "{navn}",
+        "description": "Nøkkel: {key}. Hjelperne heter time.ki_{key}_… og lages/fjernes ved omstart når typen endres.",
+        "data": {
+          "navn": "Navn",
+          "type": "Type",
+          "tilstede": "Tilstedeværelse",
+          "slett": "Slett personen",
+          "sover": "Søvnsensor (binary_sensor som er på når personen sover — f.eks. KI Søvn). Finnes binary_sensor.<nøkkel>_sover, brukes den automatisk."
+        }
+      },
+      "lys": {
+        "title": "Lys",
+        "description": "Regler som slår av glemte lys eller demper lys om natten. Hver regel får en egen bryter (switch.ki_lys_<navn>) i kortet under Oppsett → Lys.",
+        "data": {
+          "regel": "Regel"
+        }
+      },
+      "ny_lysregel": {
+        "title": "Ny lysregel",
+        "description": "Lys som noen faktisk bruker, slås ikke av: med nærværssensor kreves fravær; uten sensor kreves lang sammenhengende på-tid, og bare innenfor tidsvinduet.",
+        "data": {
+          "navn": "Navn (f.eks. «Vaskerom» eller «Inngang bordlampe»)",
+          "type": "Type",
+          "light": "Lys (eller bryter)",
+          "presence": "Bevegelses-/nærværssensor (valgfri — uten den brukes maks på-tid)",
+          "fravaer_min": "Glemt: minutter uten bevegelse før lyset slås av",
+          "maks_pa_min": "Glemt uten sensor: minutter sammenhengende på før det slås av",
+          "fra": "Tidsvindu fra (HH:MM). Glemt: standard 08:00. Demping: standard husets natt",
+          "til": "Tidsvindu til (HH:MM). Glemt: standard 22:00",
+          "natt_prosent": "Demping: lysstyrke om natten (%)",
+          "dag_prosent": "Demping: lysstyrke om dagen (%)",
+          "effekt_w": "Anslått effekt (W) — til besparelsen",
+          "slett": "Slett regelen"
+        }
+      },
+      "lysregel": {
+        "title": "{navn}",
+        "data": {
+          "navn": "Navn (f.eks. «Vaskerom» eller «Inngang bordlampe»)",
+          "type": "Type",
+          "light": "Lys (eller bryter)",
+          "presence": "Bevegelses-/nærværssensor (valgfri — uten den brukes maks på-tid)",
+          "fravaer_min": "Glemt: minutter uten bevegelse før lyset slås av",
+          "maks_pa_min": "Glemt uten sensor: minutter sammenhengende på før det slås av",
+          "fra": "Tidsvindu fra (HH:MM). Glemt: standard 08:00. Demping: standard husets natt",
+          "til": "Tidsvindu til (HH:MM). Glemt: standard 22:00",
+          "natt_prosent": "Demping: lysstyrke om natten (%)",
+          "dag_prosent": "Demping: lysstyrke om dagen (%)",
+          "effekt_w": "Anslått effekt (W) — til besparelsen",
+          "slett": "Slett regelen"
+        }
+      }
+    },
+    "error": {
+      "finnes": "Nøkkelen er tom eller finnes allerede.",
+      "ugyldig_tid": "Ugyldig klokkeslett — bruk formatet TT:MM, eller la feltet stå tomt.",
+      "navn_mangler": "Regelen må ha et navn.",
+      "lys_mangler": "Velg lyset eller bryteren regelen gjelder.",
+      "kan_ikke_dempes": "Nattdemping krever et lys som kan dimmes. Velg et light.-objekt, eller bytt til «glemt lys»."
+    },
+    "abort": {
+      "ingen_omrader": "Ingen områder med termostater. Sett område på termostatene under Innstillinger → Enheter."
+    }
+  }
+}
