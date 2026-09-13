@@ -42,6 +42,7 @@ class KiVvb:
         self._vi_slo_pa: datetime | None = None
         self._vi_slo_av = False
         self._ekstern_av_til: datetime | None = None
+        self._ekstern_teller = 0
         self._ekstern_varslet: datetime | None = None
         self.billige_timer: list[int] = []
         self.billige_sist: datetime | None = None
@@ -227,21 +228,32 @@ class KiVvb:
 
         # Bryteren slått på → nullstill effektflagg
         bryter = h.st(self.bryter())
-        # Slått av av noe annet like etter at vi slo den på? Da slåss vi med en annen automasjon
-        # (gammel pakke, pyscript, en fysisk bryter). Ikke slå på igjen hvert minutt — vent 30 min og si fra.
-        if (bryter != "on" and self._siste_bryter == "on" and not self._vi_slo_av
-                and self._vi_slo_pa and (naa - self._vi_slo_pa) < timedelta(minutes=5)):
+        # Slått av av noe annet etter at vi slo den på? Da slåss vi med en annen styring
+        # (gammel pakke, pyscript, en fysisk bryter, en annen hub). Ikke slå på igjen hvert
+        # minutt — vent 30 min og si fra.
+        # Merk: vi kan IKKE bruke `_siste_bryter == "on"` her. Slår den andre styringen av
+        # mellom to ticks, står bryteren allerede på "off" når vi leser den, og _siste_bryter
+        # ble satt til "off" forrige tick — da ser vi aldri overgangen. Vi går i stedet ut fra
+        # vårt eget påslag: slo vi på for under fem minutter siden, og er den av nå uten at vi
+        # slo den av, er det noen andre.
+        if (bryter != "on" and not self._vi_slo_av and self._vi_slo_pa
+                and (naa - self._vi_slo_pa) < timedelta(minutes=5)):
+            sto_sek = int((naa - self._vi_slo_pa).total_seconds())
             self._ekstern_av_til = naa + timedelta(minutes=30)
-            await h.logbook("KI VVB", "Berederen ble slått av av noe annet like etter at KI slo den på. "
-                                      "Venter 30 min før nytt forsøk. Sjekk gamle automasjoner/pyscript for berederen.")
+            self._vi_slo_pa = None
+            self._ekstern_teller += 1
+            await h.logbook("KI VVB", f"Berederen ble slått av av noe annet {sto_sek} sekunder etter at KI slo den på "
+                                      f"(gang {self._ekstern_teller} siden omstart). Venter 30 min før nytt forsøk. "
+                                      "Sjekk gamle automasjoner, pyscript, en annen hub eller et ekstra KI Energi-oppsett.")
             if h.engine is not None:
-                h.engine.logg_hendelse("Bereder: noe annet slår den av rett etter påslag — venter 30 min. Sjekk gamle automasjoner.")
+                h.engine.logg_hendelse(f"Bereder: noe annet slo den av etter {sto_sek} sekunder — venter 30 min. "
+                                       "Sjekk gamle automasjoner.")
             if self._ekstern_varslet is None or (naa - self._ekstern_varslet) > timedelta(hours=12):
                 self._ekstern_varslet = naa
                 await h.varsle("Berederen styres av noe annet",
-                               "Noe slår av berederen sekunder etter at KI Energi slår den på. Se etter en gammel automasjon, "
-                               "pyscript eller en annen integrasjon som styrer samme bryter. KI venter 30 min mellom forsøk.",
-                               kategori="vvb")
+                               f"Noe slo av berederen {sto_sek} sekunder etter at KI Energi slo den på. Se etter en gammel "
+                               "automasjon, pyscript, en annen hub eller et ekstra KI Energi-oppsett på samme bryter. "
+                               "KI venter 30 min mellom forsøk.", kategori="vvb")
         self._vi_slo_av = False
         if bryter == "on" and self._siste_bryter != "on":
             h.sett("ki_vvb_har_trukket_effekt", False)
