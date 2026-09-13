@@ -48,6 +48,15 @@ class KiEngine:
         self.nettleie_vurdering: dict | None = None
         self._senket_forrige: dict[str, float] = {}
         self._sist_frigitt: datetime | None = None
+        # Effektintegral: fyller hullet mellom oppdateringene fra energiregisteret.
+        # Vi summerer effekt × tid ved hver endring i stedet for å gange siste avlesning
+        # med hele hullet — ellers blir et sekunds ovnstopp til et kvarters forbruk.
+        self._int_kwh = 0.0
+        self._int_kw: float | None = None
+        self._int_ts: float | None = None
+        self._int_ref: float | None = None   # tidsstempelet integralet gjelder fra
+        self._time_id: str | None = None
+        self._time_maks = 0.0
 
     # ------------------------------------------------------------------
     #  Små hjelpere
@@ -110,6 +119,29 @@ class KiEngine:
         h.sett_sensor("ki_styrt_effekt", styrt)
         h.sett_sensor("ki_uregulert_effekt", max(total - styrt, 0.0))
 
+    def integrer_effekt(self) -> None:
+        """Legger effekt × tid siden forrige avlesning til integralet.
+
+        Kalles ved hver endring på effektsensoren og ved hvert tick. Vi bruker effekten
+        som gjaldt i perioden som nettopp gikk (venstre Riemann), ikke den vi leser nå —
+        den forteller bare hva som gjelder fra og med nå.
+        """
+        h = self.hub
+        naa = dt_util.utcnow().timestamp()
+        kw = (h.f(h.cfg(CONF_TOTAL_EFFEKT), None) or 0.0) / 1000.0
+        if self._int_ts is not None and self._int_kw is not None:
+            delta = naa - self._int_ts
+            if 0 < delta < 3600:
+                self._int_kwh += self._int_kw * delta / 3600.0
+        self._int_kw = kw
+        self._int_ts = naa
+
+    def _nullstill_integral(self, fra_ts: float) -> None:
+        """Registeret har levert en ny prøve — integralet starter på nytt derfra."""
+        self._int_kwh = 0.0
+        self._int_ts = fra_ts
+        self._int_ref = fra_ts
+
     def forbrukt_denne_timen(self) -> tuple[float | None, str]:
         """kWh brukt hittil i klokketimen, fra timemåleren (tidsstemplet nullpunkt ved hele timen)."""
         h = self.hub
@@ -118,16 +150,33 @@ class KiEngine:
         kwh, kv = h.nettleie.forelopig_time()
         if kwh is None:
             return None, ""
-        # Registre som oppdaterer seg sjelden: legg til øyeblikkseffekt × tid siden siste prøve,
-        # ellers står «brukt» på 0 til neste oppdatering.
+        # Registre som oppdaterer seg sjelden: legg til det integrerte forbruket siden
+        # siste prøve, ellers står «brukt» på 0 til neste oppdatering.
         tillegg = ""
         siste = h.nettleie.siste_prove_ts()
         if siste is not None:
+            if self._int_ref != siste:
+                self._nullstill_integral(siste)
+            self.integrer_effekt()
             alder_s = dt_util.utcnow().timestamp() - siste
-            if alder_s > 120:
-                total_kw = (h.f(h.cfg(CONF_TOTAL_EFFEKT), 0.0) or 0.0) / 1000.0
-                kwh += total_kw * alder_s / 3600.0
-                tillegg = f" + anslag for {int(alder_s // 60)} min siden registeret sist oppdaterte seg"
+            if alder_s > 120 and self._int_kwh > 0:
+                kwh += self._int_kwh
+                tillegg = (f" + {self._int_kwh:.2f} kWh målt med effektsensoren de "
+                           f"{int(alder_s // 60)} minuttene siden registeret sist oppdaterte seg")
+
+        # Innenfor samme klokketime kan tallet bare vokse. Når registeret tar igjen
+        # anslaget, skal differansen bli stående til neste time — ikke vises som at
+        # forbruket gikk ned.
+        n = dt_util.now()
+        time_id = n.strftime("%Y-%m-%d %H")
+        if time_id != self._time_id:
+            self._time_id = time_id
+            self._time_maks = 0.0
+        if kwh < self._time_maks:
+            kwh = self._time_maks
+        else:
+            self._time_maks = kwh
+
         if kv == "forelopig_estimert":
             return kwh, "timesmåling mot energiregisteret — nullpunktet ved timeskiftet er interpolert (estimert)" + tillegg
         if kv == "forelopig_delvis":

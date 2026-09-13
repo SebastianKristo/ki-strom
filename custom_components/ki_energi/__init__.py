@@ -128,6 +128,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     @callback
     def _effekt_endret(_event):
+        hub.engine.integrer_effekt()
         hub.engine.oppdater_effektsensorer()
 
     # Første tick litt etter oppstart, så alle hjelpere har gjenopprettet verdiene sine.
