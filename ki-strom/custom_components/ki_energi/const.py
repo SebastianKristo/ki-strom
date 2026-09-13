@@ -43,6 +43,21 @@ CONF_BYGGEAR = "byggear"
 CONF_GLASS_M2 = "glass_m2"
 CONF_STUE_AREAL = "stue_areal_m2"
 CONF_SONER = "soner"
+
+# Varmekildetyper. Typen styrer hvordan motoren behandler sonen: tregt varmeanlegg må
+# starte tidlig og tåler mer senking om gangen, varmepumpe senkes sist fordi den er
+# billigst per kWh. Derfor er én sone = én varmekilde; et rom med både oljefyr og
+# panelovn settes opp som to soner med samme `rom`.
+TYPE_PANEL = "panel"
+TYPE_GULV = "gulv"
+TYPE_VANNBAAREN = "vannbaaren"     # oljefyr, radiatorer, fjernvarme
+TYPE_VARMEPUMPE = "varmepumpe"
+TREGE_TYPER = (TYPE_GULV, TYPE_VANNBAAREN)
+
+
+def er_tregt(type_: str | None) -> bool:
+    """Treg varme må startes tidlig og kan senkes dypere om gangen."""
+    return str(type_ or "") in TREGE_TYPER
 CONF_HUSTYPE = "hustype"      # bolig | fritidsbolig
 CONF_HAR_ELBIL = "har_elbil"  # vis/bruk elbil-innstillingene
 CONF_PERSONER = "personer"

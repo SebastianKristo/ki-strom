@@ -613,13 +613,19 @@ class KiEnergiOptionsFlow(config_entries.OptionsFlow):
             else:
                 self._sone_key = key
                 soner = self._soner()
-                soner[key] = dict(navn=user_input["navn"], rom=user_input["navn"], climate="", effekt="", duty="", temp="",
+                # Kom vi hit fra «legg til en varmekilde til», arver den nye sonen rommet
+                rom = getattr(self, "_nytt_rom", None) or user_input["navn"]
+                self._nytt_rom = None
+                soner[key] = dict(navn=user_input["navn"], rom=rom, climate="", effekt="", duty="", temp="",
                                   type="panel", prio=3, nominell=1.0, sol=False, profil="fellesrom", aktiv=True,
                                   temp_dag=f"ki_temp_{key}_dag", temp_natt=f"ki_temp_{key}_natt", temp_borte="")
                 self._ny_soner = soner
                 return await self.async_step_sone()
-        return self.async_show_form(step_id="ny_sone", data_schema=vol.Schema({
-            vol.Required("key"): _tekst(), vol.Required("navn"): _tekst()}), errors=errors)
+        rom = getattr(self, "_nytt_rom", None)
+        return self.async_show_form(
+            step_id="ny_sone",
+            data_schema=vol.Schema({vol.Required("key"): _tekst(), vol.Required("navn"): _tekst()}),
+            description_placeholders={"rom": rom or ""}, errors=errors)
 
     async def async_step_sone(self, user_input=None):
         soner = getattr(self, "_ny_soner", None) or self._soner()
@@ -629,6 +635,11 @@ class KiEnergiOptionsFlow(config_entries.OptionsFlow):
             if user_input.get("slett"):
                 soner.pop(key, None)
                 return self._lagre({}, soner)
+            if user_input.get("ny_i_rommet"):
+                # Et rom med både oljefyr og panelovn settes opp som to soner med samme
+                # `rom`. Her hopper vi rett til en ny sone med rommet fylt inn.
+                self._nytt_rom = user_input.get("rom") or user_input["navn"]
+                return await self.async_step_ny_sone()
             s.update({
                 "navn": user_input["navn"], "rom": user_input.get("rom") or user_input["navn"],
                 "climate": list(user_input.get("climate") or []), "effekt": list(user_input.get("effekt") or []),
@@ -651,6 +662,7 @@ class KiEnergiOptionsFlow(config_entries.OptionsFlow):
             vol.Required("type", default=s.get("type", "panel")): selector.SelectSelector(selector.SelectSelectorConfig(
                 options=[selector.SelectOptionDict(value="panel", label="Panelovn (rask)"),
                          selector.SelectOptionDict(value="gulv", label="Gulvvarme (treg)"),
+                         selector.SelectOptionDict(value="vannbaaren", label="Vannbåren — oljefyr, radiatorer (treg)"),
                          selector.SelectOptionDict(value="varmepumpe", label="Varmepumpe (billigst — senkes sist)")], mode="dropdown")),
             vol.Required("profil", default=PROFIL_LEGACY.get(s.get("profil", "fellesrom"), s.get("profil", "fellesrom"))): selector.SelectSelector(selector.SelectSelectorConfig(
                 options=profilvalg(self._personer()).config["options"], mode="dropdown")),
@@ -658,6 +670,7 @@ class KiEnergiOptionsFlow(config_entries.OptionsFlow):
             vol.Required("nominell", default=float(s.get("nominell", 1.0))): _num(0.1, 5, 0.1, "kW"),
             vol.Required("sol", default=bool(s.get("sol", False))): selector.BooleanSelector(),
             vol.Required("aktiv", default=bool(s.get("aktiv", True))): selector.BooleanSelector(),
+            vol.Optional("ny_i_rommet", default=False): selector.BooleanSelector(),
             vol.Optional("slett", default=False): selector.BooleanSelector(),
         })
         forslag = {k: s.get(k) for k in ("climate", "effekt", "duty", "temp", "vindu") if s.get(k)}

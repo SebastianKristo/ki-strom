@@ -180,7 +180,7 @@
       },
       "ny_sone": {
         "title": "Ny sone",
-        "description": "Nøkkelen brukes i entitets-ID-er (små bokstaver, understrek).",
+        "description": "A room can have several heat sources. Create one zone per source, sharing the same room.",
         "data": {
           "key": "Nøkkel",
           "navn": "Navn"
@@ -197,13 +197,14 @@
           "duty": "Control signal / duty cycle (%)",
           "temp": "Romtemperatursensor (valgfri, ellers climate)",
           "vindu": "Vindu-/dørsensorer (valgfri) — åpent = varmen settes ned",
-          "type": "Type",
+          "type": "Heat source (decides how the zone is lowered)",
           "profil": "Styringsprofil",
           "prio": "Prioritet (1 = viktigst)",
           "nominell": "Nominell effekt (kW)",
           "sol": "Påvirkes av solinnstråling",
           "aktiv": "Aktiv",
-          "slett": "Slett denne sonen"
+          "slett": "Slett denne sonen",
+          "ny_i_rommet": "Add another heat source in this room"
         }
       },
       "soner_auto": {

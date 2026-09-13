@@ -1,27 +1,30 @@
-# KI Energi 2.16.0
+# KI Energi 2.17.0
 
-## Ett temperaturpunkt per rom
+## Flere varmekilder i samme rom
 
-Et rom kan ha flere varmekilder: stua har panelovn og oljefyr, kjøkkenet panelovn og
-gulvvarme. Hver av dem er sin egen sone med sitt eget dagpunkt, så å endre temperaturen i
-et rom betydde å endre to tall — eller å holde en `input_number` ved siden av og koble den
-opp med automasjoner.
+Sone-skjemaet har bare én `type`, og det er med vilje: typen styrer hvordan motoren
+behandler sonen. Gulvvarme startes tidlig fordi den er treg, varmepumpe senkes sist fordi
+den er billigst per kWh. En sone kan derfor ikke være både panelovn og oljefyr.
 
-Ny entitet per rom: **`number.ki_rom_<rom>_temp`**.
+Riktig modell er **én sone per varmekilde, med samme `rom`** — slik kjøkkenet allerede er
+satt opp med panelovn og gulvvarme. To ting manglet for at det skulle være praktisk:
 
-Setter du den, skjer to ting: dagpunktet (`temp_dag`) settes på alle sonene i rommet, slik
-at motoren regner med den nye temperaturen, og `climate.set_temperature` sendes til alle
-klimaenhetene i rommet så det merkes med en gang.
+**Ny type: «Vannbåren — oljefyr, radiatorer».** En oljefyr er ikke en panelovn. Den nye
+typen behandles som treg, på linje med gulvvarme: den startes tidlig og tåler dypere
+senking om gangen. Før måtte du velge mellom å kalle den panelovn (starter for sent) eller
+gulvvarme (riktig oppførsel, feil navn).
 
-Rommet bestemmes av `rom:`-feltet på sonen. Sonene i kjøkkenet — panelovn og gulvvarme —
-får dermed ett felles punkt, mens de fortsatt styres hver for seg av motoren med sin egen
-prioritet og treghet. Soner som ikke er aktive, tas ikke med.
+**«Legg til en varmekilde til i dette rommet»** nederst i sone-skjemaet. Den tar deg rett
+til en ny sone med rommet fylt inn, så du slipper å huske å skrive det likt.
 
-Attributtene lister varmekildene i rommet med type og nominell effekt, så kortene kan vise
-«panelovn + oljefyr» uten å slå det opp selv.
+Stua di står nå som én sone med to klimaenheter og type «panelovn». Del den i to — «Stue
+panelovn» og «Stue oljefyr» — så får oljefyren riktig oppstartstid, og motoren kan senke
+dem uavhengig av hverandre etter hvor mye effekt hver av dem faktisk trekker.
 
-Rom med bare én varmekilde får entiteten også, slik at dashbordet kan bruke samme
-navnemønster uansett.
+Begge sonene deler `number.ki_rom_stue_temp` fra 2.16, så det er fortsatt ett tall å sette
+i dashbordet.
 
-Flere varmekilder per rom har alltid vært mulig — `climate:` på en sone er en liste — men
-det var ingen felles måte å styre dem på.
+## Motoren
+
+`er_tregt()` erstatter de tre stedene som sammenlignet direkte mot `"gulv"`, så nye trege
+typer ikke må legges inn tre steder. Oppførselen for eksisterende soner er uendret.
