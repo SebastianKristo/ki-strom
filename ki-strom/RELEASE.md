@@ -1,30 +1,34 @@
-# KI Energi 2.17.0
+# KI Energi 2.18.0
 
-## Flere varmekilder i samme rom
+## Legionella ble aldri bekreftet på en bereder uten relé
 
-Sone-skjemaet har bare én `type`, og det er med vilje: typen styrer hvordan motoren
-behandler sonen. Gulvvarme startes tidlig fordi den er treg, varmepumpe senkes sist fordi
-den er billigst per kWh. En sone kan derfor ikke være både panelovn og oljefyr.
+På hytta står berederen bare på — det finnes ingen bryter KI kan styre, bare en
+effektmåling. I den modusen krevde metningen likevel `bryter == "on"`:
 
-Riktig modell er **én sone per varmekilde, med samme `rom`** — slik kjøkkenet allerede er
-satt opp med panelovn og gulvvarme. To ting manglet for at det skulle være praktisk:
+```python
+mettet = (bryter == "on" and h.on("ki_vvb_har_trukket_effekt") and ...)
+```
 
-**Ny type: «Vannbåren — oljefyr, radiatorer».** En oljefyr er ikke en panelovn. Den nye
-typen behandles som treg, på linje med gulvvarme: den startes tidlig og tåler dypere
-senking om gangen. Før måtte du velge mellom å kalle den panelovn (starter for sent) eller
-gulvvarme (riktig oppførsel, feil navn).
+Uten relé leser `h.st(None)` en tom tilstand, aldri `"on"`. Betingelsen kunne dermed ikke
+bli sann. Berederen kunne gjøre full oppvarming hver dag i månedsvis uten at én metning
+ble registrert, dagteller bare vokste, og kortet meldte «Forfalt — tvinges på».
 
-**«Legg til en varmekilde til i dette rommet»** nederst i sone-skjemaet. Den tar deg rett
-til en ny sone med rommet fylt inn, så du slipper å huske å skrive det likt.
+Uten relé regnes berederen nå som permanent på, som den faktisk er: elementet har strøm
+hele tiden, og effektmålingen alene forteller om den varmer eller er mettet. Full
+oppvarming fulgt av lav effekt i åtte minutter bekrefter legionella, akkurat som med
+relé.
 
-Stua di står nå som én sone med to klimaenheter og type «panelovn». Del den i to — «Stue
-panelovn» og «Stue oljefyr» — så får oljefyren riktig oppstartstid, og motoren kan senke
-dem uavhengig av hverandre etter hvor mye effekt hver av dem faktisk trekker.
+**Ny syklus startes av effekten, ikke av bryteren.** Uten relé finnes ingen av/på-overgang
+som nullstiller «har trukket effekt». Flagget nullstilles derfor når elementet begynner å
+trekke strøm igjen etter en metning — det er starten på neste oppvarming.
 
-Begge sonene deler `number.ki_rom_stue_temp` fra 2.16, så det er fortsatt ett tall å sette
-i dashbordet.
+**Statusteksten lover ikke noe den ikke kan holde.** Ved forfall står det nå «Forfalt —
+overvåkes» i stedet for «Forfalt — tvungen kjøring». Uten en bryter kan ingenting tvinges
+på, og teksten skal si det.
 
-## Motoren
+«Ingen respons fra berederen» leser bryteren direkte og gir derfor ingen falsk alarm i
+denne modusen. Det er kontrollert med egen test.
 
-`er_tregt()` erstatter de tre stedene som sammenlignet direkte mot `"gulv"`, så nye trege
-typer ikke må legges inn tre steder. Oppførselen for eksisterende soner er uendret.
+Fem tester dekker dette: at modusen kjennes igjen, at metning bekreftes uten relé, at
+dagtelleren og legionella-status følger, at statusteksten er ærlig, og at
+ingen-respons-alarmen holder seg rolig.
