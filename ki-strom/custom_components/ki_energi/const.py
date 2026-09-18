@@ -469,6 +469,9 @@ SENSORS = [
     ("ki_vvb_dager_siden_siste_syklus", "KI VVB Dager Siden Siste Syklus", "mdi:calendar-clock", "d", None, None),
     ("ki_vvb_oppvarming_minutter", "KI VVB Oppvarming Minutter", "mdi:timer-outline", "min", None, None),
     ("ki_vvb_billige_timer", "KI VVB Billige Timer", "mdi:clock-check-outline", None, None, None),
+    # Tilstedeværelse i klartekst: hjemme, kort tur, eller borte siden helgen.
+    # `borte_siden` lå bare i minnet til modes.py, så kortet kunne ikke vise hvor lenge.
+    ("ki_tilstedevaerelse", "KI Tilstedeværelse", "mdi:home-account", None, None, None),
 ]
 
 # (nøkkel, navn, ikon, device_class)

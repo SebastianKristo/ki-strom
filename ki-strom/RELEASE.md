@@ -1,46 +1,31 @@
-# KI Energi 2.19.0
+# KI Energi 2.20.0
 
-## Fraværstemperaturen på hytta kunne ikke settes
+## Ny sensor: `sensor.ki_tilstedevaerelse`
 
-Hytteoppsettet setter frostsikringen til **8 °C** for panelovner og **10 °C** for
-gulvvarme. Men tallentitetene hadde minimum **10** og **12**: en verdi under minimum kan
-ikke settes, så hyttas egen standard ble avvist i det den skulle brukes.
+Integrasjonen skilte allerede mellom en tur på butikken og bortreist — den første skal
+ikke senke huset, den andre skal — men skillet fantes ikke noe sted utenfor koden.
+`borte_siden` lå bare i minnet til `modes.py`, så et kort kunne ikke vise hvor lenge
+noen hadde vært borte.
 
-Grensene går nå ned til 5 °C for alle tre. Lavere enn det er ikke frostsikring — det er å
-la røret fryse.
+Sensoren sier det i klartekst:
 
-En kontroll av alle 60 tallentitetene mot alle forhåndsvalgte verdier i oppsettene er lagt
-inn som test, så den samme uoverensstemmelsen ikke kan snike seg inn igjen.
+| Tilstand | Tekst |
+| --- | --- |
+| `hjemme` | Noen er hjemme |
+| `hjemkomst` | Noen er hjemme — varmer opp igjen |
+| `kort_tur` | Ute en tur, 40 min — bortemodus om 5 t 20 min |
+| `borte` | Alle er borte |
+| `borte_lenge` | Borte i 3 døgn — huset står i bortemodus |
+| `ukjent` | Vet ikke om noen er hjemme |
 
-## Innstillingene het «Helgemodus»
+Attributter: `tekst`, `borte_siden`, `minutter_borte`, `bortemodus`,
+`hjemkomst_aktiv`, `venter_svar`, `auto_etter_timer` og `hjemkomst_tid`.
 
-Det er grunnen til at de ikke var å finne. På en hytte er det **ukedagene** den står tom,
-og leter man etter en fraværstemperatur, ser man ikke etter «helg».
+Ni tester dekker overgangene, inkludert bortemodus uten kjent starttid og
+nedtellingen til automatisk bortemodus.
 
-De heter nå:
+## Ett kjent problem, fortsatt ikke løst
 
-* «KI Temp Borte Panelovner», «KI Temp Borte Gulvvarme», «KI Temp Borte Bad»
-* «KI Borte Auto-aktivering Ved Fravær», «KI Borte Auto Etter Timer Borte»
-
-Entitets-ID-ene er uendret — `ki_temp_helg` og de andre — så ingenting i dashbordene eller
-automasjonene dine brekker. Det er bare navnet som er rettet.
-
-## Om ankomst uten å svare på varselet
-
-Kommer noen til hytta mens bortemodus står på, **avsluttes den med én gang**. Ingen varsel
-må godtas: `modes.py` sjekker tilstedeværelse direkte, slår av bortemodus, og regner
-varmeprogrammet om på nytt i samme omgang.
-
-Dette er dekket av en test nå, siden det er en egenskap man ikke vil miste ved en
-refaktorering.
-
-Forutsetningen er at tilstedeværelse faktisk registreres. Hytta har posisjonsbrytere, og
-er ingen av dem på når du kommer, vet integrasjonen ikke at du er der — da står den på 8 °C
-til noe melder tilstedeværelse.
-
-## Ett kjent problem, ikke løst her
-
-`tests/test_smoke.py::test_lysregler` feiler: lyset på soverommet slås ikke av etter
-fravær, mens vaskerommet gjør det. Jeg har ikke rørt lysreglene i denne versjonen, og
-klarte ikke å tidfeste når det oppsto — arbeidskopien her har ingen historikk å
-sammenligne med. Det er verdt en egen runde.
+`tests/test_smoke.py::test_lysregler` feiler: soveromslyset slås ikke av etter fravær,
+mens vaskerommet gjør det. Jeg har ikke rørt lysreglene i denne eller forrige versjon.
+Det er verdt en egen runde.

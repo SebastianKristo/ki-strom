@@ -62,6 +62,7 @@ class KiModuser:
 
         borte = self.alle_borte()
         h.sett_sensor("ki_alle_borte", borte)
+        self._sett_tilstedevaerelse(borte)
 
         # --- fraværssporing ---
         if borte:
@@ -234,6 +235,64 @@ class KiModuser:
             h.engine.logg_hendelse(f"Hjemkomst startet: {grunn}. Mål kl. {planlagt:%H:%M}. "
                                    "Sonene forvarmes så sent som mulig innenfor budsjettet.")
             await h.engine.tick()
+
+    def _sett_tilstedevaerelse(self, borte: bool | None) -> None:
+        """Tilstedeværelse i klartekst, med hvor lenge og hvorfor.
+
+        Forskjellen mellom «ute en tur» og «borte siden helgen» er hele poenget: den
+        første skal ikke senke huset, den andre skal. Begge er «alle borte» for
+        integrasjonen, men de betyr ikke det samme for den som leser kortet.
+        """
+        h = self.hub
+        naa = dt_util.now()
+        helg = h.on("ki_helgemodus")
+        hjemkomst = h.on("ki_hjemkomst_aktiv")
+        venter = h.on("ki_helg_venter_svar")
+
+        siden_raa = self.m.get("borte_siden")
+        siden = None
+        if siden_raa:
+            try:
+                siden = dt_util.parse_datetime(siden_raa)
+            except (TypeError, ValueError):
+                siden = None
+        minutter = int((naa - siden).total_seconds() // 60) if siden else None
+        grense_t = int(h.num("ki_helg_auto_timer", 6) or 6)
+
+        if borte is None:
+            tilstand, tekst = "ukjent", "Vet ikke om noen er hjemme"
+        elif not borte:
+            if hjemkomst:
+                tilstand, tekst = "hjemkomst", "Noen er hjemme — varmer opp igjen"
+            else:
+                tilstand, tekst = "hjemme", "Noen er hjemme"
+        elif helg:
+            if minutter is not None and minutter >= 1440:
+                tilstand = "borte_lenge"
+                tekst = f"Borte i {minutter // 1440} døgn — huset står i bortemodus"
+            else:
+                tilstand = "borte_lenge"
+                tekst = "Borte — huset står i bortemodus"
+        elif minutter is not None and minutter < grense_t * 60:
+            tilstand = "kort_tur"
+            igjen = grense_t * 60 - minutter
+            tekst = (f"Ute en tur, {minutter} min — bortemodus om "
+                     f"{igjen // 60} t {igjen % 60} min" if igjen >= 60
+                     else f"Ute en tur, {minutter} min — bortemodus om {igjen} min")
+        else:
+            tilstand = "borte"
+            tekst = "Alle er borte"
+
+        h.sett_sensor("ki_tilstedevaerelse", tilstand, {
+            "tekst": tekst,
+            "borte_siden": siden.isoformat() if siden else None,
+            "minutter_borte": minutter,
+            "bortemodus": helg,
+            "hjemkomst_aktiv": hjemkomst,
+            "venter_svar": venter,
+            "auto_etter_timer": grense_t,
+            "hjemkomst_tid": h.tekst("ki_hjemkomst_tid", "17:00"),
+        })
 
     async def hjemkomst_ferdig(self, grunn: str) -> None:
         h = self.hub
