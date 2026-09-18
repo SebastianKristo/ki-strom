@@ -1,3 +1,58 @@
+# KI Energi 2.25.0
+
+## Lading bare hjemme, og bare til batteriet er fullt
+
+### Stedssperre
+
+Bilen lades bare når stedssensoren sier at den står der den skal. Står den andre steder,
+**rører ikke integrasjonen laderen i det hele tatt** — verken for å starte eller stoppe.
+Laderen der er ikke vår.
+
+Tre ting settes opp under Utstyr: stedssensor, stedets navn, og batterinivå. Sammenligningen
+tåler store bokstaver og mellomrom i kantene, siden slike navn kommer fra en bil-app og
+ikke er skrevet av oss.
+
+Er stedet ikke satt opp, er det ingen stedssperre og alt virker som før. Men svarer
+sensoren ikke — «unknown», «unavailable» eller tom — rører vi heller ingenting. Vi vet da
+ikke hvor bilen er, og å gjette er verre enn å la være.
+
+### Hysterese på batteriet
+
+Stopper ved 80 %, starter igjen først under 70 %. Begge grensene kan endres.
+
+**Avstanden mellom dem er poenget.** Med bare ett tall ville den vippet av og på rundt
+det, og hver vipp er et avbrudd for bilen.
+
+Det gir også oppførselen du beskrev når bilen har vært borte, uten at vi trenger å spore
+det: kommer den hjem med 75 % etter å ha blitt full, står den — den er full nok. Kommer
+den hjem med 60 %, lader den. Nivået forteller alt vi må vite, og en «har vært borte»-
+tilstand ville vært en ekstra ting som kan bli feil.
+
+**Et fullt batteri slår av uansett hvor mye ledig effekt det er.** Effektbudsjettet kan
+bare gjøre ladingen mindre, aldri mer nødvendig.
+
+### Statussensoren
+
+`sensor.ki_lading_status` har fått `batteri_pst`, `stopp_ved_pst`, `start_under_pst`,
+`fulladet`, `hjemme` og `sted_navn`. Ny tilstand `borte` når bilen ikke står hjemme.
+
+### Nye innstillinger
+
+* `number.ki_lading_stopp_ved` (50–100 %, standard 80)
+* `number.ki_lading_start_under` (10–95 %, standard 70)
+
+Settes start høyere enn stopp, flyttes start automatisk ned — ellers ville bilen aldri
+ladet.
+
+### Tester
+
+14 nye: uten sted, bilen borte, bilen hjemme, sted uten svar, navn med store bokstaver og
+mellomrom, stopp ved 80, lading under 70, hjem med 75 som ikke starter, fall under 70 som
+starter igjen, uten batterinivå, ugyldige grenser, og fullt batteri med mye ledig effekt.
+45 tester for ladingen, 65 i alt.
+
+---
+
 # KI Energi 2.24.1
 
 ## Ladingen så konfigurert ut overalt

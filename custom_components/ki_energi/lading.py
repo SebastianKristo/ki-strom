@@ -33,6 +33,9 @@ from homeassistant.util import dt as dt_util
 from .const import (
     CONF_LADER_BRYTER,
     CONF_LADER_EFFEKT,
+    CONF_LADER_SOC,
+    CONF_LADER_STED,
+    CONF_LADER_STED_NAVN,
     CONF_LADESTROM_KNAPPER,
 )
 from .hub import KiHub
@@ -120,6 +123,69 @@ class KiLading:
             return None
         return st.state == "on"
 
+    def soc(self) -> float | None:
+        """Batterinivå i prosent, eller None."""
+        eid = self.hub.cfg(CONF_LADER_SOC)
+        if not eid:
+            return None
+        st = self.hub.hass.states.get(eid)
+        if st is None or st.state in ("unknown", "unavailable"):
+            return None
+        try:
+            return float(st.state)
+        except (TypeError, ValueError):
+            return None
+
+    def hjemme(self) -> bool | None:
+        """Står bilen på stedet den skal lades?
+
+        Returnerer None når vi ikke kan vite det — enten fordi stedet ikke er satt opp,
+        eller fordi sensoren ikke svarer. De to behandles ulikt av den som spør: er
+        stedet ikke satt opp, er det ingen stedssperre; svarer ikke sensoren, rører vi
+        ingenting.
+        """
+        eid = self.hub.cfg(CONF_LADER_STED)
+        navn = (self.hub.cfg(CONF_LADER_STED_NAVN) or "").strip()
+        if not eid or not navn:
+            return None
+        st = self.hub.hass.states.get(eid)
+        if st is None or st.state in ("unknown", "unavailable", ""):
+            return None
+        return st.state.strip().casefold() == navn.casefold()
+
+    def bor_lade(self) -> tuple[bool, str]:
+        """Skal bilen lades i det hele tatt? Hysterese på batterinivået.
+
+        Stopper ved øvre grense og starter igjen først under den nedre. Avstanden er
+        poenget: uten den ville den vippet av og på rundt ett eneste tall, og hver vipp
+        er et avbrudd for bilen.
+
+        Det gir også oppførselen man vil ha når bilen har vært borte. Kommer den hjem
+        med 75 % etter å ha blitt full, står den — den er full nok. Kommer den hjem med
+        60 %, lader den. Vi trenger derfor ingen egen «har vært borte»-tilstand: nivået
+        forteller alt vi må vite.
+        """
+        soc = self.soc()
+        if soc is None:
+            return True, ""          # uten batterinivå gjelder bare effektbudsjettet
+
+        stopp = self.hub.num("ki_lading_stopp_ved", 80)
+        start = self.hub.num("ki_lading_start_under", 70)
+        if start >= stopp:
+            start = max(0, stopp - 10)
+
+        if soc >= stopp:
+            self.m["soc_full"] = True
+            return False, f"Batteriet er på {soc:.0f} % — fulladet ved {stopp:.0f} %"
+        if soc < start:
+            self.m["soc_full"] = False
+            return True, ""
+        # Mellom grensene: behold forrige avgjørelse.
+        if self.m.get("soc_full"):
+            return False, (f"Batteriet er på {soc:.0f} % — lader igjen først under "
+                           f"{start:.0f} %")
+        return True, ""
+
     def effekt_kw(self) -> float | None:
         """Bilens målte ladeeffekt i kW, eller None."""
         eid = self.hub.cfg(CONF_LADER_EFFEKT)
@@ -164,6 +230,26 @@ class KiLading:
         if pa is None:
             return {"handling": "utilgjengelig", "trinn": None, "kw": 0.0,
                     "forklaring": "Laderen svarer ikke — rører den ikke"}
+
+        # Stedssperren går foran alt. Står bilen et annet sted, er laderen der ikke vår,
+        # og vi skal verken starte eller stoppe den.
+        hjemme = self.hjemme()
+        if hjemme is False:
+            sted = h.hass.states.get(h.cfg(CONF_LADER_STED))
+            hvor = sted.state if sted else "et annet sted"
+            self.satt_trinn = None
+            return {"handling": "borte", "trinn": None, "kw": 0.0,
+                    "forklaring": f"Bilen står på {hvor} — rører ikke laderen"}
+        if hjemme is None and h.cfg(CONF_LADER_STED):
+            return {"handling": "borte", "trinn": None, "kw": 0.0,
+                    "forklaring": "Vet ikke hvor bilen står — rører ikke laderen"}
+
+        # Fulladet? Da stopper vi, uansett hvor mye ledig effekt det er.
+        skal, grunn = self.bor_lade()
+        if not skal:
+            if not pa:
+                return {"handling": "av", "trinn": None, "kw": 0.0, "forklaring": grunn}
+            return {"handling": "stopp", "trinn": None, "kw": 0.0, "forklaring": grunn}
 
         målt = self.effekt_kw()
 
@@ -260,4 +346,10 @@ class KiLading:
             "trinn_tilgjengelig": sorted(self._knapper()),
             "sist_endret": self.sist_endret.isoformat() if self.sist_endret else None,
             "automatikk": self.hub.on("ki_lading_automatikk", True),
+            "batteri_pst": self.soc(),
+            "stopp_ved_pst": self.hub.num("ki_lading_stopp_ved", 80),
+            "start_under_pst": self.hub.num("ki_lading_start_under", 70),
+            "fulladet": bool(self.m.get("soc_full")),
+            "hjemme": self.hjemme(),
+            "sted_navn": self.hub.cfg(CONF_LADER_STED_NAVN) or "",
         })

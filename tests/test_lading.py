@@ -66,7 +66,8 @@ class FalskStates:
 
 class FalskHub:
     def __init__(self, bryter="off", effekt=None, effekt_enhet="kW",
-                 auto=True, mellom=5, dodband=0.6, knapper=None):
+                 auto=True, mellom=5, dodband=0.6, knapper=None,
+                 soc=None, sted=None, sted_navn=None, stopp=80, start=70):
         self.minne = {}
         states = {"switch.lader": FalskSt(bryter)}
         if effekt is not None:
@@ -74,7 +75,15 @@ class FalskHub:
             if effekt_enhet is not None:
                 attrs["unit_of_measurement"] = effekt_enhet
             states["sensor.ladeeffekt"] = FalskSt(effekt, attrs)
+        if soc is not None:
+            states["sensor.bil_soc"] = FalskSt(soc)
+        if sted is not None:
+            states["sensor.bil_sted"] = FalskSt(sted)
         self.hass = types.SimpleNamespace(states=FalskStates(states))
+        self._soc_ent = "sensor.bil_soc" if soc is not None else ""
+        self._sted_ent = "sensor.bil_sted" if sted is not None else ""
+        self._sted_navn = sted_navn or ""
+        self._stopp, self._start = stopp, start
         self._auto = auto
         self._mellom = mellom
         self._dodband = dodband
@@ -87,6 +96,9 @@ class FalskHub:
             "lader_bryter": "switch.lader",
             "lader_effekt": "sensor.ladeeffekt",
             "ladestrom_knapper": self._knapper,
+            "lader_soc": self._soc_ent,
+            "lader_sted": self._sted_ent,
+            "lader_sted_navn": self._sted_navn,
         }.get(key)
 
     def on(self, key, standard=True):
@@ -94,7 +106,9 @@ class FalskHub:
 
     def num(self, key, standard=0):
         return {"ki_lading_min_mellom_min": self._mellom,
-                "ki_lading_dodband_kw": self._dodband}.get(key, standard)
+                "ki_lading_dodband_kw": self._dodband,
+                "ki_lading_stopp_ved": self._stopp,
+                "ki_lading_start_under": self._start}.get(key, standard)
 
     def sett_sensor(self, *a, **k):
         pass
@@ -302,3 +316,93 @@ def test_lader_som_ikke_svarer(frys):
 def test_alle_trinn_er_stigende():
     """Rekkefølgen betyr noe for velg_trinn — en usortert TRINN ville gitt feil svar."""
     assert list(TRINN) == sorted(TRINN)
+
+
+# ------------------------------------------------------- hvor bilen står
+HJEMME = "Kolbulinna 239, Lena"
+
+
+def test_uten_sted_ingen_sperre(frys):
+    """Er stedet ikke satt opp, lades det som før."""
+    lading, _ = lag(bryter="off")
+    assert lading.hjemme() is None
+    assert lading.vurder(4.0)["handling"] == "start"
+
+
+def test_bilen_borte_rorer_ingenting(frys):
+    lading, _ = lag(bryter="on", effekt=2.3, sted="Storgata 1, Oslo", sted_navn=HJEMME)
+    lading.satt_trinn = 10
+    v = lading.vurder(6.0)
+    assert v["handling"] == "borte"
+    assert "Storgata 1, Oslo" in v["forklaring"]
+
+
+def test_bilen_hjemme_lader(frys):
+    lading, _ = lag(bryter="off", sted=HJEMME, sted_navn=HJEMME)
+    assert lading.hjemme() is True
+    assert lading.vurder(4.0)["handling"] == "start"
+
+
+def test_sted_uten_svar_rorer_ingenting(frys):
+    lading, _ = lag(bryter="on", effekt=2.3, sted="unknown", sted_navn=HJEMME)
+    assert lading.vurder(6.0)["handling"] == "borte"
+
+
+def test_stedsnavn_taler_store_bokstaver_og_mellomrom(frys):
+    lading, _ = lag(bryter="off", sted="  kolbulinna 239, LENA ", sted_navn=HJEMME)
+    assert lading.hjemme() is True
+
+
+# --------------------------------------------------------- batteriet
+def test_stopper_ved_80(frys):
+    lading, _ = lag(bryter="on", effekt=2.3, soc=80, sted=HJEMME, sted_navn=HJEMME)
+    lading.satt_trinn = 10
+    v = lading.vurder(6.0)
+    assert v["handling"] == "stopp"
+    assert "80 %" in v["forklaring"]
+
+
+def test_lader_under_70(frys):
+    lading, _ = lag(bryter="off", soc=65, sted=HJEMME, sted_navn=HJEMME)
+    assert lading.vurder(4.0)["handling"] == "start"
+
+
+def test_mellom_70_og_80_beholder_forrige_avgjorelse(frys):
+    """Kommer bilen hjem med 75 % etter å ha blitt full, står den — den er full nok."""
+    lading, hub = lag(bryter="on", effekt=2.3, soc=80, sted=HJEMME, sted_navn=HJEMME)
+    lading.satt_trinn = 10
+    assert lading.vurder(6.0)["handling"] == "stopp"      # blir full
+    hub.hass.states._d["sensor.bil_soc"] = FalskSt(75)
+    hub.hass.states._d["switch.lader"] = FalskSt("off")
+    v = lading.vurder(6.0)
+    assert v["handling"] == "av"
+    assert "under 70" in v["forklaring"]
+
+
+def test_faller_under_70_starter_igjen(frys):
+    lading, hub = lag(bryter="on", effekt=2.3, soc=80, sted=HJEMME, sted_navn=HJEMME)
+    lading.satt_trinn = 10
+    lading.vurder(6.0)                                     # full
+    hub.hass.states._d["sensor.bil_soc"] = FalskSt(68)
+    hub.hass.states._d["switch.lader"] = FalskSt("off")
+    assert lading.vurder(4.0)["handling"] == "start"
+
+
+def test_uten_batterinivaa_lades_som_for(frys):
+    lading, _ = lag(bryter="off", sted=HJEMME, sted_navn=HJEMME)
+    assert lading.soc() is None
+    assert lading.vurder(4.0)["handling"] == "start"
+
+
+def test_ugyldige_grenser_rettes(frys):
+    """Start over stopp ville betydd at den aldri lader. Da flyttes start ned."""
+    lading, _ = lag(bryter="off", soc=60, sted=HJEMME, sted_navn=HJEMME,
+                    stopp=70, start=90)
+    assert lading.vurder(4.0)["handling"] == "start"
+
+
+def test_fullt_batteri_slar_av_selv_med_mye_ledig(frys):
+    """Effektbudsjettet skal ikke kunne overstyre et fullt batteri."""
+    lading, _ = lag(bryter="on", effekt=4.1, soc=95, sted=HJEMME, sted_navn=HJEMME)
+    lading.satt_trinn = 18
+    assert lading.vurder(20.0)["handling"] == "stopp"

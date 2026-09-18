@@ -25,6 +25,10 @@ CONF_VVB_EFFEKT = "vvb_effekt"
 CONF_LADER_BRYTER = "lader_bryter"
 CONF_LADER_EFFEKT = "lader_effekt"
 CONF_LADESTROM_KNAPPER = "ladestrom_knapper"
+# Batterinivå og hvor bilen står. Uten stedet lades det ikke i det hele tatt.
+CONF_LADER_SOC = "lader_soc"
+CONF_LADER_STED = "lader_sted"
+CONF_LADER_STED_NAVN = "lader_sted_navn"
 CONF_HANKLEVARMER = "hanklevarmer"
 CONF_HANKLEVARMER_EFFEKT = "hanklevarmer_effekt"
 # Fuktsensor på badet. Er den satt, kan håndklevarmeren slås på etter dusj.
@@ -192,6 +196,9 @@ DEFAULT_CONFIG = {
     CONF_LADER_BRYTER: "",
     CONF_LADER_EFFEKT: "",
     CONF_LADESTROM_KNAPPER: [],
+    CONF_LADER_SOC: "",
+    CONF_LADER_STED: "",
+    CONF_LADER_STED_NAVN: "",
     CONF_IMPORTERT_ENERGI: "sensor.strommaler_imported_energy",
     CONF_UTE_TEMP: "sensor.outdoor_meter_temperature",
     CONF_VAER: "weather.forecast_home",
@@ -400,6 +407,10 @@ NUMBERS = [
     ("ki_lading_min_mellom_min", "KI Lading Minste Tid Mellom Endringer", 1, 30, 1, "min", 5, "mdi:timer-sand"),
     # Dødbånd: vi bytter trinn bare når det nye gir noe å hente.
     ("ki_lading_dodband_kw", "KI Lading Dødbånd", 0, 2, 0.1, "kW", 0.6, "mdi:arrow-expand-vertical"),
+    # Hysterese: stopp når batteriet er fullt nok, start igjen først når det har falt
+    # godt under. Uten avstand mellom dem ville den vippet av og på rundt ett tall.
+    ("ki_lading_stopp_ved", "KI Lading Stopp Ved", 50, 100, 1, "%", 80, "mdi:battery-charging-high"),
+    ("ki_lading_start_under", "KI Lading Start Under", 10, 95, 1, "%", 70, "mdi:battery-charging-low"),
     ("ki_reserve_frokost_kwh", "KI Effektreserve Frokost", 0, 3, 0.1, "kW", 0.7, "mdi:toaster"),
     ("ki_reserve_middag_kwh", "KI Effektreserve Middag", 0, 3, 0.1, "kW", 1.0, "mdi:stove"),
     ("ki_sone_gul", "KI Sonegrense Gul", 50, 95, 1, "%", 75, "mdi:circle"),
