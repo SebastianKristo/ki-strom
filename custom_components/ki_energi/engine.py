@@ -21,6 +21,7 @@ from homeassistant.core import callback
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    er_tregt,
     CONF_VVB_BRYTER, CONF_HANKLEVARMER, CONF_HAR_ELBIL,
     CONF_GARDINER,
     CONF_ENERGILEDD_DAG, CONF_ENERGILEDD_NATT, CONF_GLASS_M2, CONF_HANKLEVARMER_EFFEKT,
@@ -490,7 +491,7 @@ class KiEngine:
             return t_natt_lt, f"Leggetid — senket fram til kl. {lt:%H:%M}", lt.hour * 60 + lt.minute
 
         profil = konf.get(Z_PROFIL, "fellesrom")
-        er_gulv = konf.get("type") == "gulv"
+        er_gulv = er_tregt(konf.get("type"))
         helg = h.on("ki_helgemodus")
         sommer = h.on("ki_sommermodus")
         hjemkomst = self.hjemkomst_frist()
@@ -659,8 +660,8 @@ class KiEngine:
                     if any(h.pa(e) for e in (konf.get("vindu") or [])):
                         rate *= 0.6   # åpent vindu: regn med tregere oppvarming, start tidligere
                     behov = min((mangler / rate) * 60.0, 10 * 60.0)
-                    if konf.get("type") == "gulv":
-                        behov = max(behov, 45.0)      # gulv er tregt — start uansett tidlig
+                    if er_tregt(konf.get("type")):
+                        behov = max(behov, 45.0)      # tregt anlegg — start uansett tidlig
                     til_frist = (frist - h.naa_min()) % (24 * 60)
                     start_min = (frist - int(behov) - 10) % (24 * 60)
                     forvarm_start = f"{start_min // 60:02d}:{start_min % 60:02d}"
@@ -779,7 +780,7 @@ class KiEngine:
                              forklaring=(last["forvarm_grunn"] or last["grunn"])
                              + (" — varmen er tilbake (gradvis gjenoppvarming)" if var_senket else ""))
             else:
-                maks = shed_gulv if last["type"] == "gulv" else min(shed_panel, 1.0) if last["type"] == "varmepumpe" else shed_panel
+                maks = shed_gulv if er_tregt(last["type"]) else min(shed_panel, 1.0) if last["type"] == "varmepumpe" else shed_panel
                 mangel = last["effekt"] - max(tilgjengelig, 0.0)
                 trinn = min(maks, round(max(0.5, mangel / max(last["effekt"], 0.1) * maks) * 2) / 2)
                 p.update(handling="senket", settpunkt=round(last["mal"] - trinn, 1), senket=trinn,

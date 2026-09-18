@@ -227,7 +227,14 @@ class KiVvb:
             await h.logbook("KI VVB", "Datoen for siste metning manglet og er satt til nå. Første ekte metning overskriver den.")
 
         # Bryteren slått på → nullstill effektflagg
-        bryter = h.st(self.bryter())
+        #
+        # Uten relé — hytta, der berederen bare står på — finnes ingen bryter å lese.
+        # Da regnes den som permanent på: elementet er koblet til strøm hele tiden, og
+        # det er effektmålingen alene som forteller om den varmer eller er mettet.
+        # Før ga `h.st(None)` en tom tilstand, og siden metningen krevde `bryter == "on"`
+        # ble legionella aldri bekreftet. Berederen kunne gjøre ferdig oppvarming i det
+        # uendelige, og kortet meldte «Forfalt — tvinges på» uten at noe kunne gjøres.
+        bryter = "on" if self.overvakes() else h.st(self.bryter())
         # Slått av av noe annet etter at vi slo den på? Da slåss vi med en annen styring
         # (gammel pakke, pyscript, en fysisk bryter, en annen hub). Ikke slå på igjen hvert
         # minutt — vent 30 min og si fra.
@@ -259,6 +266,12 @@ class KiVvb:
             h.sett("ki_vvb_har_trukket_effekt", False)
             h.sett("ki_vvb_oppvarming_startet", naa)
             self.for_lenge_varslet = False
+        # Uten relé finnes ingen av/på-overgang som nullstiller flagget. Vi nullstiller
+        # det i stedet når elementet begynner å trekke strøm igjen etter en metning —
+        # det er starten på en ny syklus.
+        if self.overvakes() and self.var_mettet and (self.effekt() or 0) > h.num("ki_vvb_metning_terskel_w", 150):
+            h.sett("ki_vvb_har_trukket_effekt", False)
+            h.sett("ki_vvb_oppvarming_startet", naa)
         self._siste_bryter = bryter
 
         # Effekt over/under terskel med debounce
@@ -517,7 +530,9 @@ class KiVvb:
         if self.var_mettet:
             return "Mettet - termostaten har koblet ut"
         if self.forfalt():
-            return "Forfalt - tvungen kjøring"
+            # Uten relé kan ingenting tvinges på. Da er «Forfalt — overvåkes» det ærlige
+            # svaret: fristen er passert, men KI har ingen bryter å slå på.
+            return "Forfalt - overvåkes" if self.overvakes() else "Forfalt - tvungen kjøring"
         if self.ferdig_i_vinduet():
             return "Ferdig for i natt"
         if self.i_vindu():

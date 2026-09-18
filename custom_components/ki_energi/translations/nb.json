@@ -180,7 +180,7 @@
       },
       "ny_sone": {
         "title": "Ny sone",
-        "description": "Nøkkelen brukes i entitets-ID-er (små bokstaver, understrek).",
+        "description": "Et rom kan ha flere varmekilder. Lag én sone per kilde og gi dem samme rom.",
         "data": {
           "key": "Nøkkel",
           "navn": "Navn"
@@ -197,13 +197,14 @@
           "duty": "Control signal / duty cycle (%)",
           "temp": "Romtemperatursensor (valgfri, ellers climate)",
           "vindu": "Vindu-/dørsensorer (valgfri) — åpent = varmen settes ned",
-          "type": "Type",
+          "type": "Varmekilde (styrer hvordan sonen senkes)",
           "profil": "Styringsprofil",
           "prio": "Prioritet (1 = viktigst)",
           "nominell": "Nominell effekt (kW)",
           "sol": "Påvirkes av solinnstråling",
           "aktiv": "Aktiv",
-          "slett": "Slett denne sonen"
+          "slett": "Slett denne sonen",
+          "ny_i_rommet": "Legg til en varmekilde til i dette rommet"
         }
       },
       "soner_auto": {
