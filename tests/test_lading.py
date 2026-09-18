@@ -138,6 +138,28 @@ def test_knapper_hopper_over_ukjente():
     assert lading._knapper() == {16: "button.tesla_ladestrom_16a_button"}
 
 
+def test_standardkonfigurasjonen_er_tom():
+    """Ekte entitets-ID-er som standard ville slått på ladingen overalt.
+
+    Med verdier i DEFAULT_CONFIG svarte konfigurert() ja på hver installasjon — også
+    der laderen aldri var valgt — og modulen ville forsøkt å styre entiteter som ikke
+    finnes.
+    """
+    from custom_components.ki_energi.const import (
+        CONF_LADER_BRYTER, CONF_LADER_EFFEKT, CONF_LADESTROM_KNAPPER, DEFAULT_CONFIG)
+    assert not DEFAULT_CONFIG[CONF_LADER_BRYTER]
+    assert not DEFAULT_CONFIG[CONF_LADER_EFFEKT]
+    assert not DEFAULT_CONFIG[CONF_LADESTROM_KNAPPER]
+
+
+def test_ikke_konfigurert_uten_bryter():
+    """Uten bryter er ladingen av, uansett hva annet som er satt."""
+    lading, _ = lag(knapper={"16": "button.a16"})
+    lading.hub.cfg = lambda key: None if key == "lader_bryter" else (
+        {"16": "button.a16"} if key == "ladestrom_knapper" else None)
+    assert not lading.konfigurert()
+
+
 def test_ikke_konfigurert_uten_knapper():
     lading, _ = lag(knapper={})
     assert not lading.konfigurert()

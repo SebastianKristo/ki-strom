@@ -1,3 +1,22 @@
+# KI Energi 2.24.1
+
+## Ladingen så konfigurert ut overalt
+
+`DEFAULT_CONFIG` inneholdt ekte entitets-ID-er for laderen — Tesla-bryteren, ladeeffekten
+og de fire knappene. Dermed svarte `konfigurert()` ja på **hver eneste installasjon**,
+også der laderen aldri var valgt.
+
+To ting fulgte av det. Elbillader-fanen dukket opp i klimakortet hjemme, der det ikke
+finnes noen lader. Og verre: modulen ville forsøkt å styre entiteter som ikke finnes.
+
+Standardverdiene er nå tomme, som de er for håndklevarmeren og gardinene. Laderen velges
+under Utstyr, og flagget `lading` blir sant først da.
+
+To nye tester låser det: standardkonfigurasjonen skal være tom, og uten bryter er
+ladingen av uansett hva annet som er satt. 53 tester i alt.
+
+---
+
 # KI Energi 2.24.0
 
 Nytt versjonsnummer på innholdet fra 2.23.1, så HACS ser en ren ny utgivelse. Ingen

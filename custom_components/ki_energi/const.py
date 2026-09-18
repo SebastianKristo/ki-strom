@@ -186,14 +186,12 @@ DEFAULT_SONER: dict[str, dict] = {
 
 DEFAULT_CONFIG = {
     CONF_TOTAL_EFFEKT: "sensor.strommaler_effekt",
-    CONF_LADER_BRYTER: "switch.tesla_model_y_batteri_charging_toggle",
-    CONF_LADER_EFFEKT: "sensor.tesla_model_y_batteri_charge_power",
-    CONF_LADESTROM_KNAPPER: {
-        "5": "button.tesla_ladestrom_5a_button",
-        "10": "button.tesla_ladestrom_10a_button",
-        "16": "button.tesla_ladestrom_16a_button",
-        "18": "button.tesla_ladestrom_18a_button",
-    },
+    # Tomme med vilje. Sto det ekte entitets-ID-er her, ville `konfigurert()` svart ja
+    # på hver eneste installasjon — også der laderen aldri er valgt — og modulen ville
+    # forsøkt å styre entiteter som ikke finnes. Laderen velges under Utstyr.
+    CONF_LADER_BRYTER: "",
+    CONF_LADER_EFFEKT: "",
+    CONF_LADESTROM_KNAPPER: [],
     CONF_IMPORTERT_ENERGI: "sensor.strommaler_imported_energy",
     CONF_UTE_TEMP: "sensor.outdoor_meter_temperature",
     CONF_VAER: "weather.forecast_home",
