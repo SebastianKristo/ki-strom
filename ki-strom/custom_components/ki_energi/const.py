@@ -21,6 +21,10 @@ CONF_UTE_TEMP = "ute_temp"
 CONF_VAER = "vaer"
 CONF_VVB_BRYTER = "vvb_bryter"
 CONF_VVB_EFFEKT = "vvb_effekt"
+# Billading: bryter, bilens ladeeffekt, og knappene som setter ladestrøm
+CONF_LADER_BRYTER = "lader_bryter"
+CONF_LADER_EFFEKT = "lader_effekt"
+CONF_LADESTROM_KNAPPER = "ladestrom_knapper"
 CONF_HANKLEVARMER = "hanklevarmer"
 CONF_HANKLEVARMER_EFFEKT = "hanklevarmer_effekt"
 CONF_GARDINER = "gardiner"
@@ -180,6 +184,14 @@ DEFAULT_SONER: dict[str, dict] = {
 
 DEFAULT_CONFIG = {
     CONF_TOTAL_EFFEKT: "sensor.strommaler_effekt",
+    CONF_LADER_BRYTER: "switch.tesla_model_y_batteri_charging_toggle",
+    CONF_LADER_EFFEKT: "sensor.tesla_model_y_ladeeffekt",
+    CONF_LADESTROM_KNAPPER: {
+        "5": "button.tesla_ladestrom_5a_button",
+        "10": "button.tesla_ladestrom_10a_button",
+        "16": "button.tesla_ladestrom_16a_button",
+        "18": "button.tesla_ladestrom_18a_button",
+    },
     CONF_IMPORTERT_ENERGI: "sensor.strommaler_imported_energy",
     CONF_UTE_TEMP: "sensor.outdoor_meter_temperature",
     CONF_VAER: "weather.forecast_home",
@@ -312,6 +324,7 @@ SWITCHES = [
     ("ki_vindu_stopp", "KI Vindu Åpent Stopper Varme", True, "mdi:window-open-variant"),
     ("ki_tillat_dyrere_trinn", "KI Tillat Dyrere Kapasitetstrinn", False, "mdi:cash-lock-open"),
     ("ki_elbil_natt", "KI Elbil Lader Om Natten", False, "mdi:ev-station"),
+    ("ki_lading_automatikk", "KI Lading Automatikk", True, "mdi:ev-plug-type2"),
     ("ki_auto_soveromsmodus", "KI Automatisk Soveromsmodus", True, "mdi:sleep"),
     ("ki_adaptiv_reserve", "KI Adaptiv Reserve", True, "mdi:school-outline"),
     ("ki_gradvis_gjenoppvarming", "KI Gradvis Gjenoppvarming", True, "mdi:stairs-up"),
@@ -376,6 +389,10 @@ NUMBERS = [
     ("ki_mal_snitt_kwh", "KI Mål For Snitt Av Tre Topper", 2, 5, 0.05, "kWh", 4.7, "mdi:target"),
     ("ki_min_time_kwh", "KI Laveste Timegrense", 1, 5, 0.1, "kWh", 3.0, "mdi:arrow-collapse-down"),
     ("ki_reserve_uregulert_kwh", "KI Reserve For Uregulert Last", 0, 2, 0.05, "kWh", 0.35, "mdi:shield-outline"),
+    # Hver strømendring gir bilen et lite avbrudd, så vi haster ikke med å justere.
+    ("ki_lading_min_mellom_min", "KI Lading Minste Tid Mellom Endringer", 1, 30, 1, "min", 5, "mdi:timer-sand"),
+    # Dødbånd: vi bytter trinn bare når det nye gir noe å hente.
+    ("ki_lading_dodband_kw", "KI Lading Dødbånd", 0, 2, 0.1, "kW", 0.6, "mdi:arrow-expand-vertical"),
     ("ki_reserve_frokost_kwh", "KI Effektreserve Frokost", 0, 3, 0.1, "kW", 0.7, "mdi:toaster"),
     ("ki_reserve_middag_kwh", "KI Effektreserve Middag", 0, 3, 0.1, "kW", 1.0, "mdi:stove"),
     ("ki_sone_gul", "KI Sonegrense Gul", 50, 95, 1, "%", 75, "mdi:circle"),
@@ -445,6 +462,7 @@ TARIFF_TABELL_STANDARD = "2:150,5:250,10:420,15:585,20:755"
 # Sensorer motoren skriver. (nøkkel, navn, ikon, enhet, device_class, state_class)
 SENSORS = [
     ("ki_energi_status", "KI Energistatus", "mdi:brain", None, None, None),
+    ("ki_lading_status", "KI Ladestatus", "mdi:ev-plug-type2", None, None, None),
     ("ki_laster", "KI Laster", "mdi:format-list-bulleted", None, None, None),
     ("ki_bereder", "KI Varmtvann", "mdi:water-boiler", None, None, None),
     ("ki_hanklevarmer", "KI Håndklevarmer", "mdi:radiator", None, None, None),

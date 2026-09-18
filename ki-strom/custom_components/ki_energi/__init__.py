@@ -24,6 +24,7 @@ from .nettleie import KiNettleie
 from .sparing import KiSparing
 from .prognose import KiPrognoselaering
 from .lys import KiLys
+from .lading import KiLading
 from .vvb import KiVvb
 
 _LOGGER = logging.getLogger(__name__)
@@ -97,6 +98,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hub.last_minne()
     hub.engine = KiEngine(hub)
     hub.vvb = KiVvb(hub)
+    hub.lading = KiLading(hub)
     hub.moduser = KiModuser(hub)
     hub.nettleie = KiNettleie(hub)
     hub.sparing = KiSparing(hub)

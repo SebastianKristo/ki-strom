@@ -17,6 +17,7 @@ from .const import (
     CONF_IMPORTERT_ENERGI, CONF_KAPASITETSTRINN, CONF_NORDPOOL, CONF_NORGESPRIS_AKTIV, CONF_SONER,
     CONF_STROMPRIS, CONF_STUE_AREAL, CONF_TILSTEDE_CYBELE, CONF_TILSTEDE_RUNE,
     CONF_TILSTEDE_SEBASTIAN, CONF_TOPP1, CONF_TOPP2, CONF_TOPP3, CONF_TOTAL_EFFEKT, CONF_UTE_TEMP,
+    CONF_LADER_BRYTER, CONF_LADER_EFFEKT, CONF_LADESTROM_KNAPPER,
     CONF_VAER, CONF_VARSEL_MOTTAKERE, CONF_VVB_BRYTER, CONF_VVB_EFFEKT, DEFAULT_CONFIG,
     DEFAULT_SONER, DOMAIN, PROFILER, PROFIL_TEKST,
 )
@@ -106,6 +107,11 @@ SKJEMA_MALING = {
 SKJEMA_UTSTYR = {
     vol.Optional(CONF_VVB_BRYTER): _ent(["switch", "input_boolean"]),
     vol.Optional(CONF_VVB_EFFEKT): _ent("sensor", device_class="power"),
+    # Billading. Knappene settes opp som en liste i stigende rekkefølge — modulen
+    # leser trinnet ut av entitetsnavnet, så «5a», «10a», «16a», «18a» må stå i ID-en.
+    vol.Optional(CONF_LADER_BRYTER): _ent(["switch", "input_boolean"]),
+    vol.Optional(CONF_LADER_EFFEKT): _ent("sensor", device_class="power"),
+    vol.Optional(CONF_LADESTROM_KNAPPER): _ent("button", multiple=True),
     vol.Optional(CONF_HANKLEVARMER): _ent("switch"),
     vol.Optional(CONF_HANKLEVARMER_EFFEKT): _ent("sensor", device_class="power"),
     vol.Optional(CONF_GARDINER): _ent("cover"),
