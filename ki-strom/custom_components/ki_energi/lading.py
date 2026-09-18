@@ -133,7 +133,14 @@ class KiLading:
         except (TypeError, ValueError):
             return None
         enhet = (st.attributes.get("unit_of_measurement") or "").lower()
-        return round(v / 1000.0, 3) if enhet.startswith("w") else round(v, 3)
+        if enhet.startswith("kw"):
+            return round(v, 3)
+        if enhet.startswith("w"):
+            return round(v / 1000.0, 3)
+        # Ingen enhet i det hele tatt — det skjer med tall fra broer som Homey Link.
+        # Da gjetter vi på størrelsen: en bil lader aldri på 400 kW, men godt på
+        # 400 W, så alt over 100 leses som watt.
+        return round(v / 1000.0, 3) if abs(v) > 100 else round(v, 3)
 
     # -------------------------------------------------------------- vurderingen
     def vurder(self, ledig_kw: float) -> dict:
