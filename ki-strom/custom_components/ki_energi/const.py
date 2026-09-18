@@ -289,7 +289,7 @@ SWITCHES = [
     ("ki_energi_hovedbryter", "KI Energimotor", True, "mdi:brain"),
     ("ki_skyggemodus", "KI Skyggemodus", True, "mdi:ghost-outline"),
     ("ki_helgemodus", "KI Helgemodus", False, "mdi:bag-suitcase"),
-    ("ki_helg_auto", "KI Helg Auto-aktivering Ved Fravær", True, "mdi:home-export-outline"),
+    ("ki_helg_auto", "KI Borte Auto-aktivering Ved Fravær", True, "mdi:home-export-outline"),
     ("ki_helg_venter_svar", "KI Helg Venter På Svar", False, "mdi:help-circle-outline"),
     ("ki_helg_senk_gulvvarme", "KI Helg Senk Gulvvarme", False, "mdi:heating-coil"),
     ("ki_hjemkomst_aktiv", "KI Hjemkomst Pågår", False, "mdi:home-import-outline"),
@@ -340,9 +340,17 @@ NUMBERS = [
     ("ki_temp_bad", "KI Temp Bad Gulvvarme", 18, 28, 0.5, "°C", 24, "mdi:shower"),
     ("ki_temp_do", "KI Temp Do Gulvvarme", 12, 25, 0.5, "°C", 20, "mdi:toilet"),
     ("ki_temp_vaskegang", "KI Temp Vaskegang Gulvvarme", 5, 28, 0.5, "°C", 20, "mdi:washing-machine"),
-    ("ki_temp_helg", "KI Temp Helgemodus Panelovner", 10, 20, 0.5, "°C", 16, "mdi:bag-suitcase"),
-    ("ki_temp_helg_gulvvarme", "KI Temp Helg Gulvvarme", 12, 24, 0.5, "°C", 18, "mdi:heating-coil"),
-    ("ki_temp_helg_bad", "KI Temp Helg Bad", 12, 26, 0.5, "°C", 22, "mdi:shower"),
+    # Nedre grense var 10, 12 og 12 °C — men hytteoppsettet setter 8, 10 og 12 som
+    # frostsikring. Verdien under minimum kan ikke settes, så hyttas egen standard ble
+    # avvist av tallentiteten. Grensene går nå ned til 5: lavere enn det er ikke
+    # frostsikring, det er å la røret fryse.
+    #
+    # Navnene sier «borte» og ikke bare «helg». På en hytte er det ukedagene den står
+    # tom, og «Helgemodus» er grunnen til at innstillingen ikke er å finne når man leter
+    # etter fraværstemperatur.
+    ("ki_temp_helg", "KI Temp Borte Panelovner", 5, 20, 0.5, "°C", 16, "mdi:bag-suitcase"),
+    ("ki_temp_helg_gulvvarme", "KI Temp Borte Gulvvarme", 5, 24, 0.5, "°C", 18, "mdi:heating-coil"),
+    ("ki_temp_helg_bad", "KI Temp Borte Bad", 5, 26, 0.5, "°C", 22, "mdi:shower"),
     ("ki_temp_sommer", "KI Temp Sommer Grunnvarme", 10, 20, 0.5, "°C", 17, "mdi:white-balance-sunny"),
     ("ki_natt_senk_ute_grense", "KI Nattsenk Kun Når Utetemp Under", 0, 20, 1, "°C", 12, "mdi:thermometer-low"),
     ("ki_stue_reduksjon", "KI Stue Reduksjon Etter Formiddag", 0, 4, 0.5, "°C", 1.5, "mdi:sofa-outline"),
@@ -352,7 +360,7 @@ NUMBERS = [
     ("ki_sommer_start_maned", "KI Sommer Fra Måned", 1, 12, 1, "", 6, "mdi:calendar-start"),
     ("ki_sommer_slutt_maned", "KI Sommer Til Og Med Måned", 1, 12, 1, "", 8, "mdi:calendar-end"),
     ("ki_sommer_ute_grense", "KI Sommer Når Døgnsnitt Ute Over", 5, 25, 1, "°C", 15, "mdi:thermometer-high"),
-    ("ki_helg_auto_timer", "KI Helg Auto Etter Timer Borte", 1, 24, 1, "t", 6, "mdi:timer-sand"),
+    ("ki_helg_auto_timer", "KI Borte Auto Etter Timer Borte", 1, 24, 1, "t", 6, "mdi:timer-sand"),
     ("ki_hanklevarmer_maks_pa_tid", "KI Håndklevarmer Maks På-Tid", 30, 480, 15, "min", 240, "mdi:timer-alert-outline"),
     ("ki_vvb_metning_terskel_w", "KI VVB Effektgrense Utkoblet Termostat", 20, 500, 10, "W", 150, "mdi:flash-off"),
     ("ki_vvb_metning_minutter", "KI VVB Minutter Null Effekt Før Mettet", 2, 30, 1, "min", 8, "mdi:timer-check"),
