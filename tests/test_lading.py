@@ -70,8 +70,10 @@ class FalskHub:
         self.minne = {}
         states = {"switch.lader": FalskSt(bryter)}
         if effekt is not None:
-            states["sensor.ladeeffekt"] = FalskSt(
-                effekt, {"unit_of_measurement": effekt_enhet})
+            attrs = {}
+            if effekt_enhet is not None:
+                attrs["unit_of_measurement"] = effekt_enhet
+            states["sensor.ladeeffekt"] = FalskSt(effekt, attrs)
         self.hass = types.SimpleNamespace(states=FalskStates(states))
         self._auto = auto
         self._mellom = mellom
@@ -142,9 +144,20 @@ def test_ikke_konfigurert_uten_knapper():
     assert lading.vurder(5.0)["handling"] == "ingen"
 
 
-def test_effekt_i_watt_regnes_om():
-    lading, _ = lag(effekt=2300, effekt_enhet="W")
-    assert lading.effekt_kw() == 2.3
+@pytest.mark.parametrize("verdi,enhet,ventet", [
+    (2300, "W", 2.3),
+    (2.3, "kW", 2.3),
+    (2300, "w", 2.3),
+    (2.3, "KW", 2.3),
+    # Uten enhet — typisk for tall fra broer som Homey Link. Størrelsen avgjør:
+    # en bil lader aldri på 2300 kW, men godt på 2300 W.
+    (2300, None, 2.3),
+    (1.0, None, 1.0),
+    (0.0, None, 0.0),
+])
+def test_effekt_leses_med_og_uten_enhet(verdi, enhet, ventet):
+    lading, _ = lag(effekt=verdi, effekt_enhet=enhet)
+    assert lading.effekt_kw() == ventet
 
 
 # -------------------------------------------------------------- fra stillstand

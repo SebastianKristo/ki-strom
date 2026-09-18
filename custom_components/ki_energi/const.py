@@ -185,7 +185,7 @@ DEFAULT_SONER: dict[str, dict] = {
 DEFAULT_CONFIG = {
     CONF_TOTAL_EFFEKT: "sensor.strommaler_effekt",
     CONF_LADER_BRYTER: "switch.tesla_model_y_batteri_charging_toggle",
-    CONF_LADER_EFFEKT: "sensor.tesla_model_y_ladeeffekt",
+    CONF_LADER_EFFEKT: "sensor.tesla_model_y_batteri_charge_power",
     CONF_LADESTROM_KNAPPER: {
         "5": "button.tesla_ladestrom_5a_button",
         "10": "button.tesla_ladestrom_10a_button",

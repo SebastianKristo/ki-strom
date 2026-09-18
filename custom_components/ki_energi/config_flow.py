@@ -110,7 +110,11 @@ SKJEMA_UTSTYR = {
     # Billading. Knappene settes opp som en liste i stigende rekkefølge — modulen
     # leser trinnet ut av entitetsnavnet, så «5a», «10a», «16a», «18a» må stå i ID-en.
     vol.Optional(CONF_LADER_BRYTER): _ent(["switch", "input_boolean"]),
-    vol.Optional(CONF_LADER_EFFEKT): _ent("sensor", device_class="power"),
+    # Ingen device_class-filtrering her. Bilens ladeeffekt kommer ofte fra en bro —
+    # «Homey Link Number» er bare et tall uten device class — og et filter på
+    # device_class: power ville skjult nettopp den sensoren man trenger.
+    # Modulen leser enheten fra attributtet i stedet, og tåler både W og kW.
+    vol.Optional(CONF_LADER_EFFEKT): _ent("sensor"),
     vol.Optional(CONF_LADESTROM_KNAPPER): _ent("button", multiple=True),
     vol.Optional(CONF_HANKLEVARMER): _ent("switch"),
     vol.Optional(CONF_HANKLEVARMER_EFFEKT): _ent("sensor", device_class="power"),
