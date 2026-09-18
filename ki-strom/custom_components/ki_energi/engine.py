@@ -21,6 +21,7 @@ from homeassistant.core import callback
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    CONF_BAD_FUKT,
     er_tregt,
     CONF_VVB_BRYTER, CONF_HANKLEVARMER, CONF_HAR_ELBIL,
     CONF_GARDINER,
@@ -1082,6 +1083,11 @@ class KiEngine:
             "personer": [{"key": p["key"], "navn": p["navn"], "type": p["type"], "hjemme": h.hjemme(p["entity"]) if p["entity"] else None}
                          for p in h.personer()],
             "gardiner": bool(h.cfg(CONF_GARDINER)), "hanklevarmer": bool(h.cfg(CONF_HANKLEVARMER)), "elbil": bool(h.cfg(CONF_HAR_ELBIL, False)),
+            # Flagget kortene bruker for å skjule fanen når laderen ikke er satt opp.
+            # `elbil` finnes fra før, men den betyr «huset har elbil», ikke «laderen er
+            # koblet til KI Energi» — to ulike ting, og kortet trenger den siste.
+            "lading": bool(h.lading is not None and h.lading.konfigurert()),
+            "bad_fukt": bool(h.cfg(CONF_BAD_FUKT)),
             "entiteter": {"total_effekt": h.cfg(CONF_TOTAL_EFFEKT) or "", "importert_energi": h.cfg(CONF_IMPORTERT_ENERGI) or "",
                           "ute_temp": h.cfg(CONF_UTE_TEMP) or "", "vaer": h.cfg(CONF_VAER) or "",
                           "topp1": h.cfg(CONF_TOPP1) or "", "topp2": h.cfg(CONF_TOPP2) or "", "topp3": h.cfg(CONF_TOPP3) or ""},
