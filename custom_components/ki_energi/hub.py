@@ -37,7 +37,7 @@ class KiHub:
         self.store = Store(hass, STORE_VERSION, f"{DOMAIN}.{entry.entry_id}.minne")
         self.minne: dict[str, Any] = {
             "profil": {}, "tau": {}, "state": {"overstyringer": {}, "rotasjon": 0},
-            "logg": [], "vvb": {}, "moduser": {}, "nettleie": {}, "sparing": {}, "prognose": {}, "lys": {},
+            "logg": [], "vvb": {}, "moduser": {}, "nettleie": {}, "sparing": {}, "prognose": {}, "lys": {}, "lading": {},
         }
         self.nettleie = None
         self.sparing = None
@@ -45,6 +45,7 @@ class KiHub:
         self.lys = None
         self.engine = None
         self.vvb = None
+        self.lading = None
         self.moduser = None
         self._avmeldinger: list = []
 

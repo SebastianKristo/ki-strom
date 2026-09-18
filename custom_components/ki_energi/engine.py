@@ -935,8 +935,16 @@ class KiEngine:
         margin_kw = (margin["kwh"] / max(budsjett["timer_igjen"], 0.02)) if margin else None
         plan, ledig = self.fordel(laster, budsjett, prognose, vvb_kw, margin_kw)
 
+        # Bilen får det varmen ikke bruker. Den ligger etter `fordel` med vilje: varmen
+        # tar det den trenger, bilen får resten, og den fortrenger aldri en ovn.
+        lading_kw = 0.0
+        if h.lading is not None and h.lading.konfigurert():
+            lv = await h.lading.bruk(max(0.0, ledig))
+            lading_kw = lv.get("kw") or 0.0
+            ledig = max(0.0, ledig - lading_kw)
+
         styrt_kw = sum(p["effekt"] for p in plan if p.get("handling") == "normal")
-        forventet = round(prognose + vvb_kw + styrt_kw, 2)
+        forventet = round(prognose + vvb_kw + styrt_kw + lading_kw, 2)
         farge = self.sone_farge(forventet, budsjett["tillatt_snitt"])
         senket = [p for p in plan if p.get("handling") == "senket"]
 
@@ -1086,7 +1094,8 @@ class KiEngine:
             "prognose_15_kw": prog[15], "prognose_30_kw": prog[30],
             "prognose_60_kw": prog[60], "prognose_120_kw": prog[120],
             "vvb_reservert_kw": round(vvb_kw, 2), "vvb_grunn": vvb_grunn,
-            "ledig_kw": ledig, "solfaktor": self.solfaktor(), "malekilde": budsjett["kilde"],
+            "ledig_kw": ledig, "lading_kw": lading_kw,
+            "solfaktor": self.solfaktor(), "malekilde": budsjett["kilde"],
             "tak_aktivt": budsjett["tak_aktivt"],
             "lagring": ".storage (integrasjon)", "lagring_ok": True,
             "profil_oppforinger": len(h.minne["profil"]), "tau_soner": len(h.minne["tau"]),
