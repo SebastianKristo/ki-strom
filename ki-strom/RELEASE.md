@@ -1,6 +1,15 @@
-# KI Energi 2.21.1
+# KI Energi 2.22.0
 
-## Ladeeffekten kunne ikke velges i oppsettet
+Samme innhold som 2.21.1, med nytt versjonsnummer. 2.21.1 ble aldri pushet — pakka ble
+ikke lastet ned, og skriptet pushet det som alt lå i repoet. Et ubrukt nummer gjør at
+verken en gammel zip eller en gammel tagg kan forveksles med denne.
+
+Repoet står på 2.21.0 nå, så denne pakka inneholder to ting: ladingen fra 2.21.0 er
+uendret, og oppsettsfeilen fra 2.21.1 er rettet.
+
+
+
+## Ladeeffekten kunne ikke velges i oppsettet (var 2.21.1)
 
 Feltet for bilens ladeeffekt filtrerte på `device_class: power`. Sensoren din er en
 «Homey Link Number» — bare et tall, uten device class — og ble derfor filtrert bort fra
