@@ -16,7 +16,8 @@ from homeassistant.util import dt as dt_util
 from .const import (
     CONF_STROMPRIS,
     AKSJON_HELG_JA, AKSJON_HELG_NAA, AKSJON_HELG_NEI, AKSJON_HJEM_FORLENG, AKSJON_HJEM_JA, AKSJON_HJEM_NAA,
-    AKSJON_HJEM_NEI, AKSJON_HJEM_SENERE, AKSJON_HYTTE_BLIR, AKSJON_HYTTE_DRAR, CONF_GARDINER, CONF_HANKLEVARMER, CONF_HANKLEVARMER_EFFEKT,
+    AKSJON_HJEM_NEI, AKSJON_HJEM_SENERE, AKSJON_HYTTE_BLIR, AKSJON_HYTTE_DRAR,
+    CONF_BAD_FUKT, CONF_GARDINER, CONF_HANKLEVARMER, CONF_HANKLEVARMER_EFFEKT,
     CONF_UTE_TEMP, CONF_VAER,
 )
 from .hub import KiHub
@@ -463,8 +464,23 @@ class KiModuser:
         styr = h.on("ki_styr_hanklevarmer", True)
         minutter_pa = int((naa - self.hank_pa_siden).total_seconds() / 60) if (pa and self.hank_pa_siden) else 0
         maks = h.num("ki_hanklevarmer_maks_pa_tid", 240)
+        # Fuktvinduet leses uten å endre noe: publiseringen skal beskrive, ikke styre.
+        fukt_til = self.m.get("fukt_til")
+        fukt_slutt = dt_util.parse_datetime(fukt_til) if isinstance(fukt_til, str) else fukt_til
+        i_fuktvindu = bool(fukt_slutt and naa < fukt_slutt)
+        fukt_ent = h.cfg(CONF_BAD_FUKT)
+        fukt_na = None
+        if fukt_ent and h.finnes(fukt_ent):
+            try:
+                fukt_na = float(h.st(fukt_ent))
+            except (TypeError, ValueError):
+                fukt_na = None
+
         if not styr:
             grunn = "KI-styring er av — står på konstant."
+        elif pa and i_fuktvindu:
+            igjen = int((fukt_slutt - naa).total_seconds() / 60)
+            grunn = f"Tørker håndklær etter dusj — {igjen} min igjen."
         elif pa and i_vindu:
             grunn = "Varmer i dusjvinduet."
         elif pa:
@@ -501,6 +517,11 @@ class KiModuser:
         mnd = sp.get("maned", {})
         spart_kwh_mnd = max(0.0, (mnd.get("dager", 0) * 1440 - mnd.get("pa_min", 0)) / 60 * w_nominell / 1000) + spart_kwh_dag
         h.sett_sensor("ki_hanklevarmer", "pa" if pa else "av", {
+            "fukt_styring": h.on("ki_hanklevarmer_fukt", False) and bool(fukt_ent),
+            "fukt_na": fukt_na,
+            "fukt_grense": h.num("ki_hanklevarmer_fukt_grense", 70),
+            "i_fuktvindu": i_fuktvindu,
+            "fukt_til": fukt_slutt.isoformat() if fukt_slutt else None,
             "forklaring": grunn, "styr": styr, "i_vindu": i_vindu, "minutter_pa": minutter_pa, "maks_min": maks,
             "effekt_nominell_w": round(w_nominell, 1), "pa_min_i_dag": round(sp.get("pa_min", 0)),
             "spart_kwh_i_dag": round(spart_kwh_dag, 3), "spart_kr_i_dag": round(spart_kwh_dag * pris, 2),
@@ -509,6 +530,67 @@ class KiModuser:
             "bryter": ent, "effekt_sensor": eff or "", "effekt_w": h.f(eff) if eff else None,
             "morgen": f"{h.tid_str('ki_hanklevarmer_morgen_start', '05:30')}–{h.tid_str('ki_hanklevarmer_morgen_slutt', '08:30')}",
             "kveld": f"{h.tid_str('ki_hanklevarmer_kveld_start', '19:00')}–{h.tid_str('ki_hanklevarmer_kveld_slutt', '22:00')}"})
+
+    def fukt_vindu(self, naa: datetime) -> tuple[bool, str]:
+        """Er vi i et fuktvindu etter dusj? Returnerer (aktiv, forklaring).
+
+        Fukten må ha ligget over grensen SAMMENHENGENDE i et antall minutter. Et enkelt
+        øyeblikksmål ville slått på varmeren hver gang noen vasker hendene eller koker
+        vann; det som skiller en dusj fra alt annet er at fukten blir stående.
+
+        Faller fukten under grensen før tiden er ute, nullstilles klokka. Det er med
+        vilje: halvveis oppfylt to ganger er ikke det samme som oppfylt én gang.
+
+        Når vinduet først er åpnet, står det uavhengig av fukten etterpå. Håndklærne
+        skal tørke, og de er like våte om fukten i rommet har lagt seg.
+        """
+        h = self.hub
+        fukt_ent = h.cfg(CONF_BAD_FUKT)
+        if not fukt_ent or not h.finnes(fukt_ent):
+            return False, ""
+        if not h.on("ki_hanklevarmer_fukt", False):
+            self.m.pop("fukt_over_siden", None)
+            return False, ""
+
+        # Et åpent vindu står til tiden er ute, uansett hva fukten gjør nå.
+        til = self.m.get("fukt_til")
+        if til:
+            slutt = dt_util.parse_datetime(til) if isinstance(til, str) else til
+            if slutt and naa < slutt:
+                igjen = int((slutt - naa).total_seconds() / 60)
+                return True, f"Etter dusj — {igjen} min igjen av vinduet"
+            self.m.pop("fukt_til", None)
+            self.m.pop("fukt_over_siden", None)
+
+        try:
+            fukt = float(h.st(fukt_ent))
+        except (TypeError, ValueError):
+            return False, ""
+
+        grense = h.num("ki_hanklevarmer_fukt_grense", 70)
+        kreves = h.num("ki_hanklevarmer_fukt_minutter", 3)
+
+        if fukt < grense:
+            self.m.pop("fukt_over_siden", None)
+            return False, ""
+
+        siden = self.m.get("fukt_over_siden")
+        start = dt_util.parse_datetime(siden) if isinstance(siden, str) else siden
+        if start is None:
+            self.m["fukt_over_siden"] = naa.isoformat()
+            return False, ""
+
+        minutter = (naa - start).total_seconds() / 60
+        if minutter < kreves:
+            return False, ""
+
+        # Grensen er holdt lenge nok: åpne vinduet.
+        timer = h.num("ki_hanklevarmer_fukt_timer", 2)
+        slutt = naa + timedelta(hours=timer)
+        self.m["fukt_til"] = slutt.isoformat()
+        self.m.pop("fukt_over_siden", None)
+        return True, (f"Fukten har vært over {int(grense)} % i {int(kreves)} min — "
+                      f"varmeren står på i {timer:g} t")
 
     async def hanklevarmer(self, naa: datetime) -> None:
         h = self.hub
@@ -530,8 +612,19 @@ class KiModuser:
             return
 
         minutt = naa.hour * 60 + naa.minute
-        i_vindu = (h.mellom(h.tid_min("ki_hanklevarmer_morgen_start", "05:30"), h.tid_min("ki_hanklevarmer_morgen_slutt", "08:30"), minutt)
-                   or h.mellom(h.tid_min("ki_hanklevarmer_kveld_start", "19:00"), h.tid_min("ki_hanklevarmer_kveld_slutt", "22:00"), minutt))
+        tidsvindu = (h.mellom(h.tid_min("ki_hanklevarmer_morgen_start", "05:30"), h.tid_min("ki_hanklevarmer_morgen_slutt", "08:30"), minutt)
+                     or h.mellom(h.tid_min("ki_hanklevarmer_kveld_start", "19:00"), h.tid_min("ki_hanklevarmer_kveld_slutt", "22:00"), minutt))
+
+        # Fuktvinduet regnes som et vindu på lik linje med dusjvinduene. Det er ikke
+        # bare enklere, det er nødvendig: uten det ville sikkerhetsavstengingen og
+        # kanten på et tidsvindu slått av varmeren midt i fuktvinduet.
+        fukt_pa, fukt_tekst = self.fukt_vindu(naa)
+        nytt_fuktvindu = fukt_pa and not self.m.get("fukt_meldt")
+        i_vindu = tidsvindu or fukt_pa
+        if fukt_pa:
+            self.m["fukt_meldt"] = True
+        else:
+            self.m.pop("fukt_meldt", None)
         maks = h.num("ki_hanklevarmer_maks_pa_tid", 240)
         if i_vindu and forrige_pa and not pa and not getattr(self, "_hank_vi_slo_av", False):
             self.m["hank_manuelt_av_i_vindu"] = True
@@ -547,7 +640,13 @@ class KiModuser:
         # Vinduskantene: slå på/av bare ved selve overgangen, så manuell bruk innimellom respekteres
         starter = minutt in (h.tid_min("ki_hanklevarmer_morgen_start", "05:30"), h.tid_min("ki_hanklevarmer_kveld_start", "19:00"))
         slutter = minutt in (h.tid_min("ki_hanklevarmer_morgen_slutt", "08:30"), h.tid_min("ki_hanklevarmer_kveld_slutt", "22:00"))
-        if i_vindu and not pa and (starter or not self.m.get("hank_manuelt_av_i_vindu")):
+        # Et ferskt fuktvindu overstyrer «slått av manuelt»: forrige avslag gjaldt
+        # forrige dusj, ikke denne.
+        if nytt_fuktvindu:
+            self.m.pop("hank_manuelt_av_i_vindu", None)
+            await h.logbook("KI Håndklevarmer", f"Slått på etter dusj — {fukt_tekst}")
+
+        if i_vindu and not pa and (starter or nytt_fuktvindu or not self.m.get("hank_manuelt_av_i_vindu")):
             # Effektvakt: utsett noen minutter i rød sone (45 W er lite, men prinsippet er likt)
             if h.sensor_state("ki_energi_status") in ("rod", "kritisk"):
                 self.m["hank_utsatt"] = True
@@ -561,6 +660,14 @@ class KiModuser:
             self.m.pop("hank_manuelt_av_i_vindu", None)
             self._hank_vi_slo_av = True
             await h.kall("switch", "turn_off", {"entity_id": ent})
+        # Fuktvinduet har ingen «kant» i klokka slik tidsvinduene har, så det må slås
+        # av eksplisitt når tiden er ute.
+        if self.m.get("fukt_var_pa") and not fukt_pa and not tidsvindu and pa:
+            self._hank_vi_slo_av = True
+            await h.kall("switch", "turn_off", {"entity_id": ent})
+            await h.logbook("KI Håndklevarmer", "Slått av — vinduet etter dusj er over.")
+        self.m["fukt_var_pa"] = fukt_pa
+
         if not i_vindu:
             self.m.pop("hank_manuelt_av_i_vindu", None)
 

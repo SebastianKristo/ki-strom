@@ -1,70 +1,91 @@
-# KI Energi 2.22.0
+# KI Energi 2.23.1
 
-Samme innhold som 2.21.1, med nytt versjonsnummer. 2.21.1 ble aldri pushet — pakka ble
-ikke lastet ned, og skriptet pushet det som alt lå i repoet. Et ubrukt nummer gjør at
-verken en gammel zip eller en gammel tagg kan forveksles med denne.
+## Flagg for om laderen er satt opp
 
-Repoet står på 2.21.0 nå, så denne pakka inneholder to ting: ladingen fra 2.21.0 er
-uendret, og oppsettsfeilen fra 2.21.1 er rettet.
+`sensor.ki_energi_status` publiserer nå `lading` og `bad_fukt` blant funksjonsflaggene,
+ved siden av `gardiner`, `hanklevarmer` og `elbil`.
 
+Kortene bruker `lading` til å skjule Elbillader-fanen når laderen ikke er koblet til. Det
+betyr noe annet enn `elbil`, som fantes fra før: `elbil` sier at huset har elbil,
+`lading` at laderen faktisk er satt opp i integrasjonen.
 
+`bad_fukt` følger samme mønster, for fuktstyringen av håndklevarmeren.
 
-## Ladeeffekten kunne ikke velges i oppsettet (var 2.21.1)
+# KI Energi 2.23.0
 
-Feltet for bilens ladeeffekt filtrerte på `device_class: power`. Sensoren din er en
-«Homey Link Number» — bare et tall, uten device class — og ble derfor filtrert bort fra
-lista. Filteret skjulte nettopp den sensoren man trenger.
+## Håndklevarmer etter dusj
 
-Filtreringen er fjernet. Feltet viser alle sensorer, og modulen leser enheten fra
-attributtet i stedet.
+Ny valgfri styring: har du en fuktsensor på badet, kan håndklevarmeren slås på når fukten
+har vært over en grense sammenhengende, og stå på en stund etterpå.
 
-### Enheten leses nå robust
+Standard er 70 %, tre minutter, to timer. Alt tre kan endres.
 
-`W` og `kW` håndteres som før, i alle skrivemåter. Nytt er sensorer **uten enhet i det
-hele tatt**, som er vanlig for tall fra broer: da avgjør størrelsen. En bil lader aldri
-på 2300 kW, men godt på 2300 W, så alt over 100 leses som watt.
+### Hvorfor «sammenhengende» er poenget
 
-Standardverdien peker nå på `sensor.tesla_model_y_batteri_charge_power`.
+Et enkelt øyeblikksmål over grensen ville slått på varmeren hver gang noen vasker hendene
+eller koker vann. Det som skiller en dusj fra alt annet er at fukten **blir stående**.
+Derfor må grensen holdes i tre minutter — og faller fukten under før tiden er ute,
+nullstilles klokka. Halvveis oppfylt to ganger er ikke det samme som oppfylt én gang.
 
-Seks nye tester for enhetslesningen, alle seks skrivemåter og tre tilfeller uten enhet.
-31 tester i alt.
+### Når vinduet først er åpnet, står det
 
----
+Fukten i rommet legger seg lenge før håndklærne er tørre. Vinduet varer derfor de to
+timene uansett hva fukten gjør etterpå, og statussensoren viser hvor mange minutter som
+er igjen.
 
-# KI Energi 2.21.0
+### Det samarbeider med det som alt var der
 
-## Billading: bilen får det varmen ikke bruker
+Fuktvinduet regnes som et vindu på lik linje med dusjvinduene. Det er ikke bare enklere,
+det er nødvendig: uten det ville sikkerhetsavstengingen på 240 minutter og kanten på et
+tidsvindu slått av varmeren midt i fuktvinduet.
 
-Ny modul `lading.py`. Den holder hytta under kapasitetstrinnet ved å gi bilen bare det
-som er til overs — den fortrenger aldri en ovn.
+Tre ting følger av det, og alle er med vilje:
 
-`engine.py` beregnet allerede `ledig` i hvert tikk: `tillatt_snitt` minus prognosen for
-uregulert forbruk, berederens reservasjon, usikkerhetsmarginen og varmen. Tallet ble
-publisert som `ledig_kw`, men ingenting styrte på den. Ladingen er lagt inn **etter**
-`fordel()`, altså etter at varmen har tatt sitt: en panelovn som ikke får strøm blir kald
-og må hentes igjen, mens bilen bare mister tid.
-
-Bilens effekt er lagt inn i `forventet` for timen, så nettleievurderingen og
-prognoselæringen ser den.
-
-### Fire knapper, ikke et settpunkt
-
-5, 10, 16 og 18 A — omtrent 1,15 / 2,3 / 3,68 / 4,14 kW ved 230 V enfase. Modulen velger
-det høyeste trinnet som holder seg under det ledige, og stopper når ikke engang 5 A får
-plass. Knappene kan settes opp som oppslag i YAML eller som liste fra skjemaet; for lista
-leses ampere ut av entitets-ID-en.
-
-### Målingen kontrollerer, den styrer ikke
-
-Ligger bilen mer enn 0,5 kW under trinnet vi satte, frigjøres differansen til de andre
-lastene. Under en halv kilowatt regnes som måleusikkerhet.
-
-### To sperrer
-
-`ki_lading_min_mellom_min` (5) og `ki_lading_dodband_kw` (0,6). Begge er nødvendige fordi
-sensoren oppdaterer ved hver endring: uten dem ville hver måling utløst en ny endring.
+* **Effektvakten gjelder også her.** Er huset i rød sone når vinduet åpner, utsettes
+  starten, som i dusjvinduene.
+* **Et ferskt fuktvindu overstyrer «slått av manuelt».** Slo du den av i går kveld,
+  gjaldt det den dusjen, ikke denne.
+* **Fuktvinduet slås av eksplisitt** når tiden er ute. Tidsvinduene har en kant i klokka
+  å reagere på; fuktvinduet har ikke det.
 
 ### Nye entiteter
 
-`switch.ki_lading_automatikk`, `number.ki_lading_min_mellom_min`,
-`number.ki_lading_dodband_kw`, `sensor.ki_lading_status`.
+* `switch.ki_hanklevarmer_fukt` — av som standard, så ingenting endrer seg før du slår
+  den på
+* `number.ki_hanklevarmer_fukt_grense` (40–95 %)
+* `number.ki_hanklevarmer_fukt_minutter` (1–30 min)
+* `number.ki_hanklevarmer_fukt_timer` (0,5–8 t)
+
+`sensor.ki_hanklevarmer` har fått `fukt_styring`, `fukt_na`, `fukt_grense`,
+`i_fuktvindu` og `fukt_til`, og forklaringen sier «Tørker håndklær etter dusj — 87 min
+igjen» når vinduet er åpent.
+
+### Oppsett
+
+Nytt felt under Utstyr: fuktsensor for badet. Uten device_class-filter, av samme grunn
+som ladeeffekten — sensorer fra broer har ofte ingen device class, og filteret ville
+skjult dem.
+
+### Tester
+
+20 nye i `tests/test_hanklevarmer_fukt.py`: uten sensor, avslått, sensor uten tall, under
+grensen, første måling, for kort tid, grensen holdt lenge nok, fall som nullstiller
+klokka, vinduet som står når fukten faller, vinduet som lukkes, ny dusj som åpner nytt
+vindu, fire grenseverdier og fem varigheter. 51 tester i alt med ladingen.
+
+---
+
+# KI Energi 2.22.0
+
+Ladingen fra 2.21.0 uendret, og oppsettsfeilen fra 2.21.1 rettet: feltet for bilens
+ladeeffekt filtrerte på `device_class: power`, og en «Homey Link Number» uten device class
+ble filtrert bort. Filtreringen er fjernet, og enheten leses fra attributtet — `W`, `kW`,
+eller ingen enhet, der størrelsen avgjør.
+
+# KI Energi 2.21.0
+
+Ny modul `lading.py`: bilen får bare det varmen ikke bruker, og fortrenger aldri en ovn.
+Fire trinn (5/10/16/18 A), målingen kontrollerer i stedet for å styre, og to sperrer mot
+vingling. Nye entiteter `switch.ki_lading_automatikk`,
+`number.ki_lading_min_mellom_min`, `number.ki_lading_dodband_kw` og
+`sensor.ki_lading_status`.
