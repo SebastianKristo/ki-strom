@@ -42,8 +42,10 @@ from .hub import KiHub
 
 _LOGGER = logging.getLogger(__name__)
 
-# Trinnene knappene gir, i ampere. Rekkefølgen er stigende og betyr noe.
-TRINN = (5, 10, 16, 18)
+# Trinnene brukes bare som fallback. De ekte kommer fra knappene du har satt opp:
+# én bil har 5/8/10/16 A, en annen 5/10/16/18. Å hardkode én liste betyr at knapper
+# hoppes over med en advarsel, og at trinn som ikke finnes likevel kan velges.
+TRINN = (5, 8, 10, 16, 18)
 # 230 V enfase. Brukes bare til å anslå hva et trinn koster i kW før vi har målt.
 VOLT = 230.0
 
@@ -53,13 +55,13 @@ def trinn_kw(ampere: int) -> float:
     return round(ampere * VOLT / 1000.0, 2)
 
 
-def velg_trinn(ledig_kw: float, minste: int = 0) -> int | None:
+def velg_trinn(ledig_kw: float, minste: int = 0, trinn: tuple[int, ...] = TRINN) -> int | None:
     """Høyeste trinn som holder seg under `ledig_kw`.
 
     Returnerer None når ikke engang det laveste trinnet får plass — altså «ikke lad».
-    `minste` lar en fremtidig innstilling kreve et gulv uten å røre logikken her.
+    `trinn` er bilens egne trinn; standarden er bare en fallback.
     """
-    kandidater = [a for a in TRINN if a >= minste and trinn_kw(a) <= ledig_kw]
+    kandidater = [a for a in trinn if a >= minste and trinn_kw(a) <= ledig_kw]
     return max(kandidater) if kandidater else None
 
 
@@ -88,10 +90,11 @@ class KiLading:
         rå = self.hub.cfg(CONF_LADESTROM_KNAPPER)
         ut: dict[int, str] = {}
         if isinstance(rå, dict):
-            for a in TRINN:
-                eid = rå.get(str(a)) or rå.get(a)
-                if eid:
-                    ut[a] = eid
+            for nøkkel, eid in rå.items():
+                try:
+                    ut[int(nøkkel)] = eid
+                except (TypeError, ValueError):
+                    _LOGGER.warning("ki_energi lading: «%s» er ikke et amperetall", nøkkel)
             return ut
         if isinstance(rå, str):
             rå = [rå]
@@ -103,12 +106,21 @@ class KiLading:
                     "Entitets-ID-en må inneholde trinnet, som «..._16a_...».", eid)
                 continue
             a = int(m.group(1))
-            if a in TRINN:
+            # Ingen sjekk mot en fast liste. Har du en 8 A-knapp, er 8 A et trinn.
+            if 1 <= a <= 99:
                 ut[a] = eid
             else:
-                _LOGGER.warning("ki_energi lading: %s A er ikke et kjent trinn %s — hopper over %s",
-                                a, TRINN, eid)
+                _LOGGER.warning("ki_energi lading: %s A virker urimelig — hopper over %s", a, eid)
         return ut
+
+    def trinn(self) -> tuple[int, ...]:
+        """Trinnene denne bilen faktisk har, stigende.
+
+        Hentet fra knappene i oppsettet. Er ingen satt opp, brukes fallbacken — men da
+        er `konfigurert()` uansett usann, så det er bare for å slippe en tom liste.
+        """
+        k = sorted(self._knapper())
+        return tuple(k) if k else TRINN
 
     def _bryter(self) -> str | None:
         return self.hub.cfg(CONF_LADER_BRYTER)
@@ -259,7 +271,7 @@ class KiLading:
             if målt < forventet - 0.5:
                 ledig_kw += forventet - målt
 
-        ønsket = velg_trinn(ledig_kw)
+        ønsket = velg_trinn(ledig_kw, 0, self.trinn())
 
         # Minsteavstand: hver endring gir bilen et avbrudd, så vi haster ikke.
         min_min = h.num("ki_lading_min_mellom_min", 5)
@@ -343,7 +355,7 @@ class KiLading:
             "ledig_kw": round(ledig_kw, 2),
             "malt_kw": self.effekt_kw(),
             "satt_trinn_a": self.satt_trinn,
-            "trinn_tilgjengelig": sorted(self._knapper()),
+            "trinn_tilgjengelig": list(self.trinn()),
             "sist_endret": self.sist_endret.isoformat() if self.sist_endret else None,
             "automatikk": self.hub.on("ki_lading_automatikk", True),
             "batteri_pst": self.soc(),

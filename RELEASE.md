@@ -1,3 +1,27 @@
+# KI Energi 2.29.0
+
+## Ladetrinnene kommer fra knappene dine, ikke fra en liste i koden
+
+`TRINN = (5, 10, 16, 18)` var hardkodet. Bilen din har **5, 8, 10 og 16 A**.
+
+To ting fulgte av det: 8 A-knappen ble hoppet over med «ikke et kjent trinn», og 18 A
+kunne velges selv om knappen ikke finnes — motoren ville trykket på en entitet som ikke
+er der.
+
+Trinnene leses nå ut av knappene du har satt opp. Har du en 8 A-knapp, er 8 A et trinn.
+Har du 32 A på en trefasekurs, er det også et trinn — vi overprøver ikke oppsettet.
+
+Bare knapper uten et amperetall i navnet hoppes over, fordi vi ikke kan plassere dem.
+
+`trinn_tilgjengelig` på `sensor.ki_lading_status` viser nå de ekte trinnene.
+
+### Tester
+
+48 for ladingen: valg mot 5/10/16/18 og mot 5/8/10/16, at trinnene følger knappene, at et
+uvanlig trinn som 32 A godtas, og at navn uten ampere hoppes over. 81 i alt.
+
+---
+
 # KI Energi 2.28.0
 
 ## Baderomsvifte på samme fuktmåling

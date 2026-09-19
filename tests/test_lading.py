@@ -31,16 +31,32 @@ def test_trinn_kw():
 
 
 def test_velg_trinn_tar_hoyeste_som_passer():
-    assert velg_trinn(0.0) is None
-    assert velg_trinn(1.0) is None          # under laveste trinn
-    assert velg_trinn(1.15) == 5            # nøyaktig laveste går
-    assert velg_trinn(2.29) == 5
-    assert velg_trinn(2.3) == 10
-    assert velg_trinn(3.67) == 10
-    assert velg_trinn(3.68) == 16
-    assert velg_trinn(4.13) == 16
-    assert velg_trinn(4.14) == 18
-    assert velg_trinn(50.0) == 18           # aldri over høyeste knapp
+    """Mot en bil med 5/10/16/18 A."""
+    t = (5, 10, 16, 18)
+    assert velg_trinn(0.0, 0, t) is None
+    assert velg_trinn(1.0, 0, t) is None          # under laveste trinn
+    assert velg_trinn(1.15, 0, t) == 5            # nøyaktig laveste går
+    assert velg_trinn(2.29, 0, t) == 5
+    assert velg_trinn(2.3, 0, t) == 10
+    assert velg_trinn(3.67, 0, t) == 10
+    assert velg_trinn(3.68, 0, t) == 16
+    assert velg_trinn(4.13, 0, t) == 16
+    assert velg_trinn(4.14, 0, t) == 18
+    assert velg_trinn(50.0, 0, t) == 18           # aldri over høyeste knapp
+
+
+def test_velg_trinn_med_andre_trinn():
+    """Sebastians bil har 5/8/10/16 A — ingen 18, men en 8-er.
+
+    Det var grunnen til å slutte med en fast liste: 8 A ble hoppet over som «ukjent»,
+    og 18 A kunne velges selv om knappen ikke fantes.
+    """
+    t = (5, 8, 10, 16)
+    assert velg_trinn(1.83, 0, t) == 5
+    assert velg_trinn(1.84, 0, t) == 8            # 8 A = 1,84 kW
+    assert velg_trinn(2.29, 0, t) == 8
+    assert velg_trinn(2.3, 0, t) == 10
+    assert velg_trinn(50.0, 0, t) == 16           # ingen 18 A å velge
 
 
 def test_velg_trinn_med_gulv():
@@ -142,14 +158,30 @@ def test_knapper_fra_liste_leser_ampere_fra_id():
     }
 
 
-def test_knapper_hopper_over_ukjente():
-    """En knapp på feil trinn er verre enn en manglende knapp."""
+def test_knapper_uten_ampere_hoppes_over():
+    """Et navn uten amperetall kan vi ikke plassere, og da lar vi det være."""
     lading, _ = lag(knapper=[
         "button.tesla_ladestrom_16a_button",
-        "button.tesla_ladestrom_32a_button",   # ikke et kjent trinn
         "button.tesla_lade_maks",              # ingen ampere i navnet
     ])
     assert lading._knapper() == {16: "button.tesla_ladestrom_16a_button"}
+
+
+def test_trinn_folger_knappene():
+    """Trinnene er de knappene du har, ikke en fast liste i koden."""
+    lading, _ = lag(knapper=[
+        "button.tesla_ladestrom_5a_button",
+        "button.tesla_ladestrom_8a_button",
+        "button.tesla_ladestrom_10a_button",
+        "button.tesla_ladestrom_16a_button",
+    ])
+    assert lading.trinn() == (5, 8, 10, 16)
+
+
+def test_uvanlig_trinn_godtas():
+    """32 A er et ekte trinn på en trefasekurs. Vi skal ikke overprøve oppsettet."""
+    lading, _ = lag(knapper=["button.lader_32a"])
+    assert lading.trinn() == (32,)
 
 
 def test_standardkonfigurasjonen_er_tom():
