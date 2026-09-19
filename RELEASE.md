@@ -1,3 +1,16 @@
+# KI Energi 2.27.0
+
+## Nytt attributt: har_fuktsensor
+
+`sensor.ki_hanklevarmer` hadde bare `fukt_styring`, som er sann når styringen er slått
+PÅ. Et kort kunne derfor ikke skille «ingen fuktsensor er valgt» fra «sensor valgt, men
+styringen er av» — og viste innstillingene i begge tilfellene.
+
+`har_fuktsensor` sier om en sensor er valgt i det hele tatt. De to sammen gir kortene det
+de trenger.
+
+---
+
 # KI Energi 2.26.0
 
 ## «Hjemkomst 13:00» på en lørdag

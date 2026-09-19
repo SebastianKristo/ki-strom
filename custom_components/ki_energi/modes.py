@@ -523,6 +523,12 @@ class KiModuser:
         mnd = sp.get("maned", {})
         spart_kwh_mnd = max(0.0, (mnd.get("dager", 0) * 1440 - mnd.get("pa_min", 0)) / 60 * w_nominell / 1000) + spart_kwh_dag
         h.sett_sensor("ki_hanklevarmer", "pa" if pa else "av", {
+            # To ulike ting, og kortene trenger begge:
+            #   har_fuktsensor — er en sensor valgt i det hele tatt
+            #   fukt_styring   — er styringen slått PÅ
+            # Før fantes bare den andre, og et kort kunne ikke skille «ikke satt opp»
+            # fra «satt opp, men av».
+            "har_fuktsensor": bool(fukt_ent),
             "fukt_styring": h.on("ki_hanklevarmer_fukt", False) and bool(fukt_ent),
             "fukt_na": fukt_na,
             "fukt_grense": h.num("ki_hanklevarmer_fukt_grense", 70),
