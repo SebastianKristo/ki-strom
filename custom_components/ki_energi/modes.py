@@ -292,7 +292,13 @@ class KiModuser:
             "hjemkomst_aktiv": hjemkomst,
             "venter_svar": venter,
             "auto_etter_timer": grense_t,
-            "hjemkomst_tid": h.tekst("ki_hjemkomst_tid", "17:00"),
+            # Bare når en hjemkomst faktisk er planlagt. Sto den her alltid, leste
+            # kortene den som «dere kommer hjem kl. 13», også en lørdag der ingen har
+            # bedt om oppvarming — tallet er bare standardverdien i innstillingen.
+            "hjemkomst_tid": h.tekst("ki_hjemkomst_tid", "17:00") if hjemkomst else None,
+            # Innstillingen for seg, så kortene kan vise den under Bortemodus uten å
+            # forveksle den med en planlagt hjemkomst.
+            "hjemkomst_tid_innstilling": h.tekst("ki_hjemkomst_tid", "17:00"),
         })
 
     async def hjemkomst_ferdig(self, grunn: str) -> None:

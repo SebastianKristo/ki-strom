@@ -1,3 +1,17 @@
+# KI Energi 2.26.0
+
+## «Hjemkomst 13:00» på en lørdag
+
+`hjemkomst_tid` ble publisert på `sensor.ki_tilstedevaerelse` **alltid**, også når ingen
+hjemkomst var planlagt. Tallet var bare standardverdien i innstillingen, men kortene leste
+det som «dere kommer hjem klokka 13» — også en lørdag der ingen hadde bedt om noe.
+
+Attributtet settes nå bare når `hjemkomst_aktiv` er sann. Innstillingen for seg ligger i
+`hjemkomst_tid_innstilling`, så kortene kan vise den under Bortemodus uten å forveksle den
+med en planlagt hjemkomst.
+
+---
+
 # KI Energi 2.25.0
 
 ## Lading bare hjemme, og bare til batteriet er fullt
