@@ -17,7 +17,7 @@ from .const import (
     CONF_IMPORTERT_ENERGI, CONF_KAPASITETSTRINN, CONF_NORDPOOL, CONF_NORGESPRIS_AKTIV, CONF_SONER,
     CONF_STROMPRIS, CONF_STUE_AREAL, CONF_TILSTEDE_CYBELE, CONF_TILSTEDE_RUNE,
     CONF_TILSTEDE_SEBASTIAN, CONF_TOPP1, CONF_TOPP2, CONF_TOPP3, CONF_TOTAL_EFFEKT, CONF_UTE_TEMP,
-    CONF_BAD_FUKT, CONF_LADER_BRYTER, CONF_LADER_EFFEKT, CONF_LADER_SOC,
+    CONF_BAD_FUKT, CONF_BAD_VIFTE, CONF_LADER_BRYTER, CONF_LADER_EFFEKT, CONF_LADER_SOC,
     CONF_LADER_STED, CONF_LADER_STED_NAVN, CONF_LADESTROM_KNAPPER,
     CONF_VAER, CONF_VARSEL_MOTTAKERE, CONF_VVB_BRYTER, CONF_VVB_EFFEKT, DEFAULT_CONFIG,
     DEFAULT_SONER, DOMAIN, PROFILER, PROFIL_TEKST,
@@ -127,6 +127,9 @@ SKJEMA_UTSTYR = {
     # Fuktsensor på badet. Uten device_class-filter, av samme grunn som ladeeffekten:
     # sensorer fra broer har ofte ingen device class, og filteret ville skjult dem.
     vol.Optional(CONF_BAD_FUKT): _ent("sensor"),
+    # Baderomsvifta. Startes av samme fuktmåling som håndklevarmeren, men med egen
+    # varighet i minutter.
+    vol.Optional(CONF_BAD_VIFTE): _ent(["switch", "fan", "input_boolean"]),
     vol.Optional(CONF_HANKLEVARMER_EFFEKT): _ent("sensor", device_class="power"),
     vol.Optional(CONF_GARDINER): _ent("cover"),
     vol.Optional(CONF_HVITEVARER): _ent("sensor", multiple=True, device_class="power"),

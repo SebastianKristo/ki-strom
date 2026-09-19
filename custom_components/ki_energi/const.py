@@ -33,6 +33,8 @@ CONF_HANKLEVARMER = "hanklevarmer"
 CONF_HANKLEVARMER_EFFEKT = "hanklevarmer_effekt"
 # Fuktsensor på badet. Er den satt, kan håndklevarmeren slås på etter dusj.
 CONF_BAD_FUKT = "bad_fukt"
+# Baderomsvifte som kan startes av samme fuktmåling som håndklevarmeren.
+CONF_BAD_VIFTE = "bad_vifte"
 CONF_GARDINER = "gardiner"
 CONF_TILSTEDE_CYBELE = "tilstede_cybele"
 CONF_TILSTEDE_SEBASTIAN = "tilstede_sebastian"
@@ -207,6 +209,7 @@ DEFAULT_CONFIG = {
     CONF_HANKLEVARMER: "switch.hanklevarmer",
     CONF_HANKLEVARMER_EFFEKT: "sensor.hanklevarmer_power",
     CONF_BAD_FUKT: "",
+    CONF_BAD_VIFTE: "",
     CONF_GARDINER: "",
     CONF_TILSTEDE_CYBELE: "", CONF_TILSTEDE_SEBASTIAN: "", CONF_TILSTEDE_RUNE: "",
     CONF_TOPP1: "sensor.nettleie_elvia_toppforbruk",
@@ -276,6 +279,7 @@ PRESETS: dict[str, dict] = {
             CONF_AREAL: 100, CONF_BYGGEAR: 1970, CONF_GLASS_M2: 12, CONF_STUE_AREAL: 30,
             CONF_VVB_BRYTER: "", CONF_VVB_EFFEKT: "sensor.hytte_bereder_effekt",
             CONF_HANKLEVARMER: "", CONF_HANKLEVARMER_EFFEKT: "", CONF_BAD_FUKT: "",
+            CONF_BAD_VIFTE: "",
             CONF_GARDINER: "",
             CONF_TOTAL_EFFEKT: "sensor.hytte_strommaler_effekt", CONF_IMPORTERT_ENERGI: "sensor.hytte_strommaler_imported_energy",
             CONF_UTE_TEMP: "sensor.hytte_utetemperatur", CONF_VAER: "weather.forecast_home",
@@ -320,6 +324,7 @@ SWITCHES = [
     ("ki_gardin_folg_sol", "KI Gardiner Følg Sola", True, "mdi:weather-sunset"),
     ("ki_styr_hanklevarmer", "KI Styr Håndklevarmer", True, "mdi:radiator"),
     ("ki_hanklevarmer_fukt", "KI Håndklevarmer Etter Dusj", False, "mdi:water-percent"),
+    ("ki_bad_vifte_fukt", "KI Baderomsvifte Etter Dusj", False, "mdi:fan"),
     ("ki_vvb_prisstyring", "KI VVB Prisstyring", True, "mdi:cash-clock"),
     ("ki_vvb_alltid_pa", "KI VVB Alltid På", False, "mdi:power"),
     ("ki_vvb_folg_spotpris", "KI VVB Følg Spotpris", False, "mdi:chart-line"),
@@ -403,6 +408,8 @@ NUMBERS = [
     ("ki_hanklevarmer_fukt_grense", "KI Håndklevarmer Fuktgrense", 40, 95, 1, "%", 70, "mdi:water-percent"),
     ("ki_hanklevarmer_fukt_minutter", "KI Håndklevarmer Fukt Varighet", 1, 30, 1, "min", 3, "mdi:timer-sand"),
     ("ki_hanklevarmer_fukt_timer", "KI Håndklevarmer Etter Dusj Timer", 0.5, 8, 0.5, "t", 2, "mdi:clock-outline"),
+    # Vifta går i minutter, ikke timer: den skal lufte ut, ikke tørke håndklær.
+    ("ki_bad_vifte_minutter", "KI Baderomsvifte Minutter", 5, 120, 5, "min", 20, "mdi:fan-clock"),
     # Hver strømendring gir bilen et lite avbrudd, så vi haster ikke med å justere.
     ("ki_lading_min_mellom_min", "KI Lading Minste Tid Mellom Endringer", 1, 30, 1, "min", 5, "mdi:timer-sand"),
     # Dødbånd: vi bytter trinn bare når det nye gir noe å hente.

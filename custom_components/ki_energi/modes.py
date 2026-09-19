@@ -17,7 +17,7 @@ from .const import (
     CONF_STROMPRIS,
     AKSJON_HELG_JA, AKSJON_HELG_NAA, AKSJON_HELG_NEI, AKSJON_HJEM_FORLENG, AKSJON_HJEM_JA, AKSJON_HJEM_NAA,
     AKSJON_HJEM_NEI, AKSJON_HJEM_SENERE, AKSJON_HYTTE_BLIR, AKSJON_HYTTE_DRAR,
-    CONF_BAD_FUKT, CONF_GARDINER, CONF_HANKLEVARMER, CONF_HANKLEVARMER_EFFEKT,
+    CONF_BAD_FUKT, CONF_BAD_VIFTE, CONF_GARDINER, CONF_HANKLEVARMER, CONF_HANKLEVARMER_EFFEKT,
     CONF_UTE_TEMP, CONF_VAER,
 )
 from .hub import KiHub
@@ -109,6 +109,8 @@ class KiModuser:
         if forste_i_minuttet:
             await self._tidshendelser(naa, minutt)
             await self.hanklevarmer(naa)
+            # Etter håndklevarmeren, så begge ser samme fuktmåling i samme tikk.
+            await self.bad_vifte(naa)
             self._publiser_hanklevarmer(naa)
             await self.gardiner_tick(naa)
             await self.sommer_auto(naa, ny_dag)
@@ -529,6 +531,10 @@ class KiModuser:
             # Før fantes bare den andre, og et kort kunne ikke skille «ikke satt opp»
             # fra «satt opp, men av».
             "har_fuktsensor": bool(fukt_ent),
+            "har_badvifte": bool(h.cfg(CONF_BAD_VIFTE)),
+            "vifte_styring": h.on("ki_bad_vifte_fukt", False) and bool(h.cfg(CONF_BAD_VIFTE)),
+            "vifte_minutter": h.num("ki_bad_vifte_minutter", 20),
+            "vifte_til": self.m.get("vifte_til"),
             "fukt_styring": h.on("ki_hanklevarmer_fukt", False) and bool(fukt_ent),
             "fukt_na": fukt_na,
             "fukt_grense": h.num("ki_hanklevarmer_fukt_grense", 70),
@@ -542,6 +548,84 @@ class KiModuser:
             "bryter": ent, "effekt_sensor": eff or "", "effekt_w": h.f(eff) if eff else None,
             "morgen": f"{h.tid_str('ki_hanklevarmer_morgen_start', '05:30')}–{h.tid_str('ki_hanklevarmer_morgen_slutt', '08:30')}",
             "kveld": f"{h.tid_str('ki_hanklevarmer_kveld_start', '19:00')}–{h.tid_str('ki_hanklevarmer_kveld_slutt', '22:00')}"})
+
+    def _fukt_utlost(self, naa: datetime) -> bool:
+        """Har fukten ligget over grensen sammenhengende lenge nok, akkurat nå?
+
+        Skilt ut fordi BÅDE håndklevarmeren og baderomsvifta utløses av den samme
+        målingen, men har hver sin varighet — to timer mot tjue minutter. Lå klokka
+        inne i hver av dem, ville den første som kjørte nullstilt den for den andre.
+
+        Returnerer True bare i det tikket grensen er oppfylt. Den som spør åpner sitt
+        eget vindu ut fra det.
+        """
+        h = self.hub
+        fukt_ent = h.cfg(CONF_BAD_FUKT)
+        if not fukt_ent or not h.finnes(fukt_ent):
+            return False
+        try:
+            fukt = float(h.st(fukt_ent))
+        except (TypeError, ValueError):
+            return False
+
+        grense = h.num("ki_hanklevarmer_fukt_grense", 70)
+        kreves = h.num("ki_hanklevarmer_fukt_minutter", 3)
+
+        if fukt < grense:
+            self.m.pop("fukt_over_siden", None)
+            return False
+
+        siden = self.m.get("fukt_over_siden")
+        start = dt_util.parse_datetime(siden) if isinstance(siden, str) else siden
+        if start is None:
+            self.m["fukt_over_siden"] = naa.isoformat()
+            return False
+        if (naa - start).total_seconds() / 60 < kreves:
+            return False
+        return True
+
+    async def bad_vifte(self, naa: datetime) -> None:
+        """Baderomsvifta: på når fukten har vært høy lenge nok, av etter X minutter.
+
+        Egen varighet fra håndklevarmeren. Vifta skal lufte ut, ikke tørke håndklær, og
+        tjue minutter på full vifte er noe annet enn to timer med lunken varme.
+
+        Vi slår bare av det VI slo på. Har noen startet vifta manuelt, står den — den
+        som trykket vet best hvorfor.
+        """
+        h = self.hub
+        ent = h.cfg(CONF_BAD_VIFTE)
+        if not ent or not h.finnes(ent):
+            return
+        if not h.on("ki_bad_vifte_fukt", False):
+            return
+
+        til = self.m.get("vifte_til")
+        slutt = dt_util.parse_datetime(til) if isinstance(til, str) else til
+        pa = h.st(ent) == "on"
+
+        if slutt and naa < slutt:
+            if not pa and self.m.get("vifte_vi_slo_pa"):
+                await h.kall("switch", "turn_on", {"entity_id": ent})
+            return
+
+        if slutt:
+            # Tiden er ute. Slå av, men bare hvis det var vi som startet.
+            self.m.pop("vifte_til", None)
+            if pa and self.m.pop("vifte_vi_slo_pa", None):
+                await h.kall("switch", "turn_off", {"entity_id": ent})
+                await h.logbook("KI Baderomsvifte", "Slått av — luftet ferdig etter dusj.")
+            self.m.pop("vifte_vi_slo_pa", None)
+            return
+
+        if self._fukt_utlost(naa):
+            minutter = h.num("ki_bad_vifte_minutter", 20)
+            self.m["vifte_til"] = (naa + timedelta(minutes=minutter)).isoformat()
+            if not pa:
+                self.m["vifte_vi_slo_pa"] = True
+                await h.kall("switch", "turn_on", {"entity_id": ent})
+                await h.logbook("KI Baderomsvifte",
+                                f"Slått på etter dusj — lufter i {int(minutter)} min.")
 
     def fukt_vindu(self, naa: datetime) -> tuple[bool, str]:
         """Er vi i et fuktvindu etter dusj? Returnerer (aktiv, forklaring).
@@ -574,33 +658,20 @@ class KiModuser:
             self.m.pop("fukt_til", None)
             self.m.pop("fukt_over_siden", None)
 
-        try:
-            fukt = float(h.st(fukt_ent))
-        except (TypeError, ValueError):
+        if not self._fukt_utlost(naa):
             return False, ""
 
         grense = h.num("ki_hanklevarmer_fukt_grense", 70)
         kreves = h.num("ki_hanklevarmer_fukt_minutter", 3)
 
-        if fukt < grense:
-            self.m.pop("fukt_over_siden", None)
-            return False, ""
-
-        siden = self.m.get("fukt_over_siden")
-        start = dt_util.parse_datetime(siden) if isinstance(siden, str) else siden
-        if start is None:
-            self.m["fukt_over_siden"] = naa.isoformat()
-            return False, ""
-
-        minutter = (naa - start).total_seconds() / 60
-        if minutter < kreves:
-            return False, ""
-
         # Grensen er holdt lenge nok: åpne vinduet.
         timer = h.num("ki_hanklevarmer_fukt_timer", 2)
         slutt = naa + timedelta(hours=timer)
         self.m["fukt_til"] = slutt.isoformat()
-        self.m.pop("fukt_over_siden", None)
+        # Klokka nullstilles IKKE her. Baderomsvifta utløses av den samme målingen, og
+        # hadde håndklevarmeren tømt den, ville vifta aldri startet når begge er på.
+        # Den nullstilles når fukten faller under grensen, og gjenåpning hindres av at
+        # vinduet alt står åpent.
         return True, (f"Fukten har vært over {int(grense)} % i {int(kreves)} min — "
                       f"varmeren står på i {timer:g} t")
 

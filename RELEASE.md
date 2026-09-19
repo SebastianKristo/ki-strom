@@ -1,3 +1,47 @@
+# KI Energi 2.28.0
+
+## Baderomsvifte på samme fuktmåling
+
+Vifta starter når fukten har ligget over grensen sammenhengende, og slår seg av etter et
+antall minutter. Standard 20.
+
+### Egen varighet, samme utløsning
+
+Vifta skal lufte ut, håndklevarmeren skal tørke håndklær. Tjue minutter på full vifte er
+noe annet enn to timer med lunken varme, så varigheten er egen og regnes i minutter.
+
+Men de utløses av den **samme** målingen, og det tvang fram en endring: utløsningen er
+skilt ut i `_fukt_utlost()`. Lå klokka inne i hver av dem, ville den som kjørte først
+nullstilt den for den andre.
+
+Håndklevarmeren nullstilte faktisk klokka etter at den hadde åpnet sitt vindu. Med begge
+slått på ville vifta aldri ha startet. Klokka nullstilles nå først når fukten faller under
+grensen, og gjenåpning hindres av at vinduet alt står åpent.
+
+### Vi slår bare av det vi slo på
+
+Har noen startet vifta manuelt, står den. Vi husker om starten var vår, og rører den
+ellers ikke.
+
+### Nye entiteter
+
+* `switch.ki_bad_vifte_fukt` — av som standard
+* `number.ki_bad_vifte_minutter` (5 til 120 min, standard 20)
+
+Nytt felt under Utstyr: baderomsvifte. Tar `switch`, `fan` eller `input_boolean`.
+
+`sensor.ki_hanklevarmer` har fått `har_badvifte`, `vifte_styring`, `vifte_minutter` og
+`vifte_til`.
+
+### Tester
+
+13 nye i `tests/test_bad_vifte.py`: utløsning etter sammenhengende tid, nullstilling ved
+fall, at håndklevarmeren ikke stjeler utløsningen, start og stopp, egen varighet mot
+varmeren, vifte som sto på fra før, avslått, uten vifte, ny dusj, og fire varigheter.
+78 tester i alt.
+
+---
+
 # KI Energi 2.27.0
 
 ## Nytt attributt: har_fuktsensor
