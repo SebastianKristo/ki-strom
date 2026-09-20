@@ -7,7 +7,8 @@ from homeassistant.util import dt as dt_util
 from custom_components.ki_energi.modes import KiModuser as Modes
 
 
-def _m(borte, *, minutter=None, helg=False, hjemkomst=False, venter=False, grense=6):
+def _m(borte, *, minutter=None, helg=False, hjemkomst=False, venter=False, grense=6,
+       planlagt=None):
     m = object.__new__(Modes)
     satt = {}
     verdier = {"ki_helgemodus": helg, "ki_hjemkomst_aktiv": hjemkomst,
@@ -16,6 +17,7 @@ def _m(borte, *, minutter=None, helg=False, hjemkomst=False, venter=False, grens
         on=lambda n, std=False: bool(verdier.get(n, std)),
         num=lambda n, std=0: grense if n == "ki_helg_auto_timer" else std,
         tekst=lambda n, std="": "17:00",
+        dt=lambda n: planlagt,
         sett_sensor=lambda n, v, a=None: satt.update({n: (v, a or {})}),
     )
     m.m = {}
@@ -78,3 +80,21 @@ def test_attributtene_er_med():
               "hjemkomst_aktiv", "venter_svar", "auto_etter_timer", "hjemkomst_tid"):
         assert n in a, n
     assert a["auto_etter_timer"] == 8 and a["venter_svar"] is True
+
+
+def test_hjemkomst_planlagt_folger_med():
+    """Kortene teller ned mot tidspunktet, ikke mot klokkeslettet i innstillingen.
+
+    Søndag 13.00, svar «ja» da innstilt tid alt var passert: planen er om 30 minutter.
+    Uten datoen måtte kortet gjette, og la på et døgn — «om 23 t 45 min».
+    """
+    plan = dt_util.now() + timedelta(minutes=30)
+    t, a = _m(True, minutter=120, helg=True, hjemkomst=True, planlagt=plan)
+    assert a["hjemkomst_planlagt"] == plan.isoformat()
+    assert a["hjemkomst_tid"] == "17:00"
+
+
+def test_hjemkomst_planlagt_er_none_uten_hjemkomst():
+    """Ingen planlagt hjemkomst: feltet skal være tomt, ikke et gammelt tidspunkt."""
+    t, a = _m(True, minutter=120, helg=True)
+    assert a["hjemkomst_planlagt"] is None

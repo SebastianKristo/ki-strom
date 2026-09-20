@@ -252,6 +252,14 @@ class KiModuser:
         hjemkomst = h.on("ki_hjemkomst_aktiv")
         venter = h.on("ki_helg_venter_svar")
 
+        # Selve tidspunktet for hjemkomsten, ikke bare klokkeslettet i innstillingen.
+        # De to er ikke det samme: svarer han ja etter at innstilt tid er passert,
+        # settes planen til «om 30 minutter», og en fritidsbolig planlegges på en annen
+        # DAG. Kortene som bare hadde klokkeslettet måtte gjette datoen, og la på et
+        # døgn så snart tiden var passert — derfor sto det «om 23 t 45 min» kl. 13.00
+        # på en søndag der han nettopp hadde svart ja.
+        plan = h.dt("ki_hjemkomst_planlagt") if hjemkomst else None
+
         siden_raa = self.m.get("borte_siden")
         siden = None
         if siden_raa:
@@ -298,6 +306,9 @@ class KiModuser:
             # kortene den som «dere kommer hjem kl. 13», også en lørdag der ingen har
             # bedt om oppvarming — tallet er bare standardverdien i innstillingen.
             "hjemkomst_tid": h.tekst("ki_hjemkomst_tid", "17:00") if hjemkomst else None,
+            # Hele tidspunktet med dato, i lokal tid. Kortene skal regne nedtelling av
+            # denne, ikke av klokkeslettet over.
+            "hjemkomst_planlagt": plan.isoformat() if plan else None,
             # Innstillingen for seg, så kortene kan vise den under Bortemodus uten å
             # forveksle den med en planlagt hjemkomst.
             "hjemkomst_tid_innstilling": h.tekst("ki_hjemkomst_tid", "17:00"),
