@@ -117,7 +117,7 @@ class KiPrognoselaering:
         self._senket_naa |= set(senket)
         rad = self.m["prognoser"].setdefault(nk, {})
         if nye:
-            for h_key, pr in rad.items():
+            for pr in rad.values():
                 if not pr.get("pavirket"):
                     pr["pavirket"] = True
                     pr["pavirket_av"] = sorted(nye)

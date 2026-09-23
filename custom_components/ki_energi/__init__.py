@@ -1,6 +1,7 @@
 """KI Energi — intelligent klima- og energistyring for Home Assistant."""
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import timedelta
 
@@ -14,8 +15,8 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_IMPORTERT_ENERGI,
-    CONF_HANKLEVARMER_EFFEKT, CONF_HVITEVARER, CONF_TOTAL_EFFEKT, CONF_VVB_EFFEKT, DOMAIN, LAERING_MIN,
-    PLATFORMS, TICK_SEK,
+    CONF_HANKLEVARMER_EFFEKT, CONF_HVITEVARER, CONF_TOTAL_EFFEKT, CONF_VVB_EFFEKT, DOMAIN, EFFEKTSENSOR_SEK,
+    LAERING_MIN, PLATFORMS, TICK_SEK, TJENESTER,
 )
 from .engine import KiEngine
 from .hub import KiHub
@@ -74,7 +75,7 @@ def _migrer_soner_til_rom(hass: HomeAssistant, entry: ConfigEntry) -> None:
         ny_key = _slug(forste.get("rom") or rom)
         if ny_key in soner and ny_key not in keys:
             ny_key = ny_key + "_rom"
-        liste = lambda felt: [x for k in keys for x in ((soner[k].get(felt) if isinstance(soner[k].get(felt), list) else [soner[k].get(felt)]) or []) if x]  # noqa: E731
+        liste = lambda felt: [x for k in keys for x in ((soner[k].get(felt) if isinstance(soner[k].get(felt), list) else [soner[k].get(felt)]) or []) if x]  # noqa: E731,B023
         ny = dict(forste)
         ny.update(navn=forste.get("rom") or forste.get("navn"), climate=liste("climate"), effekt=liste("effekt"),
                   vindu=liste("vindu"), duty=next((soner[k].get("duty") for k in keys if soner[k].get("duty")), ""),
@@ -109,29 +110,62 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_options_oppdatert))
 
-    async def _tick(_now=None):
-        await hub.moduser.tick()
-        await hub.vvb.tick()
+    tick_laas = asyncio.Lock()
+
+    async def _del(navn: str, koro) -> None:
+        """Én del av ticket. Feiler den, logges det – og resten av ticket kjører likevel.
+
+        Før lå moduser og bereder rett i rekkefølge foran motoren: en feil i én av dem
+        stoppet hele ticket, og varmestyringen sto stille det minuttet uten at noe ble
+        logget. Motoren har alltid hatt sin egen vakt; nå har de andre det også."""
         try:
-            await hub.lys.tick()
+            await koro
         except Exception as e:  # noqa: BLE001
-            _LOGGER.debug("ki_energi: lys-tick feilet: %s", e)
-        await hub.engine.tick()
+            _LOGGER.exception("ki_energi: %s feilet i tick: %s", navn, e)
+            hub.feil_i_tick[navn] = str(e)
+        else:
+            hub.feil_i_tick.pop(navn, None)
+
+    async def _tick(_now=None):
+        # Overlapp: et tick som venter på et tregt tjenestekall skal ikke få et nytt
+        # oppå seg – da skriver to ticks settpunkter om hverandre. Det som pågår, får
+        # gjøre seg ferdig; det neste minuttet tar igjen.
+        if tick_laas.locked():
+            hub.tick_hoppet_over += 1
+            _LOGGER.warning("ki_energi: forrige tick pågår fortsatt – hopper over dette")
+            return
+        async with tick_laas:
+            await _del("moduser", hub.moduser.tick())
+            await _del("bereder", hub.vvb.tick())
+            await _del("lys", hub.lys.tick())
+            await hub.engine.tick()
 
     async def _laering(_now=None):
-        await hub.engine.laering()
+        await _del("læring", hub.engine.laering())
 
     async def _timeslutt(_now=None):
-        await hub.engine.timeslutt()
+        await _del("timeslutt", hub.engine.timeslutt())
 
     async def _midnatt(_now=None):
         if dt_util.now().day == 1:
-            await hub.engine.manedsskifte()
+            await _del("månedsskifte", hub.engine.manedsskifte())
+
+    # Effektsensoren kan melde flere ganger i sekundet (Tibber Pulse, smartplugger).
+    # Integralet må ha hver eneste måling for å bli riktig, men de tre avledede
+    # sensorene trenger ikke skrives oftere enn hvert annet sekund – ellers er det
+    # tre tilstandsendringer i recorderen per måling, hele døgnet.
+    sensor_timer: list = []
+
+    @callback
+    def _skriv_effektsensorer(_now=None):
+        sensor_timer.clear()
+        hub.engine.oppdater_effektsensorer()
 
     @callback
     def _effekt_endret(_event):
         hub.engine.integrer_effekt()
-        hub.engine.oppdater_effektsensorer()
+        if not sensor_timer:
+            sensor_timer.append(async_call_later(hass, EFFEKTSENSOR_SEK, _skriv_effektsensorer))
 
     # Første tick litt etter oppstart, så alle hjelpere har gjenopprettet verdiene sine.
     hub.avmeld_ved_stopp(async_call_later(hass, 20, _tick))
@@ -169,9 +203,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if ok:
         hass.data[DOMAIN].pop(entry.entry_id, None)
     if not hass.data[DOMAIN]:
-        for tj in ("overstyr", "fjern_overstyring", "nullstill_laering", "vvb_boost", "vvb_avbryt_boost",
-                   "vvb_tving_syklus", "hjemkomst", "hjemkomst_ferdig", "helg_sporsmal", "sett_standardverdier", "tick",
-                   "leggetid", "sett_prio", "nullstill_prognoselaering"):
+        for tj in TJENESTER:
             hass.services.async_remove(DOMAIN, tj)
     return ok
 
@@ -288,19 +320,23 @@ def _registrer_tjenester(hass: HomeAssistant) -> None:
             await hub.vvb.tick()
             await hub.engine.tick()
 
-    hass.services.async_register(DOMAIN, "overstyr", overstyr, schema=SCHEMA_OVERSTYR)
-    hass.services.async_register(DOMAIN, "leggetid", leggetid,
-                                 schema=vol.Schema({vol.Required("sone"): str, vol.Optional("avbryt", default=False): bool}))
-    hass.services.async_register(DOMAIN, "nullstill_prognoselaering", nullstill_prognoselaering, schema=SCHEMA_STANDARD)
-    hass.services.async_register(DOMAIN, "sett_prio", sett_prio,
-                                 schema=vol.Schema({vol.Required("sone"): str, vol.Required("prio"): vol.Coerce(int)}))
-    hass.services.async_register(DOMAIN, "fjern_overstyring", fjern_overstyring, schema=SCHEMA_SONE)
-    hass.services.async_register(DOMAIN, "nullstill_laering", nullstill_laering, schema=SCHEMA_HVA)
-    hass.services.async_register(DOMAIN, "vvb_boost", vvb_boost, schema=SCHEMA_BOOST)
-    hass.services.async_register(DOMAIN, "vvb_avbryt_boost", vvb_avbryt_boost, schema=SCHEMA_STANDARD)
-    hass.services.async_register(DOMAIN, "vvb_tving_syklus", vvb_tving_syklus, schema=SCHEMA_STANDARD)
-    hass.services.async_register(DOMAIN, "hjemkomst", hjemkomst, schema=SCHEMA_HJEMKOMST)
-    hass.services.async_register(DOMAIN, "hjemkomst_ferdig", hjemkomst_ferdig, schema=SCHEMA_STANDARD)
-    hass.services.async_register(DOMAIN, "helg_sporsmal", helg_sporsmal, schema=SCHEMA_STANDARD)
-    hass.services.async_register(DOMAIN, "sett_standardverdier", sett_standardverdier, schema=SCHEMA_STANDARD)
-    hass.services.async_register(DOMAIN, "tick", tick, schema=SCHEMA_STANDARD)
+    # Én liste. Den samme brukes ved avlasting, så en ny tjeneste ikke kan bli glemt der.
+    handlere = {
+        "overstyr": (overstyr, SCHEMA_OVERSTYR),
+        "leggetid": (leggetid, vol.Schema({vol.Required("sone"): str, vol.Optional("avbryt", default=False): bool})),
+        "nullstill_prognoselaering": (nullstill_prognoselaering, SCHEMA_STANDARD),
+        "sett_prio": (sett_prio, vol.Schema({vol.Required("sone"): str, vol.Required("prio"): vol.Coerce(int)})),
+        "fjern_overstyring": (fjern_overstyring, SCHEMA_SONE),
+        "nullstill_laering": (nullstill_laering, SCHEMA_HVA),
+        "vvb_boost": (vvb_boost, SCHEMA_BOOST),
+        "vvb_avbryt_boost": (vvb_avbryt_boost, SCHEMA_STANDARD),
+        "vvb_tving_syklus": (vvb_tving_syklus, SCHEMA_STANDARD),
+        "hjemkomst": (hjemkomst, SCHEMA_HJEMKOMST),
+        "hjemkomst_ferdig": (hjemkomst_ferdig, SCHEMA_STANDARD),
+        "helg_sporsmal": (helg_sporsmal, SCHEMA_STANDARD),
+        "sett_standardverdier": (sett_standardverdier, SCHEMA_STANDARD),
+        "tick": (tick, SCHEMA_STANDARD),
+    }
+    assert set(handlere) == set(TJENESTER), "TJENESTER i const.py må nevne alle tjenestene"
+    for navn, (fn, skjema) in handlere.items():
+        hass.services.async_register(DOMAIN, navn, fn, schema=skjema)

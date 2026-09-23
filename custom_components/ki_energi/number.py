@@ -7,7 +7,6 @@ Da trenger ikke kortene i dashbordet en egen input_number per rom.
 """
 from __future__ import annotations
 
-import logging
 import re
 
 from homeassistant.components.number import NumberEntity, NumberMode
@@ -136,7 +135,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     kjente = {n[0] for n in NUMBERS}
     entiteter = [KiNumber(hub, *n) for n in NUMBERS]
     # Soner som er lagt til av brukeren og som ikke har ferdige temperaturhjelpere
-    for key, konf in hub.soner().items():
+    for konf in hub.soner().values():
         for felt, navn, std in ((Z_TEMP_DAG, "Dag", 21), (Z_TEMP_NATT, "Natt", 18), (Z_TEMP_BORTE, "Borte", 19)):
             hk = konf.get(felt) or ""
             if hk and hk not in kjente:

@@ -9,6 +9,12 @@ PLATFORMS = ["sensor", "binary_sensor", "switch", "number", "time", "datetime", 
 
 TICK_SEK = 60
 LAERING_MIN = 5
+EFFEKTSENSOR_SEK = 2      # avledede effektsensorer skrives høyst så ofte
+TJENESTER = (
+    "overstyr", "fjern_overstyring", "nullstill_laering", "vvb_boost", "vvb_avbryt_boost", "vvb_tving_syklus",
+    "hjemkomst", "hjemkomst_ferdig", "helg_sporsmal", "sett_standardverdier", "tick", "leggetid", "sett_prio",
+    "nullstill_prognoselaering",
+)
 MAKS_LOGG_LINJER = 200
 PRIO_VEKT = {1: 10000, 2: 600, 3: 300, 4: 150, 5: 60}
 

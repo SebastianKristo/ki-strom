@@ -15,7 +15,7 @@ from __future__ import annotations
 import calendar
 import logging
 from bisect import bisect_left
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Any
 
 from homeassistant.util import dt as dt_util

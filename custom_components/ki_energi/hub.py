@@ -14,7 +14,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
-from .const import (
+from .const import (  # noqa: F401 – konstantene brukes av moduler som henter dem herfra
     CONF_HUSTYPE, CONF_PERSONER, CONF_PRESET, LEGACY_PERSONER, PRESETS,
     CONF_SONER, DEFAULT_CONFIG, DEFAULT_SONER, DOMAIN, Z_AKTIV, Z_PROFIL,
     Z_TEMP_BORTE, Z_TEMP_DAG, Z_TEMP_NATT,
@@ -35,6 +35,10 @@ class KiHub:
         self.sensors: dict[str, Any] = {}     # nøkkel -> sensor-/binærsensorentitet
         self.sensor_cache: dict[str, tuple[Any, dict]] = {}
         self.store = Store(hass, STORE_VERSION, f"{DOMAIN}.{entry.entry_id}.minne")
+        # Helse: siste feil per del av ticket, og hvor mange ticks som er hoppet over
+        # fordi forrige fortsatt pågikk. Vises i diagnostikken og på statussensoren.
+        self.feil_i_tick: dict[str, str] = {}
+        self.tick_hoppet_over = 0
         self.minne: dict[str, Any] = {
             "profil": {}, "tau": {}, "state": {"overstyringer": {}, "rotasjon": 0},
             "logg": [], "vvb": {}, "moduser": {}, "nettleie": {}, "sparing": {}, "prognose": {}, "lys": {}, "lading": {},

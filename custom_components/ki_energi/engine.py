@@ -1095,6 +1095,8 @@ class KiEngine:
             "grense_kwh": budsjett["grense"], "grense_grunn": budsjett["grense_grunn"],
             "forbrukt_kwh": budsjett["forbrukt"], "igjen_kwh": budsjett["igjen"],
             "minutter_igjen": budsjett["minutter_igjen"],
+            # Helse: deler av ticket som feilet sist, og ticks som er hoppet over.
+            "feil": dict(h.feil_i_tick), "ticks_hoppet_over": h.tick_hoppet_over,
             "tillatt_effekt_kw": budsjett["tillatt_snitt"], "forventet_effekt_kw": forventet,
             "uregulert_kw": round(prognose, 2), "uregulert_60_kw": round(self.prognose_uregulert(60), 2),
             "prognose_15_kw": prog[15], "prognose_30_kw": prog[30],
