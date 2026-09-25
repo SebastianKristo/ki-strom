@@ -1113,7 +1113,11 @@ class KiEngine:
             navn=p["navn"], rom=p["rom"], key=p["key"], type=p["type"], prio=p["prio"],
             handling=p.get("handling"), mal=p.get("mal"), settpunkt=p.get("settpunkt"),
             naa=p.get("naa"), effekt=p.get("effekt"), forklaring=p.get("forklaring"),
-            overstyrt=bool(self.overstyring(p["key"])), helpere=p.get("helpere"), styr=p.get("styr"),
+            overstyrt=bool(self.overstyring(p["key"])),
+            # Når overstyringen slutter og hva den står på – så et kort kan si «Manuelt til 11:34».
+            overstyrt_til=(self.overstyring(p["key"]) or {}).get("til"),
+            overstyrt_temp=(self.overstyring(p["key"]) or {}).get("temp"),
+            helpere=p.get("helpere"), styr=p.get("styr"),
             entiteter=p.get("entiteter"), vindu=p.get("vindu", False), vindu_navn=p.get("vindu_navn", ""),
             leggetid=bool(self.leggetid_aktiv(p["key"])), profil=p.get("profil"),
             person=p.get("person"), person_type=p.get("person_type"), forvarm_start=p.get("forvarm_start"),

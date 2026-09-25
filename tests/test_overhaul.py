@@ -95,3 +95,21 @@ async def test_tjenestene_registreres_og_fjernes(hass):
     await hass.async_block_till_done()
     for tj in TJENESTER:
         assert not hass.services.has_service(DOMAIN, tj), tj
+
+
+async def test_overstyring_synes_i_lastlista(hass):
+    """Kortet trenger å vite til når en manuell temperatur gjelder."""
+    entry = await _setup(hass)
+    hub = hass.data[DOMAIN][entry.entry_id]
+    sone = next(iter(hub.aktive_soner()))
+    await hass.services.async_call(DOMAIN, "overstyr", {"sone": sone, "temp": 23.5, "minutter": 90}, blocking=True)
+    await hass.async_block_till_done()
+    rad = next(r for r in hass.states.get("sensor.ki_laster").attributes["laster"] if r["key"] == sone)
+    assert rad["overstyrt"] is True
+    assert rad["overstyrt_temp"] == 23.5
+    til = dt_util.parse_datetime(rad["overstyrt_til"])
+    assert 85 <= (til - dt_util.now()).total_seconds() / 60 <= 91
+    await hass.services.async_call(DOMAIN, "fjern_overstyring", {"sone": sone}, blocking=True)
+    await hass.async_block_till_done()
+    rad = next(r for r in hass.states.get("sensor.ki_laster").attributes["laster"] if r["key"] == sone)
+    assert rad["overstyrt"] is False and rad["overstyrt_til"] is None
