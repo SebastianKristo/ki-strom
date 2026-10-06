@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 DOMAIN = "ki_energi"
-VERSION = "2.0.0"
+VERSION = "2.33.0"   # holdes lik manifest.json — testen test_versjon passer på det
 DEVICE_NAME = "KI Energi"
 
 PLATFORMS = ["sensor", "binary_sensor", "switch", "number", "time", "datetime", "text"]
@@ -77,6 +77,25 @@ def er_tregt(type_: str | None) -> bool:
     """Treg varme må startes tidlig og kan senkes dypere om gangen."""
     return str(type_ or "") in TREGE_TYPER
 CONF_HUSTYPE = "hustype"      # bolig | fritidsbolig
+# Stedets navn, til varslene («Kommer dere til Toten i dag?»). Sto hardkodet som «Toten»
+# før — feil for en hytte i Strömstad, og for alle andre enn ham.
+CONF_STED_NAVN = "sted_navn"
+# Nettleiemodell. Elvia: snittet av de tre høyeste døgnmaksene fra tre ulike dager.
+# «topp3_timer»: de tre høyeste timene i måneden uansett dag (vanlig i Sverige, der en
+# hytte i Strömstad betaler effektavgift til Ellevio). Høylastvinduet begrenser hvilke
+# timer som teller — utenfor det koster en topp ingenting i fastledd.
+CONF_NETTLEIE_MODELL = "nettleie_modell"       # elvia | topp3_timer
+CONF_HOYLAST_FRA = "hoylast_fra"               # "HH:MM" – tomt = hele døgnet
+CONF_HOYLAST_TIL = "hoylast_til"
+CONF_HOYLAST_HVERDAG = "hoylast_hverdag"       # bare mandag–fredag teller
+CONF_HOYLAST_MANEDER = "hoylast_maneder"       # "11-3" – tomt = hele året
+NETTLEIE_MODELLER = {
+    "elvia": "Elvia-modellen — snittet av de tre høyeste døgnmaksene fra tre ulike dager",
+    "topp3_timer": "Tre høyeste timer i måneden uansett dag (svensk effektavgift, f.eks. Ellevio)",
+}
+# Elbillader: faser og spenning, så et amperetrinn kan regnes om til kW før det er målt.
+CONF_LADER_FASER = "lader_faser"               # 1 | 3
+CONF_LADER_VOLT = "lader_volt"                 # 230 (IT/TT) | 400 (TN)
 CONF_HAR_ELBIL = "har_elbil"  # vis/bruk elbil-innstillingene
 CONF_PERSONER = "personer"
 CONF_LYSREGLER = "lysregler"  # liste av lysregler (glemt lys / nattdemping)    # liste av {key, navn, entity, type}; type: barn | ungdom | voksen
@@ -305,6 +324,8 @@ PRESETS: dict[str, dict] = {
             # elbil 5 A om natten (3-fas ≈ 3,5 kW; 1-fas ≈ 1,2 — juster)
             "ki_elbil_natt": True, "ki_elbil_effekt_kw": 3.5,
             "ki_sommer_auto": True, "ki_styr_gardiner": False, "ki_styr_hanklevarmer": False,
+            # hytta kan trenge et døgn fra frost til varmt
+            "ki_forvarming_maks_timer": 24,
         },
     },
     "tom": {"navn": "Tomt oppsett (velg alt selv)", "hustype": "bolig", "beskrivelse": "", "config": {}, "soner": {}, "verdier": {}, "personer": []},
@@ -343,6 +364,15 @@ SWITCHES = [
     ("ki_laering_tau", "KI Lær Tidskonstanter", True, "mdi:school"),
     ("ki_solkompensasjon", "KI Solkompensasjon", True, "mdi:weather-sunny"),
     ("ki_vindu_stopp", "KI Vindu Åpent Stopper Varme", True, "mdi:window-open-variant"),
+    # Frostvakt: løfter bortetemperaturene når det er bitende kaldt, og slår alarm hvis et
+    # rom likevel faller mot frysepunktet. Viktigst på hytta, men like riktig i et hus
+    # som står tomt en uke i januar.
+    ("ki_frostvakt", "KI Frostvakt", True, "mdi:snowflake-alert"),
+    # Bereder i bortemodus: ikke varm vann hver natt til et tomt hus — bare legionella
+    # på fristen, og klart vann til folk kommer.
+    ("ki_vvb_borte_sparing", "KI VVB Sparer Når Alle Er Borte", True, "mdi:water-off-outline"),
+    # Lading bare i nattvinduet (ki_elbil_fra/til) med mindre batteriet er lavt.
+    ("ki_lading_kun_natt", "KI Lading Bare Om Natten", False, "mdi:weather-night"),
     ("ki_tillat_dyrere_trinn", "KI Tillat Dyrere Kapasitetstrinn", False, "mdi:cash-lock-open"),
     ("ki_elbil_natt", "KI Elbil Lader Om Natten", False, "mdi:ev-station"),
     ("ki_lading_automatikk", "KI Lading Automatikk", True, "mdi:ev-plug-type2"),
@@ -433,6 +463,11 @@ NUMBERS = [
     ("ki_shed_panel_maks", "KI Maks Senking Panelovn", 0, 6, 0.5, "°C", 2.0, "mdi:radiator"),
     ("ki_vindu_forsinkelse_min", "KI Vindu Forsinkelse", 0, 30, 1, "min", 3, "mdi:timer-outline"),
     ("ki_vindu_temp", "KI Vindu Åpent Temperatur", 5, 18, 0.5, "°C", 12, "mdi:snowflake-thermometer"),
+    ("ki_frost_ute_grense", "KI Frostvakt Når Ute Under", -30, 5, 1, "°C", -10, "mdi:thermometer-low"),
+    ("ki_frost_paslag", "KI Frostvakt Påslag", 0, 6, 0.5, "°C", 2, "mdi:thermometer-plus"),
+    ("ki_frost_alarm_temp", "KI Frostvakt Alarm Når Rom Under", 1, 12, 0.5, "°C", 5, "mdi:snowflake-alert"),
+    ("ki_vvb_klar_for_ankomst_timer", "KI VVB Klart Før Ankomst", 0.5, 12, 0.5, "t", 3, "mdi:home-clock"),
+    ("ki_forvarming_maks_timer", "KI Forvarming Maks Timer", 2, 36, 1, "t", 10, "mdi:timer-sand"),
     ("ki_komfort_vekt", "KI Komfortvekt", 10, 200, 5, "", 60, "mdi:sofa"),
     ("ki_trinn_kostnad_diff", "KI Kostnad Neste Kapasitetstrinn", 0, 500, 5, "kr", 170, "mdi:cash"),
     ("ki_mal_trinn_kw", "KI Ønsket Kapasitetstrinn Under", 2, 20, 0.5, "kW", 5.0, "mdi:target"),
@@ -536,6 +571,7 @@ BINARY_SENSORS = [
     ("ki_vvb_legionella_ok", "KI VVB Legionella OK", "mdi:shield-check", "safety"),
     ("ki_vvb_legionella_forfalt", "KI VVB Legionella Forfalt", "mdi:alert", "problem"),
     ("ki_vvb_bor_varme", "KI VVB Bør Varme", "mdi:water-boiler-auto", None),
+    ("ki_frostfare", "KI Frostfare", "mdi:snowflake-alert", "cold"),
 ]
 
 # Varselhandlinger (mobile_app_notification_action)

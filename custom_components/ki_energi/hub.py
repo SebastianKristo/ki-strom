@@ -15,7 +15,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .const import (  # noqa: F401 – konstantene brukes av moduler som henter dem herfra
-    CONF_HUSTYPE, CONF_PERSONER, CONF_PRESET, LEGACY_PERSONER, PRESETS,
+    CONF_HUSTYPE, CONF_PERSONER, CONF_PRESET, CONF_STED_NAVN, CONF_UTE_TEMP, LEGACY_PERSONER, PRESETS,
     CONF_SONER, DEFAULT_CONFIG, DEFAULT_SONER, DOMAIN, Z_AKTIV, Z_PROFIL,
     Z_TEMP_BORTE, Z_TEMP_DAG, Z_TEMP_NATT,
 )
@@ -147,6 +147,43 @@ class KiHub:
 
     def fritidsbolig(self) -> bool:
         return self.cfg(CONF_HUSTYPE, "bolig") == "fritidsbolig"
+
+    def sted(self) -> str:
+        """Navnet på stedet, til varslene. «hytta»/«huset» når ingenting er satt."""
+        navn = str(self.cfg(CONF_STED_NAVN, "") or "").strip()
+        if navn:
+            return navn
+        return "hytta" if self.fritidsbolig() else "huset"
+
+    def ute(self) -> float | None:
+        """Utetemperaturen, fra sensoren eller værentiteten som reserve."""
+        v = self.f(self.cfg(CONF_UTE_TEMP))
+        if v is not None:
+            return v
+        try:
+            t = self.attr(self.cfg("vaer"), "temperature", None)
+            return float(t) if t is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    def frost_paslag(self) -> tuple[float, str]:
+        """Hvor mye bortetemperaturene løftes fordi det er bitende kaldt ute.
+
+        Under grensen (−10 °C) ett påslag, ti grader under den to. 8 °C i stua holder ikke
+        et rør i ytterveggen over null når det er −25 ute; da må lufta inne være varmere.
+        """
+        if not self.on("ki_frostvakt", True):
+            return 0.0, ""
+        ute = self.ute()
+        if ute is None:
+            return 0.0, ""
+        grense = self.num("ki_frost_ute_grense", -10)
+        paslag = self.num("ki_frost_paslag", 2)
+        if ute < grense - 10:
+            return 2 * paslag, f"frostvakt: {ute:.0f} °C ute, +{2 * paslag:g} °C"
+        if ute < grense:
+            return paslag, f"frostvakt: {ute:.0f} °C ute, +{paslag:g} °C"
+        return 0.0, ""
 
     def aktive_soner(self) -> dict[str, dict]:
         return {k: v for k, v in self.soner().items() if v.get(Z_AKTIV, True) and v.get("climate")}

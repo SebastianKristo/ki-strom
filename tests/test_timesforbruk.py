@@ -63,7 +63,8 @@ def test_nullstilles_ved_timeskifte():
         dt.now.return_value.strftime.return_value = "2026-09-13 08"
         motor = _motor(1000.0, 2.4, naa)
         motor.forbrukt_denne_timen()
-        dt.now.return_value.strftime.return_value = "2026-09-13 09"
+        # neste klokketime: tidsstempelet avgjør, ikke lokal «HH» (sommertid)
+        dt.utcnow.return_value.timestamp.return_value = naa + 3600
         motor.hub.nettleie.forelopig_time.return_value = (0.05, "forelopig")
         kwh, _ = motor.forbrukt_denne_timen()
     assert kwh < 0.2, "sperren mot fall holdt igjen verdien inn i neste time"

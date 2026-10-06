@@ -135,6 +135,30 @@ class KiVvb:
             return dt_util.now().hour in self.billige_timer
         return self.i_vindu()
 
+    def borte_sparing(self) -> tuple[bool, str]:
+        """Står huset tomt (bortemodus), og er det ingen grunn til å varme vann akkurat nå?
+
+        Et tomt hus bruker ikke varmtvann, men berederen tapte likevel noen kWh hver natt på
+        å holde tanken varm i vinduet. I bortemodus hopper vi over de nattlige rundene, med to
+        unntak som begge handler om folk: legionellafristen nærmer seg (siste døgn før den
+        harde fristen), eller noen kommer — da skal vannet være varmt `klar_for_ankomst` timer
+        før planlagt hjemkomst, og med én gang når noen faktisk er hjemme.
+        """
+        h = self.hub
+        if not h.on("ki_vvb_borte_sparing", True) or not h.on("ki_helgemodus"):
+            return False, ""
+        if h.sensor_state("ki_alle_borte") is False:
+            return False, ""
+        d = self.dager_siden()
+        if d is not None and d >= h.num("ki_vvb_maks_dager", 7) - 1:
+            return False, "bortemodus, men legionellafristen nærmer seg"
+        if h.on("ki_hjemkomst_aktiv"):
+            plan = h.dt("ki_hjemkomst_planlagt")
+            timer = h.num("ki_vvb_klar_for_ankomst_timer", 3)
+            if plan is None or plan - dt_util.now() <= timedelta(hours=timer):
+                return False, f"varmer så vannet er klart til ankomst kl. {plan:%H:%M}" if plan else "varmer før ankomst"
+        return True, "huset står tomt — berederen hviler til noen kommer eller legionellafristen nærmer seg"
+
     def bor_varme(self) -> bool:
         h = self.hub
         if h.on("ki_vvb_alltid_pa"):
@@ -147,6 +171,8 @@ class KiVvb:
             return not self.var_mettet
         if not h.on("ki_vvb_prisstyring", True):
             return self.bryter_pa()
+        if self.borte_sparing()[0]:
+            return False
         if self.effekt() is None:
             # Fail-safe uten effektmåling: følg vinduet, la termostaten styre
             return self.i_vindu()
@@ -175,6 +201,9 @@ class KiVvb:
             return max(effekt, nominell * 0.9), "Berederen varmer nå", True
         if self.var_mettet:
             return 0.0, "Mettet — termostaten har koblet ut", False
+        borte, borte_grunn = self.borte_sparing()
+        if borte:
+            return 0.0, "Bortemodus — " + borte_grunn, False
         if self.forfalt() or h.on("ki_vvb_tvungen_syklus_aktiv"):
             return nominell, "Tvungen kjøring — legionella går foran all oppvarming", True
         if self.bor_varme():
@@ -192,7 +221,7 @@ class KiVvb:
         nominell = h.num("ki_vvb_effekt_kw", 2.0) or 2.0
         if self.var_aktiv:
             return nominell * 0.9 if minutter <= 60 else nominell * 0.4
-        if self.var_mettet or (self.ferdig_i_vinduet() and self.legionella_ok()):
+        if self.var_mettet or (self.ferdig_i_vinduet() and self.legionella_ok()) or self.borte_sparing()[0]:
             return 0.0
         t = (h.naa_min() + minutter) % (24 * 60)
         if self.i_vindu(t):
@@ -529,6 +558,8 @@ class KiVvb:
             return "Varmer nå"
         if self.var_mettet:
             return "Mettet - termostaten har koblet ut"
+        if self.borte_sparing()[0]:
+            return "Bortemodus - hviler"
         if self.forfalt():
             # Uten relé kan ingenting tvinges på. Da er «Forfalt — overvåkes» det ærlige
             # svaret: fristen er passert, men KI har ingen bryter å slå på.
@@ -558,6 +589,9 @@ class KiVvb:
             return "Effektsensoren svarer ikke — følger vinduet og lar termostaten styre (fail-safe)."
         if self.var_mettet:
             return "Mettet. Termostaten koblet ut, så vannet er på settpunkt."
+        borte, borte_grunn = self.borte_sparing()
+        if borte:
+            return "Bortemodus: " + borte_grunn + "."
         if self.ferdig_i_vinduet():
             return f"Ferdig for i natt. Neste vindu åpner kl. {start}."
         if self.var_aktiv:
@@ -608,6 +642,7 @@ class KiVvb:
             "neste_frist": (siste + timedelta(days=maks_d)).isoformat() if siste else None,
             "onsket_innen": (siste + timedelta(days=intervall)).isoformat() if siste else None,
             "intervall_dager": intervall, "hard_frist_dager": maks_d,
+            "borte_sparing": self.borte_sparing()[0],
             "vindu": f"{h.tid_str('ki_vvb_vindu_start', '22:00')}–{h.tid_str('ki_vvb_klar_innen', '05:00')}",
             "boost_til": (self._dt("ki_vvb_boost_til").isoformat() if self.boost_aktiv() else None)})
 
@@ -618,7 +653,8 @@ class KiVvb:
         h = self.hub
         m = minutter or h.num("ki_vvb_boost_minutter", 60)
         h.sett("ki_vvb_boost_til", dt_util.now() + timedelta(minutes=float(m)))
-        await h.kall("switch", "turn_on", {"entity_id": self.bryter()})
+        if self.bryter():
+            await h.kall("switch", "turn_on", {"entity_id": self.bryter()})
         await self.tick()
 
     async def avbryt_boost(self) -> None:
@@ -628,6 +664,7 @@ class KiVvb:
     async def tving_syklus(self) -> None:
         h = self.hub
         h.sett("ki_vvb_tvungen_syklus_aktiv", True)
-        await h.kall("switch", "turn_on", {"entity_id": self.bryter()})
+        if self.bryter():
+            await h.kall("switch", "turn_on", {"entity_id": self.bryter()})
         await h.logbook("KI VVB", "Tvungen kjøring startet manuelt.")
         await self.tick()

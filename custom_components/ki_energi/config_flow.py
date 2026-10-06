@@ -14,6 +14,8 @@ from .const import (
     CONF_AREAL, CONF_BYGGEAR, CONF_ENERGILEDD_DAG, CONF_ENERGILEDD_NATT, CONF_GARDINER,
     CONF_GLASS_M2, CONF_HANKLEVARMER, CONF_HANKLEVARMER_EFFEKT, CONF_HVITEVARER,
     CONF_HAR_ELBIL, CONF_HUSTYPE, CONF_LYSREGLER, CONF_PERSONER, CONF_PRESET, LEGACY_PERSONER, PERSONTYPER, PRESETS, PROFIL_LEGACY,
+    CONF_STED_NAVN, CONF_NETTLEIE_MODELL, CONF_HOYLAST_FRA, CONF_HOYLAST_TIL, CONF_HOYLAST_HVERDAG, CONF_HOYLAST_MANEDER,
+    CONF_LADER_FASER, CONF_LADER_VOLT, NETTLEIE_MODELLER,
     CONF_IMPORTERT_ENERGI, CONF_KAPASITETSTRINN, CONF_NORDPOOL, CONF_NORGESPRIS_AKTIV, CONF_SONER,
     CONF_STROMPRIS, CONF_STUE_AREAL, CONF_TILSTEDE_CYBELE, CONF_TILSTEDE_RUNE,
     CONF_TILSTEDE_SEBASTIAN, CONF_TOPP1, CONF_TOPP2, CONF_TOPP3, CONF_TOTAL_EFFEKT, CONF_UTE_TEMP,
@@ -89,6 +91,7 @@ def skjema_hus(hass=None) -> dict:
             options=[selector.SelectOptionDict(value="bolig", label="Bolig — noen bor her fast"),
                      selector.SelectOptionDict(value="fritidsbolig", label="Fritidsbolig — tom mesteparten av tiden, frostsikring når ingen er der")],
             mode="dropdown")),
+        vol.Optional(CONF_STED_NAVN): _tekst(),
         vol.Required(CONF_AREAL, default=120): _num(20, 1000, 1, "m²"),
         vol.Required(CONF_BYGGEAR, default=1980): _num(1800, 2100, 1),
         vol.Required(CONF_GLASS_M2, default=20): _num(0, 200, 1, "m²"),
@@ -123,6 +126,13 @@ SKJEMA_UTSTYR = {
     # bilen står, og det er verre enn ingen sperre man vet om.
     vol.Optional(CONF_LADER_STED): _ent("sensor"),
     vol.Optional(CONF_LADER_STED_NAVN): selector.TextSelector(),
+    # Faser og spenning avgjør hva et amperetrinn gir i kW før effekten er målt:
+    # 16 A er 3,7 kW enfase, 6,4 kW trefase 230 V og 11 kW trefase 400 V.
+    vol.Optional(CONF_LADER_FASER, default="1"): selector.SelectSelector(selector.SelectSelectorConfig(
+        options=[selector.SelectOptionDict(value="1", label="Én fase"), selector.SelectOptionDict(value="3", label="Tre faser")], mode="dropdown")),
+    vol.Optional(CONF_LADER_VOLT, default="230"): selector.SelectSelector(selector.SelectSelectorConfig(
+        options=[selector.SelectOptionDict(value="230", label="230 V (IT/TT — vanlig i Norge)"),
+                 selector.SelectOptionDict(value="400", label="400 V (TN — nye anlegg, Sverige)")], mode="dropdown")),
     vol.Optional(CONF_HANKLEVARMER): _ent("switch"),
     # Fuktsensor på badet. Uten device_class-filter, av samme grunn som ladeeffekten:
     # sensorer fra broer har ofte ingen device class, og filteret ville skjult dem.
@@ -189,6 +199,14 @@ SKJEMA_NETTLEIE = {
     vol.Optional(CONF_KAPASITETSTRINN): _ent("sensor"),
     vol.Optional(CONF_NORGESPRIS_AKTIV): _ent("binary_sensor"),
     vol.Optional(CONF_NORDPOOL): _ent("sensor"),
+    # Nettleiemodell og høylastvindu. Elvia regner døgnmaks hele døgnet; en svensk hytte
+    # betaler for de tre høyeste timene, ofte bare hverdager kl. 07–19 i vinterhalvåret.
+    vol.Optional(CONF_NETTLEIE_MODELL, default="elvia"): selector.SelectSelector(selector.SelectSelectorConfig(
+        options=[selector.SelectOptionDict(value=k, label=v) for k, v in NETTLEIE_MODELLER.items()], mode="dropdown")),
+    vol.Optional(CONF_HOYLAST_FRA): _tekst(),
+    vol.Optional(CONF_HOYLAST_TIL): _tekst(),
+    vol.Optional(CONF_HOYLAST_HVERDAG, default=False): selector.BooleanSelector(),
+    vol.Optional(CONF_HOYLAST_MANEDER): _tekst(),
 }
 SKJEMA_HUS = skjema_hus()
 
@@ -207,6 +225,24 @@ def _valider_maling(hass, data: dict) -> dict[str, str]:
     elif st.attributes.get("state_class") not in ("total_increasing", "total") \
             or str(st.attributes.get("unit_of_measurement") or "") not in ("kWh", "Wh", "MWh"):
         feil[CONF_IMPORTERT_ENERGI] = "ikke_register"
+    return feil
+
+
+def _valider_nettleie(data: dict) -> dict[str, str]:
+    feil: dict[str, str] = {}
+    for k in (CONF_HOYLAST_FRA, CONF_HOYLAST_TIL):
+        try:
+            _hhmm(data.get(k))
+        except (ValueError, IndexError):
+            feil[k] = "ugyldig_tid"
+    m = str(data.get(CONF_HOYLAST_MANEDER) or "").strip()
+    if m:
+        try:
+            a, b = (int(x) for x in m.replace("–", "-").split("-")[:2])
+            if not (1 <= a <= 12 and 1 <= b <= 12):
+                raise ValueError(m)
+        except ValueError:
+            feil[CONF_HOYLAST_MANEDER] = "ugyldig_maneder"
     return feil
 
 
@@ -301,11 +337,14 @@ class KiEnergiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             vol.Schema(skjema_personer_rader()), forslag))
 
     async def async_step_nettleie(self, user_input=None):
+        feil = {}
         if user_input is not None:
-            self._data.update(_rens(user_input, SKJEMA_NETTLEIE))
-            return await self.async_step_hus()
+            feil = _valider_nettleie(user_input)
+            if not feil:
+                self._data.update(_rens(user_input, SKJEMA_NETTLEIE))
+                return await self.async_step_hus()
         return self.async_show_form(step_id="nettleie", data_schema=self.add_suggested_values_to_schema(
-            vol.Schema(SKJEMA_NETTLEIE), self._forslag(CONF_TOPP1, CONF_TOPP2, CONF_TOPP3, CONF_ENERGILEDD_DAG, CONF_ENERGILEDD_NATT, CONF_STROMPRIS, CONF_KAPASITETSTRINN, CONF_NORGESPRIS_AKTIV)))
+            vol.Schema(SKJEMA_NETTLEIE), user_input or self._forslag(CONF_TOPP1, CONF_TOPP2, CONF_TOPP3, CONF_ENERGILEDD_DAG, CONF_ENERGILEDD_NATT, CONF_STROMPRIS, CONF_KAPASITETSTRINN, CONF_NORGESPRIS_AKTIV)), errors=feil)
 
     async def async_step_hus(self, user_input=None):
         skjema = skjema_hus(self.hass)
@@ -500,6 +539,11 @@ class KiEnergiOptionsFlow(config_entries.OptionsFlow):
             description_placeholders={"navn": p["navn"], "key": p["key"]})
 
     async def async_step_nettleie(self, user_input=None):
+        if user_input is not None:
+            feil = _valider_nettleie(user_input)
+            if feil:
+                return self.async_show_form(step_id="nettleie", data_schema=self.add_suggested_values_to_schema(
+                    vol.Schema(SKJEMA_NETTLEIE), user_input), errors=feil)
         return await self._enkelt_skjema("nettleie", SKJEMA_NETTLEIE, user_input)
 
     async def async_step_hus(self, user_input=None):

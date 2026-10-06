@@ -75,6 +75,43 @@ class KiEngine:
         t = self.hub.minne["tau"].get(key, {})
         return t.get("k", 0.08), t.get("varme_rate", 1.2), t.get("n", 0)
 
+    def _rate_max(self, key: str) -> float | None:
+        """Lært oppvarmingsevne i °C/t ved null temperaturforskjell til ute (P/C). None før den er lært."""
+        t = self.hub.minne["tau"].get(key, {})
+        r = t.get("rate_max")
+        return float(r) if r and r > 0 else None
+
+    def forvarming_minutter(self, key: str, fra: float, til: float, ute: float | None) -> tuple[float | None, str]:
+        """Hvor lenge tar det å varme rommet fra `fra` til `til` med dagens utetemperatur?
+
+        Rommet følger dT/dt = r − k·(T − ute): ovnen gir r °C/t, og tapet vokser med
+        forskjellen til ute. Løst for tiden gir det t = ln((r − k·(fra − ute)) / (r − k·(til − ute))) / k.
+        Den gamle regelen «lært °C/t delt på manglende grader» stemte bare ved den
+        utetemperaturen raten ble lært ved — en hytte som skal fra 8 til 22 °C i −20
+        trenger langt mer enn i +5, og nådde kanskje aldri fram.
+
+        Returnerer (minutter, forklaring). None når rommet ikke kan nå målet i det været.
+        """
+        k, rate, _n = self._tau(key)
+        r = self._rate_max(key)
+        if r is None or ute is None:
+            # ikke lært ennå: den gamle, enkle regelen
+            rate = max(0.3, rate if rate and rate > 0 else 1.2)
+            return max(0.0, (til - fra) / rate * 60.0), "lært oppvarmingsrate"
+        k = max(0.005, float(k))
+        tap_til = k * (til - ute)
+        if r <= tap_til + 1e-6:
+            return None, f"ovnen klarer ca. {r:.1f} °C/t, tapet ved {til:.0f} °C inne og {ute:.0f} °C ute er {tap_til:.1f} °C/t"
+        tap_fra = k * (fra - ute)
+        timer = math.log(max(r - tap_fra, 1e-6) / (r - tap_til)) / k
+        return max(0.0, timer * 60.0), f"termisk modell ({r:.1f} °C/t, τ {1 / k:.0f} t, {ute:.0f} °C ute)"
+
+    def helgevekking(self, person: dict) -> bool:
+        """Gjelder helgevekkingen for natten som kommer? Avgjøres av morgenen etter, ikke
+        av ukedagen nå: fredag kveld er lørdag morgen, søndag kveld er mandag morgen."""
+        morgen = dt_util.now() + timedelta(hours=8)
+        return morgen.weekday() >= 5 or self.hub.on(f"ki_{person['key']}_ferie")
+
     # ------------------------------------------------------------------
     #  Måling: styrt, hvitevarer, uregulert, denne timen
     # ------------------------------------------------------------------
@@ -169,8 +206,9 @@ class KiEngine:
         # Innenfor samme klokketime kan tallet bare vokse. Når registeret tar igjen
         # anslaget, skal differansen bli stående til neste time — ikke vises som at
         # forbruket gikk ned.
-        n = dt_util.now()
-        time_id = n.strftime("%Y-%m-%d %H")
+        # Klokketimen regnes av tidsstempelet, ikke lokal «HH»: høstens 25. time er sin egen,
+        # ellers ble sperren mot fall dratt med inn i neste time ved overgangen til vintertid.
+        time_id = str(int(dt_util.utcnow().timestamp() // 3600))
         if time_id != self._time_id:
             self._time_id = time_id
             self._time_maks = 0.0
@@ -244,15 +282,33 @@ class KiEngine:
         t = t or dt_util.now()
         return f"{t.weekday()}-{t.hour}"
 
-    def profil_hent(self, nokkel: str, standard: float = 0.4) -> tuple[float, int]:
-        rad = self.hub.minne["profil"].get(nokkel)
+    def tilstede_nokkel(self) -> str | None:
+        """«h» når noen er hjemme, «b» når alle er borte, None når det ikke er kjent.
+
+        Lastprofilen læres per ukedag og time — men et hus med folk og et tomt hus er to
+        forskjellige hus. På hytta, som står tom de fleste ukene, ville profilen ellers
+        love nesten null forbruk akkurat den fredagskvelden alle kommer."""
+        borte = self.hub.sensor_state("ki_alle_borte")
+        if borte is None:
+            return None
+        return "b" if borte else "h"
+
+    def profil_hent(self, nokkel: str, standard: float = 0.4, tilstede: str | None = None) -> tuple[float, int]:
+        """Profilen for tilstedeværelsen først (når den har nok målinger), ellers den samlede."""
+        profil = self.hub.minne["profil"]
+        if tilstede:
+            rad = profil.get(f"{nokkel}-{tilstede}")
+            if rad and rad.get("n", 0) >= 3:
+                return rad.get("kw", standard), rad.get("n", 0)
+        rad = profil.get(nokkel)
         if not rad:
             return standard, 0
         return rad.get("kw", standard), rad.get("n", 0)
 
     def prognose_uregulert(self, minutter_frem: int = 0) -> float:
         naa = (self.hub.sensor_state("ki_uregulert_effekt") or 0.0) / 1000.0
-        profil, antall = self.profil_hent(self.profilnokkel(dt_util.now() + timedelta(minutes=minutter_frem)))
+        profil, antall = self.profil_hent(self.profilnokkel(dt_util.now() + timedelta(minutes=minutter_frem)),
+                                          tilstede=self.tilstede_nokkel())
         if antall < 3:
             return max(naa, 0.25)
         vekt = min(1.0, minutter_frem / 45.0)
@@ -298,7 +354,9 @@ class KiEngine:
             if n < 10 and r > 0:
                 ekstra += r * 0.5
                 grunner.append("frokostvinduet")
-        if h.cfg(CONF_HAR_ELBIL, False) and h.on("ki_elbil_natt") and h.num("ki_elbil_effekt_kw", 0) > 0 \
+        # Styrer KI laderen selv, får bilen bare det som er til overs — da reserveres ingenting på forhånd.
+        lader_styrt = h.lading is not None and h.lading.konfigurert()
+        if h.cfg(CONF_HAR_ELBIL, False) and h.on("ki_elbil_natt") and h.num("ki_elbil_effekt_kw", 0) > 0 and not lader_styrt \
                 and h.mellom(h.tid_min("ki_elbil_fra", "22:00"), h.tid_min("ki_elbil_til", "06:00"), t):
             kw = h.num("ki_elbil_effekt_kw", 0)
             _p, n = self.profil_hent(self.profilnokkel(dt_util.now() + timedelta(minutes=minutter_frem)))
@@ -371,7 +429,6 @@ class KiEngine:
         natt = h.tid_min("ki_tid_natt_start", "22:30")
         dag = h.tid_min("ki_tid_dag_start", "06:30")
         timer = ((dag - natt) % (24 * 60)) / 60.0
-        gevinst = k * timer
         pris_natt = h.f(h.cfg(CONF_ENERGILEDD_NATT))
         pris_dag = h.f(h.cfg(CONF_ENERGILEDD_DAG))
         if pris_natt and pris_dag and pris_natt > 0:
@@ -381,10 +438,24 @@ class KiEngine:
             forhold = 1.0
         if antall < 5:
             return True, "Lærer fortsatt tidskonstanten for denne sonen"
+        # Energien som ikke tilføres mens rommet kjøler seg ned, er nøyaktig den som
+        # hentes igjen om morgenen — den koster bare prisforskjellen natt/dag. Den egentlige
+        # sparingen er tapet som uteblir etter at rommet har nådd senkingen: k·dybde per
+        # time i resten av natta. Nedkjølingen tar t = −ln(1 − dybde/(inne − ute))/k.
+        # Den gamle regelen sammenlignet k·timer direkte med prisforholdet, som om hele
+        # gjenoppvarmingen var en ekstra kostnad; da «lønte» senking seg nesten aldri.
+        dybde = 2.0
+        inne_ute = max((ute if ute is not None else 0.0), -30.0)
+        diff = 21.0 - inne_ute
+        andel = min(0.95, dybde / max(diff, dybde + 0.1))
+        t_kjol = -math.log(1 - andel) / max(k, 0.005)
+        effektive = max(0.0, timer - t_kjol)
+        gevinst = 1.0 + k * effektive
         if gevinst > forhold:
-            return True, f"Sparer ca. {gevinst / forhold:.1f}× gjenoppvarmingen"
-        return False, (f"Lønner seg ikke — {timer:.0f} t senking gir {gevinst:.2f} "
-                       f"mot {forhold:.2f} i gjenoppvarming til dagpris")
+            return True, (f"Rommet når senkingen etter ca. {t_kjol:.0f} t og sparer {k * effektive * 100:.0f} % "
+                          f"av gjenoppvarmingen i tillegg")
+        return False, (f"Lønner seg ikke — rommet bruker {t_kjol:.0f} t på å kjøle seg ned, og gjenoppvarmingen "
+                       f"til dagpris ({forhold:.2f}×) spiser gevinsten")
 
     # ------------------------------------------------------------------
     #  Måltemperatur per sone
@@ -408,7 +479,7 @@ class KiEngine:
         if p and p["type"] == "barn":
             return h.tid_min(f"ki_{p['key']}_dag", "05:30")
         if p and p["type"] == "ungdom":
-            helg = (dt_util.now() + timedelta(hours=8)).weekday() >= 5 or h.on(f"ki_{p['key']}_ferie")
+            helg = self.helgevekking(p)
             return h.tid_min(f"ki_{p['key']}_vekking_helg" if helg else f"ki_{p['key']}_vekking", "07:00")
         return h.tid_min("ki_tid_dag_start", "06:30")
 
@@ -475,7 +546,7 @@ class KiEngine:
         plan = h.dt("ki_hjemkomst_planlagt")
         if plan is None:
             return h.tid_min("ki_hjemkomst_tid", "13:00")
-        if plan - dt_util.now() > timedelta(hours=20):
+        if plan - dt_util.now() > timedelta(hours=h.num("ki_forvarming_maks_timer", 10) + 2):
             return None   # for langt fram — forvarming starter først når fristen er innen rekkevidde
         return plan.hour * 60 + plan.minute
 
@@ -499,7 +570,11 @@ class KiEngine:
         if h.fritidsbolig() and h.on("ki_hjemkomst_aktiv") and hjemkomst is None:
             helg = True   # hytta: planlagt ankomst langt fram = fortsatt frostsikring
         gulv_senk = helg and h.on("ki_helg_senk_gulvvarme")
-        t_helg = h.num("ki_temp_helg", 16.0)
+        frost, frost_grunn = h.frost_paslag()
+        t_helg = h.num("ki_temp_helg", 16.0) + frost
+        t_helg_gulv = h.num("ki_temp_helg_gulvvarme", 18.0) + frost
+        t_helg_bad = h.num("ki_temp_helg_bad", 22.0) + frost
+        suffiks = f" ({frost_grunn})" if frost else ""
         t_sommer = h.num("ki_temp_sommer", 17.0)
         dag_start = h.tid_min("ki_tid_dag_start", "06:30")
         natt_start = h.tid_min("ki_tid_natt_start", "22:30")
@@ -509,19 +584,19 @@ class KiEngine:
 
         # --- Hjemkomst: hold hvilenivå, men med frist så forvarmingen slår inn ---
         if hjemkomst is not None:
-            hvile = h.num("ki_temp_helg_gulvvarme", 18.0) if er_gulv else t_helg
+            hvile = t_helg_gulv if er_gulv else t_helg
             if profil == "konstant":
-                hvile = h.num("ki_temp_helg_bad", 22.0)
-            return hvile, "Hjemkomst planlagt — forvarmes så huset er klart", hjemkomst
+                hvile = t_helg_bad
+            return hvile, "Hjemkomst planlagt — forvarmes så huset er klart" + suffiks, hjemkomst
 
         # --- Gulvvarme ---
         if er_gulv:
             if profil == "konstant":
                 if gulv_senk:
-                    return h.num("ki_temp_helg_bad", 22.0), "Helgesenking av bad", None
+                    return t_helg_bad, "Helgesenking av bad" + suffiks, None
                 return t_dag, "Holdes varmt hele døgnet", None
             if gulv_senk:
-                return h.num("ki_temp_helg_gulvvarme", 18.0), "Helgesenking av gulvvarme", None
+                return t_helg_gulv, "Helgesenking av gulvvarme" + suffiks, None
             if profil == "sjelden":
                 if not er_dag:
                     return t_dag - 2.0, "Sjelden brukt — sparestrategi om natten", dag_start
@@ -538,7 +613,7 @@ class KiEngine:
         if sommer:
             return t_sommer, "Sommermodus", None
         if helg:
-            return t_helg, "Helgemodus", None
+            return t_helg, "Helgemodus" + suffiks, None
 
         person = self.person_for(konf)
         # Automatisk soveromsmodus: søvnsensor overstyrer klokkeslettet. Sover → natt-temperatur nå
@@ -564,7 +639,7 @@ class KiEngine:
 
         if person and person["type"] == "ungdom":
             k = person["key"]
-            helgevekking = dt_util.now().weekday() >= 5 or h.on(f"ki_{k}_ferie")
+            helgevekking = self.helgevekking(person)
             vekking = h.tid_min(f"ki_{k}_vekking_helg" if helgevekking else f"ki_{k}_vekking", "07:00")
             legg = h.tid_min(f"ki_{k}_natt", "23:00")
             if sover is True:
@@ -650,17 +725,21 @@ class KiEngine:
             avvik = (mal - naa) if naa is not None else 0.3
 
             forvarm, forvarm_grunn, forvarm_start = False, "", None
+            maks_forvarming = h.num("ki_forvarming_maks_timer", 10) * 60.0
             if frist is not None and naa is not None and forvarming_pa:
-                _k, rate, _n = self._tau(key)
                 dagmal = self.dagmal(key, konf)
                 mangler = dagmal - naa
                 if mangler > 0.2:
-                    # Lært rate, men aldri under 0,3 °C/t (ellers blir «behov» absurd) og aldri
-                    # mer enn 10 t forvarming. Mangler læring brukes 1,2 °C/t.
-                    rate = max(0.3, rate if rate and rate > 0 else 1.2)
+                    behov, modell = self.forvarming_minutter(key, naa, dagmal, h.ute())
+                    if behov is None:
+                        # Ovnen når ikke målet i dette været. Start så tidlig som tillatt og si fra —
+                        # det er bedre enn å la være fordi regnestykket ikke gikk opp.
+                        behov = maks_forvarming
+                        modell = "når ikke målet i dette været — " + modell
+                    behov = max(behov, 0.3)
                     if any(h.pa(e) for e in (konf.get("vindu") or [])):
-                        rate *= 0.6   # åpent vindu: regn med tregere oppvarming, start tidligere
-                    behov = min((mangler / rate) * 60.0, 10 * 60.0)
+                        behov /= 0.6   # åpent vindu: regn med tregere oppvarming, start tidligere
+                    behov = min(behov, maks_forvarming)
                     if er_tregt(konf.get("type")):
                         behov = max(behov, 45.0)      # tregt anlegg — start uansett tidlig
                     til_frist = (frist - h.naa_min()) % (24 * 60)
@@ -669,10 +748,19 @@ class KiEngine:
                     if til_frist <= behov + 10:
                         forvarm = True
                         forvarm_grunn = (f"Trenger ca. {int(behov)} min for å nå {dagmal:.1f} °C "
-                                         f"til kl. {frist // 60:02d}:{frist % 60:02d}")
+                                         f"til kl. {frist // 60:02d}:{frist % 60:02d} ({modell})")
                         mal = dagmal
                         avvik = mal - naa
                         grunn = "Forvarming før fristen"
+
+            # Frostvakt: et rom som faller mot frysepunktet varmes uansett modus og budsjett.
+            frostfare = False
+            alarm_temp = h.num("ki_frost_alarm_temp", 5)
+            if h.on("ki_frostvakt", True) and naa is not None and naa < alarm_temp:
+                frostfare = True
+                mal = max(mal, alarm_temp + 5.0)
+                avvik = mal - naa
+                grunn = f"FROSTFARE — rommet er {naa:.1f} °C, varmes til {mal:.0f} °C"
 
             sol = self.sol_trekk(konf)
             if sol:
@@ -690,12 +778,15 @@ class KiEngine:
                 # dag), skal rommet holde måltemperaturen — vinduet er da et valg, ikke en lekkasje.
                 vindu = False
                 grunn += f" — {vindu_navn} er åpent, holder likevel varmen"
+            if frostfare:
+                vindu = False   # frost går foran et åpent vindu
             trenger = levende and styrt and avvik > 0.1 and not vindu
             laster.append(dict(
+                frostfare=frostfare,
                 vindu=vindu, vindu_navn=vindu_navn, profil=konf.get(Z_PROFIL),
                 person=pers["navn"] if pers else None, person_type=pers["type"] if pers else None,
                 key=key, navn=konf["navn"], rom=konf["rom"], type=konf["type"],
-                prio=int(konf["prio"]), climate=konf["climate"], levende=levende, styrt=styrt,
+                prio=1 if frostfare else int(konf["prio"]), climate=konf["climate"], levende=levende, styrt=styrt,
                 mal=round(mal, 1), naa=round(naa, 1) if naa is not None else None,
                 avvik=round(avvik, 2), grunn=grunn, frist=frist, forvarm=forvarm, forvarm_start=forvarm_start,
                 forvarm_grunn=forvarm_grunn, sol_trekk=sol, trenger=trenger,
@@ -803,6 +894,24 @@ class KiEngine:
             naa = float(h.attr(entity, "temperature", None))
         except (TypeError, ValueError):
             naa = None
+        # Termostaten har sine egne grenser. En varmepumpe går sjelden under 16 °C, og en
+        # gulvtermostat ikke under 5: et settpunkt utenfor avvises av Home Assistant, og
+        # sonen ville stått urørt uten at noen fikk vite hvorfor.
+        try:
+            mn = float(h.attr(entity, "min_temp", None))
+            mx = float(h.attr(entity, "max_temp", None))
+        except (TypeError, ValueError):
+            mn = mx = None
+        if mn is not None and mx is not None and mn < mx:
+            klemt = min(max(verdi, mn), mx)
+            if abs(klemt - verdi) > 1e-6:
+                if self.st.setdefault("klemt", {}).get(key) != klemt:
+                    self.st["klemt"][key] = klemt
+                    self.logg_hendelse(f"{entity}: ønsket {verdi:g} °C, men termostaten går bare "
+                                       f"{mn:g}–{mx:g} °C — skriver {klemt:g} °C.")
+                verdi = klemt
+            else:
+                self.st.get("klemt", {}).pop(key, None)
         if naa is not None and abs(naa - verdi) < 0.05:
             return False
         if naa is None and self.sist_skrevet.get(key) == verdi:
@@ -943,6 +1052,8 @@ class KiEngine:
             lv = await h.lading.bruk(max(0.0, ledig))
             lading_kw = lv.get("kw") or 0.0
             ledig = max(0.0, ledig - lading_kw)
+
+        await self.frostvakt(laster, plan)
 
         styrt_kw = sum(p["effekt"] for p in plan if p.get("handling") == "normal")
         forventet = round(prognose + vvb_kw + styrt_kw + lading_kw, 2)
@@ -1145,6 +1256,43 @@ class KiEngine:
             self.logg_signatur = signatur
             self.logg(farge, budsjett, forventet, hoved, plan, skygge)
 
+    async def frostvakt(self, laster: list[dict], plan: list[dict]) -> None:
+        """Varsler frostfare: et rom under alarmgrensen, eller en termostat som ikke svarer
+        mens det er bitende kaldt og huset står tomt. Varsles alltid, høyst hvert 12. time per rom."""
+        h = self.hub
+        if not h.on("ki_frostvakt", True):
+            h.sett_sensor("ki_frostfare", False, {"rom": [], "forklaring": "Frostvakten er av."})
+            return
+        naa = dt_util.now()
+        ute = h.ute()
+        kaldt = ute is not None and ute < h.num("ki_frost_ute_grense", -10)
+        tomt = h.on("ki_helgemodus") or h.sensor_state("ki_alle_borte") is True
+        rom, varsler = [], []
+        for last in laster:
+            if last.get("frostfare"):
+                rom.append(f"{last['navn']} ({last['naa']:.1f} °C)")
+                varsler.append((last["key"], f"Frostfare i {last['navn']}: {last['naa']:.1f} °C. Varmes nå til "
+                                             f"{last['mal']:.0f} °C uansett modus og budsjett."))
+            elif not last.get("levende") and kaldt and tomt:
+                rom.append(f"{last['navn']} (termostaten svarer ikke)")
+                varsler.append((last["key"], f"Termostaten i {last['navn']} svarer ikke, det er {ute:.0f} °C ute og "
+                                             f"{h.sted()} står tomt. Sjekk at ovnen har strøm."))
+        skygge = h.on("ki_skyggemodus", True)
+        for key, tekst in varsler:
+            sist = self.st.setdefault("frost_varslet", {}).get(key)
+            if sist and naa - dt_util.parse_datetime(sist) < timedelta(hours=12):
+                continue
+            self.st["frost_varslet"][key] = naa.isoformat(timespec="seconds")
+            await h.varsle("Frostfare", tekst + (" (Skyggemodus: ingenting skrives — slå den av!)" if skygge else ""), alltid=True)
+            self.logg_hendelse("Frostvakt: " + tekst)
+            h.lagre()
+        paslag, paslag_grunn = h.frost_paslag()
+        h.sett_sensor("ki_frostfare", bool(rom), {
+            "rom": rom, "ute": ute, "paslag": paslag, "paslag_grunn": paslag_grunn,
+            "alarm_temp": h.num("ki_frost_alarm_temp", 5),
+            "forklaring": ("Frostfare: " + ", ".join(rom)) if rom else
+                          (f"Bortetemperaturene er løftet — {paslag_grunn}." if paslag else "Ingen frostfare.")})
+
     def prognose_tekst(self, prog: dict, budsjett: dict) -> str:
         verste = max(prog, key=prog.get)
         if prog[verste] <= budsjett["tillatt_snitt"]:
@@ -1292,12 +1440,17 @@ class KiEngine:
         if kw is not None:
             kw = kw / 1000.0
             nokkel = self.profilnokkel()
-            rad = h.minne["profil"].get(nokkel, {"kw": kw, "n": 0})
-            n = rad["n"] + 1
-            alfa = max(0.05, 1.0 / min(n, 20))
-            rad["kw"] = round(rad["kw"] * (1 - alfa) + kw * alfa, 3)
-            rad["n"] = n
-            h.minne["profil"][nokkel] = rad
+            nokler = [nokkel]
+            tilstede = self.tilstede_nokkel()
+            if tilstede:
+                nokler.append(f"{nokkel}-{tilstede}")
+            for nk in nokler:
+                rad = h.minne["profil"].get(nk, {"kw": kw, "n": 0})
+                n = rad["n"] + 1
+                alfa = max(0.05, 1.0 / min(n, 20))
+                rad["kw"] = round(rad["kw"] * (1 - alfa) + kw * alfa, 3)
+                rad["n"] = n
+                h.minne["profil"][nk] = rad
 
         if h.on("ki_laering_tau", True):
             ute = h.f(h.cfg(CONF_UTE_TEMP))
@@ -1318,7 +1471,18 @@ class KiEngine:
                         continue
                     endring = (t - t0) / dt_timer
                     diff = t - ute
-                    effekt = self.sone_effekt_w(konf) or 0.0
+                    effekt = self.sone_effekt_w(konf)
+                    if effekt is None:
+                        # Ingen effektsensor: termostatens eget «heating»/«idle» avgjør. Uten det
+                        # vet vi ikke om ovnen går, og da lærer vi ingenting — før ble «ingen
+                        # sensor» lest som «0 W», og tapet ble lært mens ovnen sto på.
+                        handlinger = {h.attr(c, "hvac_action", None) for c in (konf.get("climater") or [konf["climate"]])}
+                        if "heating" in handlinger:
+                            effekt = 1000.0
+                        elif handlinger and handlinger <= {"idle", "off"}:
+                            effekt = 0.0
+                        else:
+                            continue
                     if any(h.pa(e) for e in (konf.get("vindu") or [])):
                         continue   # åpent vindu forgifter både k og oppvarmingsrate — lær ikke nå
                     rad = h.minne["tau"].get(key, {"k": 0.08, "varme_rate": 1.2, "n": 0})
@@ -1331,6 +1495,11 @@ class KiEngine:
                         if forrige <= 0:
                             forrige = 1.2
                         rad["varme_rate"] = round(max(0.05, forrige * 0.85 + endring * 0.15), 3)
+                        # Oppvarmingsevnen uavhengig av været: det rommet stiger pluss det som
+                        # samtidig tapes til ute. Brukes av den termiske modellen i forvarmingen.
+                        r_obs = endring + rad["k"] * max(diff, 0.0)
+                        forrige_r = rad.get("rate_max") or r_obs
+                        rad["rate_max"] = round(max(0.05, forrige_r * 0.85 + r_obs * 0.15), 3)
                     else:
                         continue
                     rad["n"] = rad.get("n", 0) + 1
@@ -1343,7 +1512,8 @@ class KiEngine:
             if k not in soner:
                 continue
             ut[soner[k]["navn"]] = {"tau_timer": round(1.0 / v["k"], 1) if v.get("k") else None,
-                                    "grader_per_time": v.get("varme_rate"), "malinger": v.get("n", 0)}
+                                    "grader_per_time": v.get("varme_rate"), "oppvarmingsevne": v.get("rate_max"),
+                                    "malinger": v.get("n", 0)}
         h.sett_sensor("ki_tidskonstanter", str(len(ut)), {"soner": ut})
         h.lagre()
 

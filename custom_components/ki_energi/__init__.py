@@ -318,6 +318,7 @@ def _registrer_tjenester(hass: HomeAssistant) -> None:
         if hub:
             await hub.moduser.tick()
             await hub.vvb.tick()
+            await hub.lys.tick()
             await hub.engine.tick()
 
     # Én liste. Den samme brukes ved avlasting, så en ny tjeneste ikke kan bli glemt der.

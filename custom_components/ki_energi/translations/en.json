@@ -18,7 +18,9 @@
           "hanklevarmer_effekt": "Håndklevarmer – effektsensor (W)",
           "gardiner": "Gardiner i stua (cover)",
           "hvitevarer": "Effektsensorer for komfyr, oppvaskmaskin osv. (flere)",
-          "har_elbil": "Elbillader i huset (viser elbil-innstillingene; motoren holder av ladeeffekt)"
+          "har_elbil": "Elbillader i huset (viser elbil-innstillingene; motoren holder av ladeeffekt)",
+          "lader_faser": "EV charger – number of phases",
+          "lader_volt": "EV charger – voltage"
         }
       },
       "personer": {
@@ -55,7 +57,12 @@
           "strompris": "Strømpris per kWh (Norgespris eller spot)",
           "kapasitetstrinn": "Kapasitetstrinn (vises i kortet)",
           "norgespris_aktiv": "Norgespris aktiv nå (binary_sensor)",
-          "nordpool": "Nord Pool-sensor med raw_today/raw_tomorrow (kun for spotprisstyring av bereder)"
+          "nordpool": "Nord Pool-sensor med raw_today/raw_tomorrow (kun for spotprisstyring av bereder)",
+          "nettleie_modell": "Grid tariff model",
+          "hoylast_fra": "Peak-load window from (HH:MM, empty = all day)",
+          "hoylast_til": "Peak-load window to (HH:MM)",
+          "hoylast_hverdag": "Only weekdays count in the capacity tariff",
+          "hoylast_maneder": "Only these months (e.g. 11-3, empty = all year)"
         }
       },
       "hus": {
@@ -67,7 +74,8 @@
           "glass_m2": "Glassflate i stua (m²)",
           "stue_areal_m2": "Stuens areal (m²)",
           "varsel_mottakere": "Notification recipients (pick one or more devices)",
-          "hustype": "Hustype"
+          "hustype": "Hustype",
+          "sted_navn": "Name of the place (used in notifications, e.g. “Toten” or “Strömstad”)"
         }
       },
       "maling": {
@@ -95,7 +103,9 @@
     "error": {
       "finnes_ikke": "Entiteten finnes ikke.",
       "ikke_effekt": "Dette er ikke en effektsensor i W/kW. Velg hovedmålerens øyeblikkseffekt.",
-      "ikke_register": "Dette er ikke et akkumulert energiregister (kWh, total_increasing). Dagsforbruk-sensorer kan ikke brukes."
+      "ikke_register": "Dette er ikke et akkumulert energiregister (kWh, total_increasing). Dagsforbruk-sensorer kan ikke brukes.",
+      "ugyldig_tid": "Invalid time. Use HH:MM.",
+      "ugyldig_maneder": "Use two months separated by a hyphen, e.g. 11-3."
     }
   },
   "options": {
@@ -134,7 +144,9 @@
           "hanklevarmer_effekt": "Håndklevarmer – effektsensor (W)",
           "gardiner": "Gardiner i stua (cover)",
           "hvitevarer": "Effektsensorer for komfyr, oppvaskmaskin osv. (flere)",
-          "har_elbil": "Elbillader i huset (viser elbil-innstillingene; motoren holder av ladeeffekt)"
+          "har_elbil": "Elbillader i huset (viser elbil-innstillingene; motoren holder av ladeeffekt)",
+          "lader_faser": "EV charger – number of phases",
+          "lader_volt": "EV charger – voltage"
         }
       },
       "personer": {
@@ -156,7 +168,12 @@
           "strompris": "Strømpris per kWh (Norgespris eller spot)",
           "kapasitetstrinn": "Kapasitetstrinn (vises i kortet)",
           "norgespris_aktiv": "Norgespris aktiv nå (binary_sensor)",
-          "nordpool": "Nord Pool-sensor med raw_today/raw_tomorrow (kun for spotprisstyring av bereder)"
+          "nordpool": "Nord Pool-sensor med raw_today/raw_tomorrow (kun for spotprisstyring av bereder)",
+          "nettleie_modell": "Grid tariff model",
+          "hoylast_fra": "Peak-load window from (HH:MM, empty = all day)",
+          "hoylast_til": "Peak-load window to (HH:MM)",
+          "hoylast_hverdag": "Only weekdays count in the capacity tariff",
+          "hoylast_maneder": "Only these months (e.g. 11-3, empty = all year)"
         }
       },
       "hus": {
@@ -168,7 +185,8 @@
           "glass_m2": "Glassflate i stua (m²)",
           "stue_areal_m2": "Stuens areal (m²)",
           "varsel_mottakere": "Notification recipients (pick one or more devices)",
-          "hustype": "Hustype"
+          "hustype": "Hustype",
+          "sted_navn": "Name of the place (used in notifications, e.g. “Toten” or “Strömstad”)"
         }
       },
       "soner": {
@@ -280,10 +298,11 @@
     },
     "error": {
       "finnes": "Nøkkelen er tom eller finnes allerede.",
-      "ugyldig_tid": "Invalid time — use HH:MM, or leave the field empty.",
+      "ugyldig_tid": "Invalid time. Use HH:MM.",
       "navn_mangler": "The rule needs a name.",
       "lys_mangler": "Pick the light or switch this rule applies to.",
-      "kan_ikke_dempes": "Dimming requires a dimmable light. Pick a light. entity, or switch to «forgotten light»."
+      "kan_ikke_dempes": "Dimming requires a dimmable light. Pick a light. entity, or switch to «forgotten light».",
+      "ugyldig_maneder": "Use two months separated by a hyphen, e.g. 11-3."
     },
     "abort": {
       "ingen_omrader": "Ingen områder med termostater. Sett område på termostatene under Innstillinger → Enheter."

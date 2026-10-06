@@ -319,10 +319,12 @@ def test_8b_faerre_enn_tre_dager_reservemodus(frys_tid):
     _fyll_dag(n, "2026-09-01", {17: 3.0})
     v = n.vurder(2.0)
     assert v["datakvalitet"] == "usikker" and v["kjente_dager"] == 1
-    assert v["placeholder_kwh"] == 6.0                      # ukjente dager = hard grense, ikke null
+    # Ukjente dager regnes som målet (5 kW) — ikke null, og ikke lenger den absolutte grensen:
+    # med hard grense som plassholder ble rommet negativt på hytta (9,5) de første dagene.
+    assert v["placeholder_kwh"] == 5.0
     assert any("reservemodus" in g for g in v["reserve_grunner"])
-    # 3·(5−0,5) − 6,0 − 3,0 = 4,5
-    assert v["tak_okonomi_kwh"] == pytest.approx(4.5) and v["grense_kwh"] == pytest.approx(4.5)
+    # 3·(5−0,5) − 5,0 − 3,0 = 5,5
+    assert v["tak_okonomi_kwh"] == pytest.approx(5.5) and v["grense_kwh"] == pytest.approx(5.5)
     # månedsskifte: forrige måneds dager teller ikke
     frys_tid(datetime(2026, 10, 1, 12, 0, tzinfo=OSLO))
     v = n.vurder(2.0)

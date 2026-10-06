@@ -60,6 +60,7 @@ offisielle [Nord Pool-integrasjonen](https://www.home-assistant.io/integrations/
 - [Sparing](#sparing)
 - [Nettleie etter døgnmaks](#nettleie-etter-døgnmaks)
 - [Tjenester](#tjenester)
+- [Hytte og hus — frostvakt, termisk modell, nettleiemodeller (2.33.0)](#hytte-og-hus--frostvakt-termisk-modell-nettleiemodeller-2330)
 - [Oppgradering til 2.9.0](#oppgradering-til-290)
 - [Migrering fra pakke + pyscript](#migrering-fra-pakke--pyscript)
 - [Feilsøking og FAQ](#feilsøking-og-faq)
@@ -531,7 +532,7 @@ har, vises ikke.
 
 ## Nettleie etter døgnmaks
 
-Fra 2.9.0 følger motoren Elvias faktiske modell i stedet for en fast timegrense.
+Fra 2.9.0 følger motoren Elvias faktiske modell i stedet for en fast timegrense. Fra 2.33.0 kan modellen byttes til svensk timemodell med høylastvindu — se [Hytte og hus](#hytte-og-hus--frostvakt-termisk-modell-nettleiemodeller-2330).
 
 ### Måling av hele klokketimer
 
@@ -669,6 +670,115 @@ Innlærte profiler, τ, overstyringer, logg og VVB-tilstand lagres i
 `.storage/ki_energi.<entry_id>.minne` og overlever omstart og oppdatering.
 
 ---
+
+## Hytte og hus — frostvakt, termisk modell, nettleiemodeller (2.33.0)
+
+Alt under gjelder begge hustyper. Standardverdiene er valgt så et eksisterende oppsett
+oppfører seg som før i vanlig vær; forskjellen merkes først når det er kaldt, når huset
+står tomt, eller når nettselskapet ikke er Elvia.
+
+### Frostvakt
+
+`switch.ki_frostvakt` (på), `binary_sensor.ki_frostfare`, `number.ki_frost_ute_grense` (−10 °C),
+`number.ki_frost_paslag` (2 °C), `number.ki_frost_alarm_temp` (5 °C).
+
+* **Påslag i kulda.** Under utegrensen løftes alle bortetemperaturene (panelovner, gulvvarme,
+  bad — også hvilenivået mens en hjemkomst er planlagt) med påslaget; ti grader under
+  grensen med det dobbelte. 8 °C i stua holder ikke et rør i ytterveggen over null når det
+  er −25 ute. Grunnen vises i sonens forklaring («Helgemodus (frostvakt: −22 °C ute, +4 °C)»).
+* **Alarm.** Faller et rom under alarmgrensen, får det prioritet 1 og varmes til grensen + 5 °C
+  uansett modus, vindu og budsjett, og du varsles — alltid, også med varsler av — høyst hver
+  12. time per rom. Står huset tomt i kulda og en termostat ikke svarer, varsles det også.
+  I skyggemodus sier varselet fra om at ingenting skrives.
+* Utetemperaturen hentes fra sensoren, ellers fra værentiteten.
+
+### Termostatens grenser
+
+Et settpunkt utenfor termostatens `min_temp`–`max_temp` ble avvist av Home Assistant uten at
+sonen fikk vite det — en varmepumpe går sjelden under 16 °C, så hyttas 8 °C ble aldri skrevet.
+Nå klemmes verdien til grensene, og det logges én gang per endring.
+
+### Termisk modell for forvarming
+
+Motoren lærer nå også **oppvarmingsevnen** (°C/t ved null forskjell til ute, `oppvarmingsevne`
+i `sensor.ki_tidskonstanter`) og regner forvarmingen etter dT/dt = r − k·(T − ute). Samme rom
+trenger lenger tid i −20 enn i +5, og kan rommet ikke nå målet i det været, startes
+forvarmingen så tidlig som tillatt og forklaringen sier hvorfor. `number.ki_forvarming_maks_timer`
+(10 t; hyttepresetet 24 t) setter taket, og hjemkomstfristen regnes som «innen rekkevidde» når
+den er nærmere enn taket + 2 t. Uten lært modell gjelder den gamle regelen.
+
+Læringen av varmetap skjer ikke lenger «blindt» i soner uten effektsensor: termostatens
+`hvac_action` avgjør om ovnen gikk; er den ukjent, læres ingenting.
+
+### Nattsenking regnes riktig
+
+Energien rommet ikke får mens det kjøler seg ned, er nøyaktig den som hentes igjen om morgenen
+— den koster bare prisforskjellen natt/dag. Sparingen er tapet som uteblir etter at rommet har
+nådd senkingen. Den gamle regelen (k·timer mot prisforholdet) sa «lønner seg ikke» for nesten
+alle rom; den nye regner nedkjølingstiden med dagens utetemperatur og svarer ja når rommet
+rekker å kjøle seg ned på natta.
+
+### Lastprofil med og uten folk
+
+Lastprofilen (ukedag × time) læres nå også per tilstedeværelse: én for når noen er hjemme, én
+for tomt hus. Prognosen bruker den som gjelder nå når den har nok målinger (≥ 3). På hytta,
+som står tom de fleste ukene, lovet den samlede profilen nesten null forbruk akkurat den
+fredagskvelden alle kom.
+
+### Nettleiemodeller og høylastvindu
+
+*Konfigurer → Nettleie*: **Nettleiemodell** og høylastvindu.
+
+| Modell | Hva som teller |
+|---|---|
+| `elvia` (standard) | Snittet av de tre høyeste **døgnmaksene** fra tre ulike dager |
+| `topp3_timer` | De tre høyeste **timene** i måneden, uansett dag (svensk effektavgift, f.eks. Ellevio for en hytte i Strömstad) |
+
+Høylastvinduet (fra/til, bare hverdager, bare måneder som «11-3») sier hvilke timer som teller.
+Utenfor vinduet koster en topp ingenting i fastledd, og bare den absolutte grensen gjelder —
+`sensor.ki_nettleie` sier «Utenfor høylastvinduet». Timer utenfor vinduet er heller ikke med i
+døgnmaksene. I timemodellen er «gratis»-taket månedens tredje høyeste time.
+
+**Reservemodus:** ukjente dager (færre enn to kjente «andre» dager) regnes nå som det huset
+pleier å toppe på — forrige måneds topp-tre-snitt, aldri under målet — i stedet for den
+absolutte grensen. Med 9,5 kWh som plassholder ble rommet for dagen negativt på hytta de
+første dagene i hver måned, og ankomsten på månedens første fredag ble strupt til laveste
+grense uten grunn. (`forrige_maned_snitt` og `placeholder_kwh` i `sensor.ki_nettleie`.)
+
+### Bereder i bortemodus
+
+`switch.ki_vvb_borte_sparing` (på), `number.ki_vvb_klar_for_ankomst_timer` (3 t). Står huset
+tomt i bortemodus, hopper berederen over de nattlige rundene. Den varmer likevel når
+legionellafristen er i siste døgn, når noen faktisk er hjemme, og fra `klar_for_ankomst` timer
+før en planlagt hjemkomst — så vannet er varmt når dere kommer. Status «Bortemodus – hviler».
+
+### Lading: faser, spenning og lærte trinn
+
+*Utstyr*: **antall faser** (1/3) og **spenning** (230/400 V). 16 A er 3,7 kW enfase, 6,4 kW
+trefase 230 V og 11 kW trefase 400 V — hytta og huset kan ha hvert sitt nett. Når bilen har
+stått stabilt på et trinn i tre minutter, læres trinnets faktiske effekt fra effektsensoren
+(`kw_malt` i `sensor.ki_lading_status`) og brukes i stedet for det regnede. En nesten full bil
+som struper selv, læres ikke som trinnets effekt. `switch.ki_lading_kun_natt` (av) begrenser
+ladingen til `time.ki_elbil_fra`–`til`, med mindre batteriet er under startgrensen. Styrer KI
+laderen, holdes det ikke lenger av ladeeffekt på forhånd i prognosen (bilen får bare det som er
+til overs).
+
+### Robusthet
+
+* Tidsstyrte hendelser (torsdags-/fredags-/søndagsspørsmålet, fristen, sommer-auto) treffer nå
+  innenfor et vindu etter klokkeslettet, én gang per dag, i stedet for å kreve at ticket traff
+  nøyaktig minuttet. Et tregt tjenestekall eller en omstart kl. 10:00 ga før ingen spørsmål den
+  dagen.
+* Stedsnavnet i varslene kommer fra *Hus → Stedets navn* («Kommer dere til Strömstad i dag?»).
+  Før sto «Toten» i koden.
+* Helgevekkingen for ungdom avgjøres av morgenen etter, konsekvent i hele motoren (fredag kveld
+  er lørdag morgen).
+* Sperren mot at timeforbruket «faller» midt i timen nøkles på tidsstempel, så den ikke drar
+  seg inn i neste time ved overgangen til vintertid.
+* Laderens tjenestekall går gjennom hubben: en knapp som feiler logges og velter ikke motorens
+  tick. `ki_energi.tick` kjører også lysreglene. Boost/tvungen syklus uten relé gjør ingen
+  tomme tjenestekall.
+* `sw_version` på enheten følger manifestet (sto på 2.0.0).
 
 ## Oppgradering til 2.9.0
 

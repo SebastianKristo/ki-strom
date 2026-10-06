@@ -33,6 +33,8 @@ from homeassistant.util import dt as dt_util
 from .const import (
     CONF_LADER_BRYTER,
     CONF_LADER_EFFEKT,
+    CONF_LADER_FASER,
+    CONF_LADER_VOLT,
     CONF_LADER_SOC,
     CONF_LADER_STED,
     CONF_LADER_STED_NAVN,
@@ -46,22 +48,34 @@ _LOGGER = logging.getLogger(__name__)
 # én bil har 5/8/10/16 A, en annen 5/10/16/18. Å hardkode én liste betyr at knapper
 # hoppes over med en advarsel, og at trinn som ikke finnes likevel kan velges.
 TRINN = (5, 8, 10, 16, 18)
-# 230 V enfase. Brukes bare til å anslå hva et trinn koster i kW før vi har målt.
+# 230 V enfase er standard. Brukes bare til å anslå hva et trinn koster i kW før vi har målt.
 VOLT = 230.0
+SQRT3 = 1.7320508
 
 
-def trinn_kw(ampere: int) -> float:
-    """Anslått effekt for et trinn, i kW."""
-    return round(ampere * VOLT / 1000.0, 2)
+def trinn_kw(ampere: int, faser: int = 1, volt: float = VOLT, malt: dict | None = None) -> float:
+    """Effekt for et trinn, i kW.
+
+    Målt verdi først (`malt` = {ampere: kW} lært fra effektsensoren), ellers regnet:
+    enfase U·I, trefase √3·U·I. 16 A er 3,7 kW på én fase, 6,4 kW på tre faser i et
+    230 V IT-nett og 11 kW på 400 V TN — tre helt ulike tall for samme knapp, og hytta
+    og huset kan godt ha hvert sitt nett.
+    """
+    if malt and str(ampere) in malt and malt[str(ampere)]:
+        return round(float(malt[str(ampere)]), 2)
+    if int(faser or 1) >= 3:
+        return round(SQRT3 * float(volt or VOLT) * ampere / 1000.0, 2)
+    return round(ampere * float(volt or VOLT) / 1000.0, 2)
 
 
-def velg_trinn(ledig_kw: float, minste: int = 0, trinn: tuple[int, ...] = TRINN) -> int | None:
+def velg_trinn(ledig_kw: float, minste: int = 0, trinn: tuple[int, ...] = TRINN,
+               faser: int = 1, volt: float = VOLT, malt: dict | None = None) -> int | None:
     """Høyeste trinn som holder seg under `ledig_kw`.
 
     Returnerer None når ikke engang det laveste trinnet får plass — altså «ikke lad».
     `trinn` er bilens egne trinn; standarden er bare en fallback.
     """
-    kandidater = [a for a in trinn if a >= minste and trinn_kw(a) <= ledig_kw]
+    kandidater = [a for a in trinn if a >= minste and trinn_kw(a, faser, volt, malt) <= ledig_kw]
     return max(kandidater) if kandidater else None
 
 
@@ -124,6 +138,43 @@ class KiLading:
 
     def _bryter(self) -> str | None:
         return self.hub.cfg(CONF_LADER_BRYTER)
+
+    def faser(self) -> int:
+        try:
+            return 3 if int(float(self.hub.cfg(CONF_LADER_FASER, 1) or 1)) >= 3 else 1
+        except (TypeError, ValueError):
+            return 1
+
+    def volt(self) -> float:
+        try:
+            v = float(self.hub.cfg(CONF_LADER_VOLT, VOLT) or VOLT)
+        except (TypeError, ValueError):
+            v = VOLT
+        return v if 100 <= v <= 500 else VOLT
+
+    def kw_for(self, ampere: int) -> float:
+        """Effekten et trinn faktisk gir: målt når vi har sett den, ellers regnet fra faser og spenning."""
+        return trinn_kw(ampere, self.faser(), self.volt(), self.m.get("kw_malt"))
+
+    def _laer_trinn(self, naa: datetime) -> None:
+        """Lær hva hvert trinn gir i kW. Bare når bilen har stått stabilt på trinnet i noen
+        minutter og trekker nesten det den kan — en nesten full bil trekker mindre, og det må
+        ikke læres som trinnets effekt. Glattes, og krever to samsvarende målinger."""
+        if not self.satt_trinn or not self.sist_endret or naa - self.sist_endret < timedelta(minutes=3):
+            return
+        malt = self.effekt_kw()
+        if malt is None or malt < 0.5:
+            return
+        regnet = trinn_kw(self.satt_trinn, self.faser(), self.volt())
+        if malt < regnet * 0.7:
+            return   # bilen struper selv — ikke trinnets effekt
+        lagret = self.m.setdefault("kw_malt", {})
+        gammel = lagret.get(str(self.satt_trinn))
+        lagret[str(self.satt_trinn)] = round(malt if gammel is None else 0.7 * float(gammel) + 0.3 * malt, 3)
+
+    def i_nattvindu(self) -> bool:
+        h = self.hub
+        return h.mellom(h.tid_min("ki_elbil_fra", "22:00"), h.tid_min("ki_elbil_til", "06:00"))
 
     def lader(self) -> bool | None:
         """Står bryteren på? None når den ikke svarer."""
@@ -263,15 +314,27 @@ class KiLading:
                 return {"handling": "av", "trinn": None, "kw": 0.0, "forklaring": grunn}
             return {"handling": "stopp", "trinn": None, "kw": 0.0, "forklaring": grunn}
 
+        # Bare om natten (hvis valgt), med mindre batteriet er under startgrensen — da haster det.
+        if h.on("ki_lading_kun_natt", False) and not self.i_nattvindu():
+            soc = self.soc()
+            if soc is None or soc >= h.num("ki_lading_start_under", 70):
+                vindu = f"{h.tid_str('ki_elbil_fra', '22:00')}–{h.tid_str('ki_elbil_til', '06:00')}"
+                if not pa:
+                    return {"handling": "av", "trinn": None, "kw": 0.0,
+                            "forklaring": f"Lader bare om natten ({vindu})" + (f" — batteriet er på {soc:.0f} %" if soc is not None else "")}
+                return {"handling": "stopp", "trinn": None, "kw": 0.0,
+                        "forklaring": f"Nattvinduet ({vindu}) er over — stopper ladingen"}
+
         målt = self.effekt_kw()
+        self._laer_trinn(naa)
 
         # Bilen tar mindre enn trinnet tillater: da er resten ikke vår å reservere.
         if pa and målt is not None and self.satt_trinn:
-            forventet = trinn_kw(self.satt_trinn)
+            forventet = self.kw_for(self.satt_trinn)
             if målt < forventet - 0.5:
                 ledig_kw += forventet - målt
 
-        ønsket = velg_trinn(ledig_kw, 0, self.trinn())
+        ønsket = velg_trinn(ledig_kw, 0, self.trinn(), self.faser(), self.volt(), self.m.get("kw_malt"))
 
         # Minsteavstand: hver endring gir bilen et avbrudd, så vi haster ikke.
         min_min = h.num("ki_lading_min_mellom_min", 5)
@@ -282,36 +345,36 @@ class KiLading:
             if not pa:
                 return {"handling": "av", "trinn": None, "kw": 0.0,
                         "forklaring": f"Ingen ledig effekt ({ledig_kw:.1f} kW) — "
-                                      f"{trinn_kw(TRINN[0]):.1f} kW trengs for laveste trinn"}
+                                      f"{self.kw_for(self.trinn()[0]):.1f} kW trengs for laveste trinn"}
             return {"handling": "stopp", "trinn": None, "kw": 0.0,
                     "forklaring": f"Bare {ledig_kw:.1f} kW ledig — stopper ladingen"}
 
         if not pa:
-            return {"handling": "start", "trinn": ønsket, "kw": trinn_kw(ønsket),
+            return {"handling": "start", "trinn": ønsket, "kw": self.kw_for(ønsket),
                     "forklaring": f"{ledig_kw:.1f} kW ledig — starter på {ønsket} A"}
 
         if self.satt_trinn == ønsket:
-            return {"handling": "hold", "trinn": ønsket, "kw": målt if målt is not None else trinn_kw(ønsket),
+            return {"handling": "hold", "trinn": ønsket, "kw": målt if målt is not None else self.kw_for(ønsket),
                     "forklaring": f"Lader på {ønsket} A"}
 
         # Dødbånd: vi bytter bare når det nye trinnet gir noe å hente.
         dødbånd = h.num("ki_lading_dodband_kw", 0.6)
         if self.satt_trinn is not None:
-            gevinst = abs(trinn_kw(ønsket) - trinn_kw(self.satt_trinn))
+            gevinst = abs(self.kw_for(ønsket) - self.kw_for(self.satt_trinn))
             if gevinst < dødbånd:
                 return {"handling": "hold", "trinn": self.satt_trinn,
-                        "kw": målt if målt is not None else trinn_kw(self.satt_trinn),
+                        "kw": målt if målt is not None else self.kw_for(self.satt_trinn),
                         "forklaring": f"Holder {self.satt_trinn} A — "
                                       f"{ønsket} A endrer bare {gevinst:.1f} kW"}
 
         if for_tidlig:
             igjen = min_min - int((naa - self.sist_endret).total_seconds() // 60)
             return {"handling": "hold", "trinn": self.satt_trinn,
-                    "kw": målt if målt is not None else trinn_kw(self.satt_trinn or ønsket),
+                    "kw": målt if målt is not None else self.kw_for(self.satt_trinn or ønsket),
                     "forklaring": f"Vil til {ønsket} A, men venter {max(igjen, 1)} min "
                                   f"siden forrige endring"}
 
-        return {"handling": "endre", "trinn": ønsket, "kw": trinn_kw(ønsket),
+        return {"handling": "endre", "trinn": ønsket, "kw": self.kw_for(ønsket),
                 "forklaring": f"{ledig_kw:.1f} kW ledig — går fra "
                               f"{self.satt_trinn or '?'} A til {ønsket} A"}
 
@@ -323,22 +386,21 @@ class KiLading:
         naa = dt_util.utcnow()
         knapper = self._knapper()
 
+        # Tjenestekallene går gjennom hub.kall: en knapp som feiler skal logges, ikke velte
+        # resten av motorens tick (settpunktene skrives etter ladingen).
         if v["handling"] in ("start", "endre"):
             eid = knapper.get(v["trinn"])
             if eid:
-                await h.hass.services.async_call(
-                    "button", "press", {"entity_id": eid}, blocking=False)
+                await h.kall("button", "press", {"entity_id": eid})
                 self.satt_trinn = v["trinn"]
                 self.sist_endret = naa
             if v["handling"] == "start":
-                await h.hass.services.async_call(
-                    "switch", "turn_on", {"entity_id": self._bryter()}, blocking=False)
+                await h.kall("switch", "turn_on", {"entity_id": self._bryter()})
                 self.var_pa = True
             _LOGGER.debug("ki_energi lading: %s", v["forklaring"])
 
         elif v["handling"] == "stopp":
-            await h.hass.services.async_call(
-                "switch", "turn_off", {"entity_id": self._bryter()}, blocking=False)
+            await h.kall("switch", "turn_off", {"entity_id": self._bryter()})
             self.var_pa = False
             self.satt_trinn = None
             self.sist_endret = naa
@@ -364,4 +426,8 @@ class KiLading:
             "fulladet": bool(self.m.get("soc_full")),
             "hjemme": self.hjemme(),
             "sted_navn": self.hub.cfg(CONF_LADER_STED_NAVN) or "",
+            "faser": self.faser(), "volt": self.volt(),
+            "kw_per_trinn": {a: self.kw_for(a) for a in self.trinn()},
+            "kw_malt": dict(self.m.get("kw_malt") or {}),
+            "kun_natt": self.hub.on("ki_lading_kun_natt", False),
         })

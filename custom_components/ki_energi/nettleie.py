@@ -20,7 +20,8 @@ from typing import Any
 
 from homeassistant.util import dt as dt_util
 
-from .const import CONF_IMPORTERT_ENERGI, CONF_TOPP1, CONF_TOPP2, CONF_TOPP3
+from .const import (CONF_HOYLAST_FRA, CONF_HOYLAST_HVERDAG, CONF_HOYLAST_MANEDER, CONF_HOYLAST_TIL,
+                    CONF_IMPORTERT_ENERGI, CONF_NETTLEIE_MODELL, CONF_TOPP1, CONF_TOPP2, CONF_TOPP3)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -124,6 +125,38 @@ def simuler(dager: dict[Any, float], idag: Any, kandidat: float, tabell: list[tu
         # snittet stiger, men trinnet ikke: mindre rom for de andre dagene resten av måneden
         "redusert_margin": hoyere_snitt and not (okning or 0),
     }
+
+
+def _hhmm_min(tekst: str | None) -> int | None:
+    try:
+        t, m = str(tekst).strip().split(":")[:2]
+        return int(t) * 60 + int(m)
+    except (ValueError, AttributeError, TypeError):
+        return None
+
+
+def i_hoylast(lok: datetime, fra: str | None, til: str | None, hverdag: bool, maneder: str | None) -> bool:
+    """Teller denne klokketimen i effekttariffen?
+
+    Tomme felt betyr «alltid». Vinduet er klokkeslett (kan gå over midnatt), eventuelt bare
+    mandag–fredag, og eventuelt bare i noen måneder («11-3» = november til og med mars).
+    Svensk effektavgift regnes typisk bare på høylasttimer; Elvia regner hele døgnet.
+    """
+    if hverdag and lok.weekday() >= 5:
+        return False
+    if maneder:
+        try:
+            a, b = (int(x) for x in str(maneder).replace("–", "-").split("-")[:2])
+            m = lok.month
+            if not ((a <= m <= b) if a <= b else (m >= a or m <= b)):
+                return False
+        except ValueError:
+            pass
+    f, t = _hhmm_min(fra), _hhmm_min(til)
+    if f is None or t is None or f == t:
+        return True
+    naa = lok.hour * 60 + lok.minute
+    return f <= naa < t if f < t else (naa >= f or naa < t)
 
 
 def tak_for_idag(andre: list[float], mal_kw: float, reserve: float) -> float:
@@ -379,14 +412,51 @@ class KiNettleie:
     def _lokal(ts: float) -> datetime:
         return dt_util.as_local(datetime.fromtimestamp(ts, tz=timezone.utc))
 
+    # -- modell -----------------------------------------------------------
+    def modell(self) -> str:
+        m = str(self.hub.cfg(CONF_NETTLEIE_MODELL, "") or "elvia")
+        return m if m in ("elvia", "topp3_timer") else "elvia"
+
+    def hoylast(self, lok: datetime) -> bool:
+        h = self.hub
+        return i_hoylast(lok, h.cfg(CONF_HOYLAST_FRA, ""), h.cfg(CONF_HOYLAST_TIL, ""),
+                         bool(h.cfg(CONF_HOYLAST_HVERDAG, False)), h.cfg(CONF_HOYLAST_MANEDER, ""))
+
+    def hoylast_tekst(self) -> str:
+        h = self.hub
+        deler = []
+        if h.cfg(CONF_HOYLAST_FRA, "") and h.cfg(CONF_HOYLAST_TIL, ""):
+            deler.append(f"kl. {h.cfg(CONF_HOYLAST_FRA)}–{h.cfg(CONF_HOYLAST_TIL)}")
+        if h.cfg(CONF_HOYLAST_HVERDAG, False):
+            deler.append("hverdager")
+        if h.cfg(CONF_HOYLAST_MANEDER, ""):
+            deler.append(f"månedene {h.cfg(CONF_HOYLAST_MANEDER)}")
+        return ", ".join(deler) if deler else "hele døgnet, hele året"
+
+    def timer_i_maned(self, maned: tuple[int, int]) -> dict[str, dict]:
+        """Lukkede høylasttimer i måneden: {nøkkel: {kwh, dato, time, kvalitet}} (for topp3_timer)."""
+        ut: dict[str, dict] = {}
+        for nk, rad in self.m["maler"]["timer"].items():
+            if rad.get("start") is None or rad.get("kwh") is None:
+                continue
+            lok = self._lokal(rad["start"])
+            if (lok.year, lok.month) != maned or not self.hoylast(lok):
+                continue
+            ut[nk] = {"kwh": rad["kwh"], "dato": lok.strftime("%Y-%m-%d"), "time": lok.strftime("%H"),
+                      "kvalitet": rad["kvalitet"], "kilde": "egen", "kjente_timer": 1, "manglende_timer": 0}
+        return ut
+
     def dogn(self, maned: tuple[int, int] | None = None) -> dict[str, dict]:
-        """Døgnmaks per lokal dato fra lukkede timer: {dato: {kwh, time, kvalitet, kjente_timer}}."""
+        """Døgnmaks per lokal dato fra lukkede timer: {dato: {kwh, time, kvalitet, kjente_timer}}.
+        Bare timer i høylastvinduet teller; de andre koster ingenting i fastledd."""
         ut: dict[str, dict] = {}
         for rad in self.m["maler"]["timer"].values():
             if rad.get("start") is None:
                 continue
             lok = self._lokal(rad["start"])
             if maned and (lok.year, lok.month) != maned:
+                continue
+            if not self.hoylast(lok):
                 continue
             d = lok.strftime("%Y-%m-%d")
             r = ut.setdefault(d, {"kwh": None, "time": None, "kvalitet": "mangler", "kjente_timer": 0, "manglende_timer": 0})
@@ -422,11 +492,26 @@ class KiNettleie:
         naa = dt_util.now()
         maned = (naa.year, naa.month)
         idag = naa.strftime("%Y-%m-%d")
-        egne = self.dogn(maned)
-        dager: dict[str, float] = {d: r["kwh"] for d, r in egne.items() if r["kwh"] is not None}
-        info: dict[str, dict] = {d: dict(r, kilde="egen", dato=d) for d, r in egne.items() if r["kwh"] is not None}
+        timemodell = self.modell() == "topp3_timer"
+        if timemodell:
+            # Enhetene er enkelttimer, ikke døgn: tre timer samme dag kan alle telle.
+            egne_timer = self.timer_i_maned(maned)
+            dager: dict[str, float] = {k: r["kwh"] for k, r in egne_timer.items()}
+            info: dict[str, dict] = dict(egne_timer)
+            egne = self.dogn(maned)   # til datakvalitet (manglende timer) og dagens maks i kortet
+        else:
+            egne = self.dogn(maned)
+            dager = {d: r["kwh"] for d, r in egne.items() if r["kwh"] is not None}
+            info = {d: dict(r, kilde="egen", dato=d) for d, r in egne.items() if r["kwh"] is not None}
+        # Forrige måneds topp-tre-snitt: erfaringen om hva dette huset pleier å toppe på.
+        forrige = (naa.year, naa.month - 1) if naa.month > 1 else (naa.year - 1, 12)
+        if timemodell:
+            forrige_enheter = {k: r["kwh"] for k, r in self.timer_i_maned(forrige).items()}
+        else:
+            forrige_enheter = {d: r["kwh"] for d, r in self.dogn(forrige).items() if r["kwh"] is not None}
+        forrige_snitt = snitt_av(topp_tre(forrige_enheter)) if len(forrige_enheter) >= 3 else None
         udaterte = 0
-        for i, v in enumerate(self.eksterne_topper()):
+        for i, v in enumerate([] if timemodell else self.eksterne_topper()):
             if any(abs(v - e) <= 0.06 for e in dager.values()):
                 continue
             k = f"ukjent-{i + 1}"
@@ -434,10 +519,12 @@ class KiNettleie:
             info[k] = {"kwh": v, "time": None, "kvalitet": "udatert", "kilde": "ekstern", "dato": None,
                        "kjente_timer": 0, "manglende_timer": 0}
             udaterte += 1
-        kjente_dager = len([d for d in dager if not d.startswith("ukjent")])
+        kjente_dager = len({(info[d].get("dato") or d) for d in dager if not d.startswith("ukjent")})
         dagens = egne.get(idag)
         ufullstendige = [d for d, r in egne.items() if r["manglende_timer"] > 0]
         return {"dager": dager, "info": info, "idag": idag, "dagens": dagens, "udaterte": udaterte,
+                "timemodell": timemodell, "forrige_snitt": forrige_snitt,
+                "i_hoylast": self.hoylast(naa), "hoylast": self.hoylast_tekst(),
                 "kjente_dager": kjente_dager, "ufullstendige": ufullstendige,
                 "dager_igjen": calendar.monthrange(naa.year, naa.month)[1] - naa.day,
                 "estimerte_timer": sum(1 for r in self.m["maler"]["timer"].values()
@@ -474,7 +561,11 @@ class KiNettleie:
 
         idag = g["idag"]
         dagens_kwh = g["dagens"]["kwh"] if g["dagens"] and g["dagens"]["kwh"] is not None else None
-        andre = sorted([v for d, v in g["dager"].items() if d != idag], reverse=True)
+        timemodell = g["timemodell"]
+        # Enheten som kan endres nå: i Elvia-modellen dagens døgnmaks, i timemodellen
+        # inneværende time (som ennå ikke finnes blant de lukkede).
+        enhet_naa = "__naa__" if timemodell else idag
+        andre = sorted([v for d, v in g["dager"].items() if d != enhet_naa], reverse=True)
 
         # Reserve: fast grunnreserve + påslag for usikkerhet. Enkelt og forklarbart.
         reserve = basis_reserve
@@ -489,9 +580,16 @@ class KiNettleie:
         # framover, ikke null. Placeholder = høyeste av kjente dager og hard grense.
         placeholder = None
         if len(andre) < 2 and g["dager_igjen"] > 0:
-            placeholder = max([hard] + andre + ([dagens_kwh] if dagens_kwh else []))
+            # Ukjente dager regnes som det huset pleier å toppe på — forrige måneds snitt, og
+            # aldri under målet selv. Før sto den absolutte grensen her, og med 9,5 kWh på
+            # hytta ble rommet for dagen negativt de første dagene i hver måned: ankomsten
+            # på månedens første fredag ble strupt til laveste grense uten grunn.
+            kandidater = [mal_kw] + andre + ([dagens_kwh] if dagens_kwh else [])
+            if g.get("forrige_snitt"):
+                kandidater.append(float(g["forrige_snitt"]))
+            placeholder = min(hard, max(kandidater))
             andre_for_tak = andre + [placeholder] * (2 - len(andre))
-            reserve_grunner.append(f"reservemodus: ukjente dager regnes som {placeholder:.2f} kWh")
+            reserve_grunner.append(f"reservemodus: ukjente {'timer' if timemodell else 'dager'} regnes som {placeholder:.2f} kWh")
         else:
             andre_for_tak = andre
 
@@ -508,35 +606,47 @@ class KiNettleie:
             eff_mal = mal_kw
         tariff_ukjent = eff_mal is None or (reg_trinn["ukjent"] and reg_snitt is not None)
 
-        fri_tak = dagens_kwh or 0.0                    # timer opp hit endrer ikke døgnmaksen
+        if timemodell:
+            fri_tak = andre[2] if len(andre) >= 3 else 0.0   # under tredje høyeste time: topp tre urørt
+        else:
+            fri_tak = dagens_kwh or 0.0                    # timer opp hit endrer ikke døgnmaksen
         if eff_mal is None:
             tak_ok = hard                              # utenfor tabellen: kan ikke regne kroner
         else:
             tak_ok = tak_for_idag(andre_for_tak, eff_mal, reserve)
         okonomisk = max(fri_tak, tak_ok)
-        if tillat_dyrere:
+        utenfor_hoylast = not g["i_hoylast"]
+        if tillat_dyrere or utenfor_hoylast:
             okonomisk = hard
         grense = max(laveste, min(hard, okonomisk))
 
         # Begrunnelse for grensen
-        if tillat_dyrere:
+        if utenfor_hoylast:
+            hvorfor = f"Utenfor høylastvinduet ({g['hoylast']}) — timen teller ikke i effekttariffen, bare den absolutte grensen gjelder."
+        elif tillat_dyrere:
             hvorfor = "Bryteren «tillat dyrere trinn» er på — bare den absolutte timegrensen gjelder."
         elif grense >= hard - 1e-9 and okonomisk >= hard:
             hvorfor = f"Økonomisk rom ({okonomisk:.2f} kWh) er over den absolutte grensen — {hard:.2f} kWh gjelder."
+        elif timemodell and fri_tak >= tak_ok and fri_tak > 0:
+            hvorfor = (f"Månedens tredje høyeste time er {fri_tak:.2f} kWh. "
+                       f"Timer opp til det endrer ikke topp tre — derfor er grensen {grense:.2f}.")
         elif fri_tak >= tak_ok and dagens_kwh:
             hvorfor = (f"Dagens døgnmaks er alt {dagens_kwh:.2f} kWh (kl. {g['dagens']['time']}). "
                        f"Timer opp til det endrer ingenting — derfor er grensen {grense:.2f}.")
         elif grense <= laveste + 1e-9:
             hvorfor = f"Regnestykket ga {tak_ok:.2f} kWh, men laveste tillatte timegrense er {laveste:.2f}."
         else:
-            hvorfor = (f"For å holde snittet under {eff_mal:.2f} kW med {reserve:.2f} kWh reserve kan i dag "
-                       f"toppe på {tak_ok:.2f} kWh (de to andre toppene er {andre_for_tak[0]:.2f} og {andre_for_tak[1]:.2f}).")
+            hvorfor = (f"For å holde snittet under {eff_mal:.2f} kW med {reserve:.2f} kWh reserve kan "
+                       f"{'denne timen' if timemodell else 'i dag'} toppe på {tak_ok:.2f} kWh "
+                       f"(de to andre toppene er {andre_for_tak[0]:.2f} og {andre_for_tak[1]:.2f}).")
         if mal_tapt and eff_mal is not None:
             hvorfor += (f" Målet «under {mal_kw:.0f} kW» er alt passert denne måneden (snitt {reg_snitt:.2f}); "
                         f"motoren holder nå snittet under neste grense, {eff_mal:.0f} kW.")
 
         ut: dict[str, Any] = {
             "grense_kwh": round(grense, 2), "hvorfor": hvorfor,
+            "modell": self.modell(), "hoylast": g["hoylast"], "i_hoylast": g["i_hoylast"],
+            "forrige_maned_snitt": round(g["forrige_snitt"], 3) if g.get("forrige_snitt") else None,
             "fri_tak_kwh": round(fri_tak, 3), "tak_okonomi_kwh": round(tak_ok, 3), "hard_kwh": hard,
             "reserve_kwh": round(reserve, 3), "reserve_grunner": reserve_grunner,
             "mal_kw": mal_kw, "effektivt_mal_kw": eff_mal, "mal_tapt": mal_tapt,
@@ -561,13 +671,19 @@ class KiNettleie:
         }
 
         # Prognose for inneværende time
-        if forventet_time_kwh is not None:
-            sim = simuler(g["dager"], idag, forventet_time_kwh, tab)
+        if forventet_time_kwh is not None and utenfor_hoylast:
+            ut.update({"forventet_time_kwh": round(forventet_time_kwh, 3),
+                       "forventet_dognmaks_kwh": round(max(forventet_time_kwh, dagens_kwh or 0.0), 3),
+                       "forventet_topp_tre": ut["topp_tre"], "forventet_snitt": ut["registrert_snitt"],
+                       "forventet_trinn_kr": reg_trinn["kr"], "okning_fastledd_kr": 0.0,
+                       "hoyere_dognmaks": False, "hoyere_snitt": False, "hoyere_fastledd": False, "redusert_margin": False})
+        elif forventet_time_kwh is not None:
+            sim = simuler(g["dager"], enhet_naa, forventet_time_kwh, tab)
             ut.update({
                 "forventet_time_kwh": round(forventet_time_kwh, 3),
                 "forventet_dognmaks_kwh": round(max(forventet_time_kwh, dagens_kwh or 0.0), 3),
-                "forventet_topp_tre": [dict(g["info"].get(d, {"dato": d, "kilde": "prognose"}), kwh=v,
-                                            prognose=(d == idag)) for d, v in sim["ny_topper"]],
+                "forventet_topp_tre": [dict(g["info"].get(d, {"dato": idag, "kilde": "prognose"}), kwh=v,
+                                            prognose=(d == enhet_naa)) for d, v in sim["ny_topper"]],
                 "forventet_snitt": round(sim["ny_snitt"], 3) if sim["ny_snitt"] is not None else None,
                 "forventet_trinn_kr": sim["ny_trinn"]["kr"],
                 "okning_fastledd_kr": sim["okning_kr"],
