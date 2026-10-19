@@ -251,6 +251,11 @@ class KiPrognoselaering:
             return ut
         # bruk segmentets råverdi som "trekk" på den glattede horisontmarginen (aldri under horisont-glattet ned)
         kwh = glattet if kilde != "segment" else max(mn, min(mx, glattet + OPP_ALFA * (raa - glattet)))
+        # Marginen er lært for horisonten (minst 15 min igjen). Med 5 min igjen er usikkerheten
+        # mindre — skaler ned, som den faste reserven gjør. Ellers ble 0,3 kWh delt på ett
+        # minutt igjen til 18 kW reserve i motoren, og alle soner ble senket hvert timeskifte.
+        if minutter_igjen < hz:
+            kwh *= max(minutter_igjen, 1) / hz
         # skjev utvalg? mange påvirkede timer utelatt → ikke la marginen bli mindre enn fallback
         andel_pavirket = self.m["n_pavirket"] / max(1, self.m["n_pavirket"] + n_alle)
         status = "aktiv"

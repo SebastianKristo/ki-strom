@@ -68,13 +68,8 @@ class KiModuser:
         # --- fraværssporing ---
         if borte:
             self.m.setdefault("borte_siden", naa.isoformat())
-        else:
-            if self.m.get("borte_siden"):
-                self.m.pop("borte_siden", None)
-                h.lagre()
-            # noen kom hjem → avslutt helg/hjemkomst
-            if borte is False and (h.on("ki_helgemodus") or h.on("ki_hjemkomst_aktiv")):
-                await self.hjemkomst_ferdig("Noen kom hjem")
+        elif borte is False:
+            await self._noen_hjemme()
 
         # --- helg: dere svarte «ja, vi drar» — aktiver i det alle er ute av døra ---
         if borte and self.m.get("helg_ved_avreise") and not h.on("ki_helgemodus"):
@@ -336,6 +331,20 @@ class KiModuser:
             "hjemkomst_tid_innstilling": h.tekst("ki_hjemkomst_tid", "17:00"),
         })
 
+    async def _noen_hjemme(self) -> None:
+        """Noen kom hjem → avslutt helg/hjemkomst.
+
+        Det er overgangen borte → hjemme som teller, ikke at noen er hjemme: sparemodus valgt
+        fra varselet (som bare sendes når noen er hjemme) ble ellers opphevet i neste tick.
+        Ukjent tilstedeværelse (None) kommer ikke hit, så `borte_siden` og overgangen beholdes.
+        """
+        h = self.hub
+        kom_hjem = bool(self.m.pop("borte_siden", None))
+        if kom_hjem:
+            h.lagre()
+        if kom_hjem and (h.on("ki_helgemodus") or h.on("ki_hjemkomst_aktiv")):
+            await self.hjemkomst_ferdig("Noen kom hjem")
+
     async def hjemkomst_ferdig(self, grunn: str) -> None:
         h = self.hub
         h.sett("ki_hjemkomst_aktiv", False)
@@ -440,7 +449,9 @@ class KiModuser:
                 h.sett("ki_helg_venter_svar", False)
                 if h.engine is not None:
                     h.engine.logg_hendelse("Helgemodus slått av — gjenoppvarming budsjetteres sonevis.")
-        elif key == "ki_hjemkomst_aktiv" and verdi and h.dt("ki_hjemkomst_planlagt") is None:
+        elif key == "ki_hjemkomst_aktiv" and verdi and (
+                h.dt("ki_hjemkomst_planlagt") is None or h.dt("ki_hjemkomst_planlagt") <= dt_util.now()):
+            # En gammel, passert plan ville avsluttet hjemkomsten i neste tick — lag en ny.
             await self.start_hjemkomst(None, "Startet manuelt")
             return
         elif key == "ki_sommermodus":
@@ -678,7 +689,8 @@ class KiModuser:
         if not fukt_ent or not h.finnes(fukt_ent):
             return False, ""
         if not h.on("ki_hanklevarmer_fukt", False):
-            self.m.pop("fukt_over_siden", None)
+            # Ikke rør `fukt_over_siden` her: bad-vifta bruker samme tidsstempel, og slettet
+            # vi det hvert tick, startet vifta aldri på fukt.
             return False, ""
 
         # Et åpent vindu står til tiden er ute, uansett hva fukten gjør nå.
