@@ -129,6 +129,21 @@ class KiVvb:
         gikk = (dt_util.now() - s).total_seconds() / 60
         return gikk > h.num("ki_vvb_maks_min_uten_effekt", 10)
 
+    def midt_i_syklus(self) -> bool:
+        """Elementet har trukket strøm siden bryteren ble slått på, og termostaten har ikke koblet ut.
+
+        Da skal berederen få varme ferdig. `var_aktiv` alene holder ikke: effekten leses én gang
+        i minuttet, så ett tick med 0 W eller `unavailable` fra måleren gjorde den «ikke aktiv»,
+        og KI slo av før vannet var varmt — og før metningen ble sett, så heller ikke legionella
+        ble bekreftet. Ekte utkobling fanges av metningen (`_metning` slår av selv). Taket er
+        `ki_vvb_maks_oppvarming_min`, så en måler som har falt ut ikke holder den på for alltid.
+        """
+        h = self.hub
+        if not self.bryter_pa() or self.var_mettet or not h.on("ki_vvb_har_trukket_effekt"):
+            return False
+        s = self._dt("ki_vvb_oppvarming_startet")
+        return s is not None and dt_util.now() - s < timedelta(minutes=h.num("ki_vvb_maks_oppvarming_min", 300))
+
     def billig_time_na(self) -> bool:
         h = self.hub
         if h.on("ki_vvb_folg_spotpris") and h.cfg(CONF_NORDPOOL) and not h.pa(h.cfg(CONF_NORGESPRIS_AKTIV)):
@@ -391,7 +406,8 @@ class KiVvb:
                 self._vi_slo_pa = naa
                 await h.kall("switch", "turn_on", {"entity_id": self.bryter()})
                 await h.logbook("KI VVB", "På: " + self.forklaring())
-            elif not bv and bryter == "on" and not self.var_aktiv and not self.forfalt():
+            elif (not bv and bryter == "on" and not self.var_aktiv and not self.midt_i_syklus()
+                  and not self.forfalt()):
                 self._vi_slo_av = True
                 await h.kall("switch", "turn_off", {"entity_id": self.bryter()})
                 await h.logbook("KI VVB", "Av: " + self.forklaring())
