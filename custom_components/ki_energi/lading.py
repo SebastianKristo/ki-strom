@@ -271,6 +271,21 @@ class KiLading:
         # 400 W, så alt over 100 leses som watt.
         return round(v / 1000.0, 3) if abs(v) > 100 else round(v, 3)
 
+    def styrt_w(self) -> float:
+        """Ladeeffekten motoren selv styrer, i W — trekkes ut av «uregulert».
+
+        Lå bilen i uregulert last, spiste den sin egen plass i budsjettet: neste tick var
+        `ledig` borte, ladingen stoppet, ticket etter startet den igjen. Den presset også ned
+        varmen og ble lært inn i timeprofilen som fast forbruk. Uten effektsensor bruker vi
+        trinnet vi satte. Med automatikken av styrer ikke motoren bilen — da er den uregulert.
+        """
+        if not self.konfigurert() or not self.hub.on("ki_lading_automatikk", True):
+            return 0.0
+        kw = self.effekt_kw()
+        if kw is None:
+            kw = self.kw_for(self.satt_trinn) if self.lader() and self.satt_trinn else 0.0
+        return max(kw, 0.0) * 1000.0
+
     # -------------------------------------------------------------- vurderingen
     def vurder(self, ledig_kw: float) -> dict:
         """Hva ladingen bør gjøre med `ledig_kw` til rådighet.

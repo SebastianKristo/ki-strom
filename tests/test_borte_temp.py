@@ -63,9 +63,11 @@ def test_ankomst_avslutter_bortemodus_uten_svar_pa_varsel():
     # Selve betingelsen: noen er hjemme + bortemodus står på -> avslutt
     linjer = [l.strip() for l in s.splitlines()]
     i = next((n for n, l in enumerate(linjer)
-              if l.startswith("if borte is False and") and "ki_helgemodus" in l), None)
+              if l.startswith("if kom_hjem and") and "ki_helgemodus" in l), None)
     assert i is not None, "fant ikke ankomstbetingelsen"
     assert "hjemkomst_ferdig" in linjer[i + 1], f"neste linje er «{linjer[i + 1]}»"
+    # Det er overgangen borte → hjemme som teller (borte_siden), ikke at noen er hjemme.
+    assert 'kom_hjem = bool(self.m.pop("borte_siden", None))' in s
     ferdig = s[s.index("async def hjemkomst_ferdig"):]
     ferdig = ferdig[:ferdig.index("\n    @callback")]
     assert 'h.sett("ki_helgemodus", False)' in ferdig

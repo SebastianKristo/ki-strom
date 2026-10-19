@@ -133,6 +133,8 @@ class KiEngine:
             v = h.f(ent)
             if v is not None and v >= 0:
                 s += v
+        if h.lading is not None:
+            s += h.lading.styrt_w()
         return round(s, 0)
 
     def hvitevarer_w(self) -> float:
@@ -581,6 +583,13 @@ class KiEngine:
         er_dag = h.mellom(dag_start, natt_start)
         t_dag = h.num(konf.get(Z_TEMP_DAG) or "", 21.0)
         t_natt = h.num(konf.get(Z_TEMP_NATT) or "", t_dag - 2.0) if konf.get(Z_TEMP_NATT) else t_dag - 2.0
+
+        # --- Hjemkomst passert: dere skulle vært her nå. Hold dagtemperatur til modusen avslutter
+        # hjemkomsten (noen hjemme, eller 3 t etter). Før ga fristen «om 24 t» etter klokkeslettet,
+        # forvarmingen falt bort og målet falt til hvilenivået i det dere kom, om dere var forsinket.
+        plan = h.dt("ki_hjemkomst_planlagt") if hjemkomst is not None else None
+        if plan is not None and plan <= dt_util.now():
+            return t_dag, f"Hjemkomst kl. {dt_util.as_local(plan):%H:%M} — holder dagtemperatur", None
 
         # --- Hjemkomst: hold hvilenivå, men med frist så forvarmingen slår inn ---
         if hjemkomst is not None:
@@ -1050,7 +1059,8 @@ class KiEngine:
         lading_kw = 0.0
         if h.lading is not None and h.lading.konfigurert():
             lv = await h.lading.bruk(max(0.0, ledig))
-            lading_kw = lv.get("kw") or 0.0
+            # Manuell lading ligger allerede i den uregulerte prognosen — ikke tell den to ganger.
+            lading_kw = 0.0 if lv.get("handling") == "manuell" else (lv.get("kw") or 0.0)
             ledig = max(0.0, ledig - lading_kw)
 
         await self.frostvakt(laster, plan)

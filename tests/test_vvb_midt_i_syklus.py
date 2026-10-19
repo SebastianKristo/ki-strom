@@ -143,3 +143,71 @@ async def test_utenfor_vinduet_uten_oppvarming_slaas_av(oppsett):
     h.bryter = "on"
     await _minutter(v, klokke, 2)
     assert h.bryter == "off"
+
+
+# ----------------------------------------------------------------------
+#  Gjennomgang 1–4
+# ----------------------------------------------------------------------
+async def test_tvungen_syklus_fra_tjenesten_slaas_ikke_av(oppsett):
+    """Tjenesten «tving syklus» midt på dagen (vinduet ferdig, legionella ok)."""
+    v, h, klokke = oppsett
+    klokke[0] = klokke[0].replace(hour=13)
+    h.lagret["ki_vvb_siste_godkjente_syklus"] = klokke[0] - timedelta(hours=10)
+    await v.tving_syklus()
+    assert h.bryter == "on"
+    h.effekt = 2000.0
+    await _minutter(v, klokke, 5)
+    assert "turn_off" not in h.kall_logg
+    h.effekt = 3.0
+    await _minutter(v, klokke, 10)
+    assert h.bryter == "off"
+    assert not h.on("ki_vvb_tvungen_syklus_aktiv")
+
+
+async def test_spotpris_uten_priser_faller_tilbake_paa_vinduet(oppsett, monkeypatch):
+    v, h, klokke = oppsett
+    from custom_components.ki_energi.const import CONF_NORDPOOL
+    cfg = Hub.cfg
+    monkeypatch.setattr(Hub, "cfg", lambda self, n, std=None: "sensor.nordpool" if n == CONF_NORDPOOL else cfg(self, n, std))
+    h.lagret["ki_vvb_folg_spotpris"] = True
+    klokke[0] = klokke[0].replace(hour=23)
+    await v.tick()                       # attr gir [] → ingen billige timer
+    assert v.billige_timer == []
+    assert h.bryter == "on", "uten priser skal vinduet gjelde"
+
+
+async def test_egen_avslaaing_varsles_ikke_som_ekstern(oppsett):
+    """KI slår på 04:59, vinduet stenger 05:00 før elementet er registrert, KI slår av.
+    Det er ikke «noe annet» som styrer berederen."""
+    v, h, klokke = oppsett
+    klokke[0] = klokke[0].replace(hour=4, minute=59)
+    await v.tick()
+    assert h.bryter == "on"
+    await _minutter(v, klokke, 1)
+    assert h.bryter == "off"
+    await _minutter(v, klokke, 3)
+    assert v._ekstern_teller == 0
+    assert v._ekstern_av_til is None
+
+
+async def test_relé_unavailable_er_ikke_ekstern_avslaaing(oppsett):
+    v, h, klokke = oppsett
+    await v.tick()
+    assert h.bryter == "on"
+    h.bryter = "unavailable"
+    await _minutter(v, klokke, 1)
+    assert v._ekstern_teller == 0
+
+
+async def test_boost_avsluttes_ved_metning_og_releet_klikker_ikke(oppsett):
+    v, h, klokke = oppsett
+    klokke[0] = klokke[0].replace(hour=13)
+    h.lagret["ki_vvb_siste_godkjente_syklus"] = klokke[0] - timedelta(hours=10)
+    await v.boost(120)
+    h.effekt = 2000.0
+    await _minutter(v, klokke, 20)
+    h.effekt = 3.0
+    await _minutter(v, klokke, 60)
+    assert h.bryter == "off"
+    assert h.kall_logg.count("turn_on") == 1, h.kall_logg
+    assert not v.boost_aktiv()

@@ -599,7 +599,14 @@ class KiNettleie:
         reg_trinn = trinn(reg_snitt, tab)
 
         # Mål: ønsket trinn — eller neste grense over dagens snitt hvis målet alt er tapt
-        mal_tapt = reg_snitt is not None and reg_snitt >= mal_kw
+        # Tapt betyr at målet ikke kan nås uansett hva resten av måneden gjør. Med færre enn tre
+        # kjente topper og dager igjen er sluttsnittet minst summen delt på tre (ukjente dager ≥ 0).
+        # Før ble snittet av én dag brukt: én høy dag den 2. ga opp målet for hele måneden.
+        if reg_topper and len(reg_topper) < 3 and g["dager_igjen"] > 0:
+            minste_sluttsnitt = sum(v for _k, v in reg_topper) / 3
+        else:
+            minste_sluttsnitt = reg_snitt
+        mal_tapt = minste_sluttsnitt is not None and minste_sluttsnitt >= mal_kw
         if mal_tapt:
             eff_mal = neste_grense(reg_snitt, tab)
         else:

@@ -146,9 +146,15 @@ class KiVvb:
 
     def billig_time_na(self) -> bool:
         h = self.hub
-        if h.on("ki_vvb_folg_spotpris") and h.cfg(CONF_NORDPOOL) and not h.pa(h.cfg(CONF_NORGESPRIS_AKTIV)):
+        # Uten priser (Nord Pool nede, `raw_today` tom) er lista tom. Da faller vi tilbake på
+        # vinduet — ellers ville berederen stått kald til legionellafristen tvang den på.
+        if self.folger_spotpris() and self.billige_timer:
             return dt_util.now().hour in self.billige_timer
         return self.i_vindu()
+
+    def folger_spotpris(self) -> bool:
+        h = self.hub
+        return bool(h.on("ki_vvb_folg_spotpris") and h.cfg(CONF_NORDPOOL) and not h.pa(h.cfg(CONF_NORGESPRIS_AKTIV)))
 
     def borte_sparing(self) -> tuple[bool, str]:
         """Står huset tomt (bortemodus), og er det ingen grunn til å varme vann akkurat nå?
@@ -180,7 +186,9 @@ class KiVvb:
             return True
         if self.ingen_respons():
             return False
-        if self.forfalt():
+        if self.forfalt() or h.on("ki_vvb_tvungen_syklus_aktiv"):
+            # Tvungen syklus (tjenesten eller fristen) går til termostaten kobler ut. Uten
+            # denne ble en manuell tvangskjøring slått av igjen i neste tick.
             return True
         if self.boost_aktiv():
             return not self.var_mettet
@@ -287,7 +295,8 @@ class KiVvb:
         # ble satt til "off" forrige tick — da ser vi aldri overgangen. Vi går i stedet ut fra
         # vårt eget påslag: slo vi på for under fem minutter siden, og er den av nå uten at vi
         # slo den av, er det noen andre.
-        if (bryter != "on" and not self._vi_slo_av and self._vi_slo_pa
+        # Bare «off» teller: et relé som er `unavailable` et øyeblikk er ikke slått av av noen.
+        if (bryter == "off" and not self._vi_slo_av and self._vi_slo_pa
                 and (naa - self._vi_slo_pa) < timedelta(minutes=5)):
             sto_sek = int((naa - self._vi_slo_pa).total_seconds())
             self._ekstern_av_til = naa + timedelta(minutes=30)
@@ -364,6 +373,8 @@ class KiVvb:
                 self._allerede_varm_logget = True
                 h.sett("ki_vvb_siste_godkjente_syklus", naa)
                 h.sett("ki_vvb_tvungen_syklus_aktiv", False)
+                if self.boost_aktiv():
+                    h.sett("ki_vvb_boost_til", naa)
                 await h.logbook("KI VVB", "Bryteren ble slått på, men elementet trakk ingen strøm — termostaten var "
                                           "allerede utkoblet. Vannet er på settpunkt; regnes som sikret.")
                 if h.engine is not None:
@@ -409,6 +420,7 @@ class KiVvb:
             elif (not bv and bryter == "on" and not self.var_aktiv and not self.midt_i_syklus()
                   and not self.forfalt()):
                 self._vi_slo_av = True
+                self._vi_slo_pa = None   # vår egen avslåing — ikke en annen styring
                 await h.kall("switch", "turn_off", {"entity_id": self.bryter()})
                 await h.logbook("KI VVB", "Av: " + self.forklaring())
         self.var_bor_varme = bv
@@ -490,8 +502,13 @@ class KiVvb:
                                   "Legionellasikringen er bekreftet.")
         if h.engine is not None:
             h.engine.logg_hendelse(f"Varmtvannsbereder mettet etter {minutter} min — legionella bekreftet.")
+        # Boosten har gjort jobben sin. Står den igjen, slår `bor_varme` på igjen i neste tick,
+        # elementet trekker ingenting, `ingen_respons` slår av — og releet klikker hvert 11. min.
+        if self.boost_aktiv():
+            h.sett("ki_vvb_boost_til", naa)
         if h.on("ki_vvb_prisstyring", True) and not h.on("ki_vvb_alltid_pa"):
             self._vi_slo_av = True
+            self._vi_slo_pa = None
             await h.kall("switch", "turn_off", {"entity_id": self.bryter()})
 
     def _doegn(self, raa: list, naa: datetime) -> list[dict]:
@@ -507,7 +524,7 @@ class KiVvb:
                 pris.setdefault((s.day, s.hour), float(p.get("value", 0) or 0))
             except Exception:  # noqa: BLE001
                 continue
-        folg = h.on("ki_vvb_folg_spotpris") and not h.pa(h.cfg(CONF_NORGESPRIS_AKTIV))
+        folg = self.folger_spotpris() and bool(self.billige_timer)
         ut = []
         for i in range(24):
             t = naa + timedelta(hours=i)
