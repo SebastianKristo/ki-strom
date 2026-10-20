@@ -1,74 +1,51 @@
-# KI Energi 2.33.0
+# KI Energi 2.33.1
 
-Gjennomgang av hele integrasjonen med hytte og hus som to likeverdige tilfeller. Ingen oppsett
-må endres; forskjellen merkes først i kulda, i tomt hus, og hos andre nettselskap enn Elvia.
+Feilrettinger. Ingen oppsett må endres, og ingen nye entiteter.
 
-## Feil som er rettet
+## Varmtvannsbereder
 
-- **Settpunkt utenfor termostatens grenser** ble avvist av Home Assistant uten at sonen fikk vite det.
-  En varmepumpe går sjelden under 16 °C, så hyttas frostsikring på 8 °C ble aldri skrevet. Nå klemmes
-  verdien til `min_temp`–`max_temp`, og det logges én gang.
-- **Nettleie første dagene i måneden:** ukjente dager ble regnet som den absolutte grensen. Med 9,5 kWh
-  på hytta ble rommet for dagen negativt, og ankomsten på månedens første fredag strupt til laveste
-  grense uten grunn. Nå regnes ukjente dager som det huset pleier å toppe på (forrige måneds snitt),
-  aldri under målet.
-- **Nattsenking «lønte seg» nesten aldri:** regelen sammenlignet k·timer med prisforholdet, som om hele
-  gjenoppvarmingen var en ekstra kostnad. Energien som ikke tilføres om natten er den som hentes igjen
-  om morgenen; den koster bare prisforskjellen. Ny regel regner nedkjølingstiden med dagens
-  utetemperatur.
-- **Varmetap lært mens ovnen gikk** i soner uten effektsensor («ingen sensor» ble lest som 0 W).
-  Termostatens `hvac_action` avgjør nå; er den ukjent, læres ingenting.
-- **Tidsstyrte spørsmål** (torsdag/fredag/søndag, fristen, sommer-auto) krevde at ticket traff nøyaktig
-  minuttet. Et hoppet tick ga ingen spørsmål den dagen. Nå gjelder et vindu etter klokkeslettet, én
-  gang per dag.
-- **«Toten» sto i koden** i fredagsspørsmålet — feil for Strömstad. Stedsnavnet settes under
-  *Hus → Stedets navn*.
-- Helgevekking for ungdom var inkonsekvent mellom to steder i motoren (ukedagen nå mot morgenen etter).
-- Sperren mot at timeforbruket «faller» midt i timen kunne dra seg inn i neste time ved overgangen til
-  vintertid.
-- En feilende ladeknapp veltet hele motorens tick. `ki_energi.tick` kjørte ikke lysreglene. Boost og
-  tvungen syklus uten relé gjorde tomme tjenestekall. `sw_version` på enheten sto på 2.0.0.
+- **Ble slått av midt i oppvarmingen.** Effekten leses én gang i minuttet. Ett minutt med 0 W eller
+  `unavailable` fra måleren fikk berederen til å regnes som ferdig. Var vinduet stengt eller timen ikke
+  lenger billig, slo KI av før termostaten koblet ut — og metningen ble aldri sett, så legionella ble
+  heller ikke bekreftet. Nå får en påbegynt oppvarming gå til termostaten kobler ut (høyst
+  `ki_vvb_maks_oppvarming_min`).
+- **«Tving syklus» ble slått av etter ett minutt** når vinduet var ferdig for natta.
+- **Nord Pool nede → kaldt vann i dagevis.** Med «følg spotpris» og ingen priser fantes ingen billige
+  timer, og berederen varmet først når legionellafristen tvang den. Nå følges vinduet når prisene mangler.
+- **Falsk varsel «Berederen styres av noe annet»** når KI selv slo av like etter påslag (timeskifte,
+  vinduet stenger), eller når releet var `unavailable` et øyeblikk. Ga også 30 minutters sperre.
+- **Releet klikket av og på hvert 11. minutt** under boost etter at vannet var varmt. Boosten avsluttes
+  nå ved metning.
 
-## Nytt
+## Lading og effekttrinn
 
-- **Frostvakt** (`switch.ki_frostvakt`, `binary_sensor.ki_frostfare`): bortetemperaturene løftes
-  trinnvis når det er kaldere enn −10 ute (+2 °C, +4 under −20); et rom under 5 °C får prioritet 1,
-  varmes uansett modus og budsjett, og varsles alltid. Død termostat i tomt hus i kulda varsles også.
-- **Termisk modell for forvarming:** motoren lærer oppvarmingsevnen (°C/t ved null forskjell til ute)
-  og regner tiden etter dT/dt = r − k·(T − ute). Samme rom trenger lenger tid i −20 enn i +5; når
-  målet ikke kan nås i været, startes det så tidlig som tillatt og forklaringen sier hvorfor.
-  `number.ki_forvarming_maks_timer` (10 t, hytta 24 t).
-- **Lastprofil per tilstedeværelse:** én profil for hus med folk, én for tomt hus. Prognosen bruker
-  den som gjelder nå.
-- **Nettleiemodeller:** `elvia` (døgnmaks fra tre ulike dager) eller `topp3_timer` (tre høyeste timer i
-  måneden — svensk effektavgift), med høylastvindu (klokkeslett, bare hverdager, bare måneder).
-  Utenfor vinduet gjelder bare den absolutte grensen.
-- **Bereder i bortemodus** (`switch.ki_vvb_borte_sparing`): hviler når huset står tomt, varmer når
-  legionellafristen er i siste døgn, når noen er hjemme, og tre timer før planlagt hjemkomst
-  (`number.ki_vvb_klar_for_ankomst_timer`).
-- **Lading:** faser og spenning i oppsettet (16 A = 3,7 / 6,4 / 11 kW), trinnets faktiske effekt læres
-  fra målingen, `switch.ki_lading_kun_natt`. Styrer KI laderen, holdes det ikke av ladeeffekt på
-  forhånd i prognosen i tillegg.
+- **Bilen ble regnet som husets uregulerte forbruk.** Den spiste sin egen plass i budsjettet, så ladingen
+  stoppet og startet omtrent hvert minutt, presset ned varmen og ble lært inn i timeprofilen som fast
+  forbruk om natta. Ladeeffekten trekkes nå ut (målt, ellers trinnet KI satte). Med automatikken av
+  regnes manuell lading som uregulert, men telles ikke lenger to ganger i prognosen.
+- **Månedsmålet ble gitt opp etter én høy dag.** Snittet av én eller to kjente topper ble sammenlignet
+  med målet, og KI godtok neste effekttrinn for resten av måneden. Nå er målet tapt først når summen
+  av de kjente toppene delt på tre passerer det.
+- **Reserven eksploderte de siste minuttene av timen** når den adaptive marginen var lært (0,3 kWh med
+  ett minutt igjen ble 18 kW), og alle soner unntatt prioritet 1 ble senket ved hvert timeskifte.
+  Marginen skaleres nå ned med tiden igjen, slik den faste reserven alltid har gjort.
 
-## Nye entiteter
+## Moduser
 
-`switch.ki_frostvakt`, `switch.ki_vvb_borte_sparing`, `switch.ki_lading_kun_natt`,
-`number.ki_frost_ute_grense`, `number.ki_frost_paslag`, `number.ki_frost_alarm_temp`,
-`number.ki_vvb_klar_for_ankomst_timer`, `number.ki_forvarming_maks_timer`, `binary_sensor.ki_frostfare`.
-Nye attributter: `sensor.ki_tidskonstanter.oppvarmingsevne`, `sensor.ki_nettleie.modell/hoylast/i_hoylast/
-forrige_maned_snitt`, `sensor.ki_bereder.borte_sparing`, `sensor.ki_lading_status.faser/volt/kw_per_trinn/kw_malt`.
-
-Kortet (ki-klima-strom-kort) viser ikke de nye innstillingene ennå; de ligger på enheten i
-Home Assistant til kortet oppdateres.
+- **«Ja, sett sparemodus nå» fra varselet ble opphevet etter ett minutt.** Varselet sendes bare når noen
+  er hjemme, og «noen er hjemme» ble lest som «noen kom hjem». Nå er det overgangen borte → hjemme som
+  avslutter sparemodus og hjemkomst.
+- **Hjemkomst-bryteren virket bare første gang.** Den gamle, passerte planen ble stående, og hjemkomsten
+  ble avsluttet i neste tick. Nå lages en ny plan.
+- **Bad-vifta startet aldri på fukt** når fuktstyring av håndklevarmeren var av (standard). De to delte
+  tidsstempel, og det ene slettet det andre hvert minutt.
+- **Forsinket hjemkomst ga hvilenivå.** Etter planlagt ankomsttid falt forvarmingen bort og målet til
+  16 °C fram til hjemkomsten ble avsluttet (opptil 3 t). Nå holdes dagtemperatur.
 
 ### Kontrollert
 
-Python 3.13.16, Home Assistant 2025.12.5, pytest-homeassistant-custom-component 0.13.300:
-182 tester bestått, 28 av dem nye (`tests/test_hytte_og_hus.py`) — termisk modell mot lukket formel,
-frostpåslag og -alarm, klemming, høylastvindu og timemodell, plassholder med forrige måned,
-bereder i bortemodus, faser/lærte trinn/nattlading, tolerante tidshendelser, og hytta i −22 i en
-ekte HA-testinstans (varmepumpe klemt til 16, panelovner med +4, nettleie brukbar første dag).
-
-Ikke verifisert mot fysisk utstyr: hvilke `min_temp` termostatene dine faktisk melder, Ellevios
-nøyaktige høylastdefinisjon for Strömstad (sett vinduet etter fakturaen), og laderens trinn-effekt
-på tre faser.
+Python 3.13.16 og Home Assistant 2026.2.3 (uten pytest-homeassistant-custom-component, som ikke lot
+seg installere): 148 tester bestått, 18 av dem nye (`tests/test_vvb_midt_i_syklus.py`,
+`tests/test_gjennomgang.py`). Hver feil over har minst én test som feilet på 2.33.0. `test_smoke`, `test_overhaul`,
+`test_hytte_og_hus`, `test_rom_temp` og `test_varmekilder` trenger HA-testinstansen og er ikke kjørt
+for denne versjonen.
