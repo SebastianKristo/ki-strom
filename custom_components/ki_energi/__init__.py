@@ -1,7 +1,6 @@
 """KI Energi — intelligent klima- og energistyring for Home Assistant."""
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import timedelta
 
@@ -110,7 +109,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_options_oppdatert))
 
-    tick_laas = asyncio.Lock()
+    tick_laas = hub.tick_laas
 
     async def _del(navn: str, koro) -> None:
         """Én del av ticket. Feiler den, logges det – og resten av ticket kjører likevel.
@@ -339,5 +338,17 @@ def _registrer_tjenester(hass: HomeAssistant) -> None:
         "tick": (tick, SCHEMA_STANDARD),
     }
     assert set(handlere) == set(TJENESTER), "TJENESTER i const.py må nevne alle tjenestene"
+    def _laast(fn):
+        """Tjenestene kjører tick (motor, bereder …). Utenfor låsen kunne de gå oppå et
+        minuttick som ventet på et tjenestekall: det gamle ticket skrev da tilbake settpunktet
+        fra før overstyringen, og termostaten hoppet tilbake i et minutt."""
+        async def _inne(call: ServiceCall):
+            hub = _hub(hass)
+            if hub is None:
+                return await fn(call)
+            async with hub.tick_laas:
+                return await fn(call)
+        return _inne
+
     for navn, (fn, skjema) in handlere.items():
-        hass.services.async_register(DOMAIN, navn, fn, schema=skjema)
+        hass.services.async_register(DOMAIN, navn, _laast(fn), schema=skjema)

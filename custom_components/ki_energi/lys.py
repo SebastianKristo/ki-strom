@@ -125,6 +125,11 @@ class KiLys:
             if ps.state == "on":
                 st.update(status="i_bruk", tekst="Noen er i rommet — lyset får stå")
                 return
+            # En sensor som har falt ut (Zigbee) vet ikke om noen er der. Før ble det lest som
+            # «ingen bevegelse», målt fra da den falt ut, og lyset ble slått av over hodet på folk.
+            if ps.state in ("unavailable", "unknown"):
+                st.update(status="mangler", tekst="Nærværssensoren svarer ikke — slår ikke av")
+                return
             borte_min = (naa - ps.last_changed).total_seconds() / 60
             grense = float(r.get("fravaer_min", 5) or 5)
             if borte_min < grense:

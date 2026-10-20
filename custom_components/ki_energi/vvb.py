@@ -511,24 +511,31 @@ class KiVvb:
             self._vi_slo_pa = None
             await h.kall("switch", "turn_off", {"entity_id": self.bryter()})
 
-    def _doegn(self, raa: list, naa: datetime) -> list[dict]:
-        """24 timer fra nå: pris (hvis kjent), om timen er valgt som billig, og om den er i vinduet."""
-        h = self.hub
-        pris: dict[tuple[int, int], float] = {}
+    @staticmethod
+    def _timepriser(raa: list) -> dict[datetime, float]:
+        """Snittpris per time (lokal timestart). Nord Pool kan levere kvarterspriser (96 i
+        døgnet); før ble bare første kvarter i timen brukt, og billige timer ble valgt på ett
+        av fire tall. Natta med to 02:00 (vintertid) blir to timer, siden starten er tz-bevisst."""
+        samlet: dict[datetime, list[float]] = {}
         for p in raa:
             try:
                 s = p.get("start")
                 if isinstance(s, str):
                     s = dt_util.parse_datetime(s)
-                s = dt_util.as_local(s)
-                pris.setdefault((s.day, s.hour), float(p.get("value", 0) or 0))
+                s = dt_util.as_local(s).replace(minute=0, second=0, microsecond=0)
+                samlet.setdefault(s, []).append(float(p.get("value", 0) or 0))
             except Exception:  # noqa: BLE001
                 continue
+        return {t: sum(v) / len(v) for t, v in samlet.items()}
+
+    def _doegn(self, raa: list, naa: datetime) -> list[dict]:
+        """24 timer fra nå: pris (hvis kjent), om timen er valgt som billig, og om den er i vinduet."""
+        pris = {(t.date(), t.hour): v for t, v in self._timepriser(raa).items()}
         folg = self.folger_spotpris() and bool(self.billige_timer)
         ut = []
         for i in range(24):
             t = naa + timedelta(hours=i)
-            ut.append({"t": t.hour, "pris": pris.get((t.day, t.hour)),
+            ut.append({"t": t.hour, "pris": pris.get((t.date(), t.hour)),
                        "valgt": (t.hour in self.billige_timer) if folg else self.i_vindu(t.hour * 60),
                        "vindu": self.i_vindu(t.hour * 60), "naa": i == 0})
         return ut
@@ -553,19 +560,8 @@ class KiVvb:
             klar += timedelta(days=1)
         rt = h.attr(nordpool, "raw_today", []) or []
         rm = h.attr(nordpool, "raw_tomorrow", []) or []
-        kand, sett = [], set()
-        for p in list(rt) + list(rm):
-            try:
-                s = p.get("start")
-                if isinstance(s, str):
-                    s = dt_util.parse_datetime(s)
-                s = dt_util.as_local(s)
-                nokkel = s.day * 100 + s.hour
-                if s >= naa and s < klar and nokkel not in sett:
-                    sett.add(nokkel)
-                    kand.append((float(p.get("value", 0) or 0), s.hour))
-            except Exception:  # noqa: BLE001
-                continue
+        timepriser = self._timepriser(list(rt) + list(rm))
+        kand = [(v, t.hour) for t, v in timepriser.items() if naa <= t < klar]
         timer: list[int] = []
         for _v, hr in sorted(kand):
             if len(timer) < n and hr not in timer:
@@ -578,7 +574,7 @@ class KiVvb:
         else:
             metode = "De billigste timene etter spotpris fram til fristen."
         h.sett_sensor("ki_vvb_billige_timer", n, {"timer": self.billige_timer, "metode": metode,
-                                                    "antall_kandidater": len(rt) + len(rm),
+                                                    "antall_kandidater": len(timepriser),
                                                     "norgespris": bool(h.pa(h.cfg(CONF_NORGESPRIS_AKTIV))),
                                                     "har_priser": bool(rt or rm),
                                                     "doegn": self._doegn(list(rt) + list(rm), naa)})

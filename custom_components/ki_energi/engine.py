@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 import math
+import time
 import traceback
 from datetime import datetime, timedelta, timezone
 
@@ -42,7 +43,7 @@ class KiEngine:
         self.sist_skrevet: dict[str, float] = {}
         self.sist_skrevet_tid: dict[str, datetime] = {}
         self.logg_signatur = ""
-        self.temp_forrige: dict[str, tuple[float, float]] = {}
+        self.temp_forrige: dict[str, tuple[float, float, str | None]] = {}
         self.endret = False
         self.siste_tick: datetime | None = None
         self.hjemkomst_forklaring = ""
@@ -999,20 +1000,7 @@ class KiEngine:
 
         # Timemåler: prøv registeret, lukk ferdige timer (og rekonstruer ved hull)
         if h.nettleie is not None:
-            lukkede = await h.nettleie.oppdater()
-            if h.prognose is not None and lukkede:
-                try:
-                    n_obs = h.prognose.evaluer(lukkede)
-                    if n_obs:
-                        self.logg_hendelse(f"Prognoselæring: {n_obs} prognose(r) evaluert mot fullført time.")
-                except Exception as e:  # noqa: BLE001
-                    _LOGGER.debug("ki_energi: prognoseevaluering feilet: %s", e)
-            for rad in lukkede:
-                lok = dt_util.as_local(datetime.fromtimestamp(rad["start"], tz=timezone.utc))
-                if rad["kwh"] is None:
-                    self.logg_hendelse(f"Timen {lok:%d.%m. %H}:00–{(lok.hour + 1) % 24:02d}:00 mangler måling — telles ikke som null.")
-                else:
-                    self.logg_hendelse(f"Timen {lok:%d.%m. %H}:00–{(lok.hour + 1) % 24:02d}:00 endte på {rad['kwh']:.2f} kWh ({rad['kvalitet']}).")
+            await self._timer_lukket(await h.nettleie.oppdater())
 
         # Egen timesmåling og estimat — alltid, også når motoren er av
         forbrukt, _kilde = self.forbrukt_denne_timen()
@@ -1109,13 +1097,18 @@ class KiEngine:
                                  else f"termostaten står alt på {p['settpunkt']} °C"
                                  + (f" (sist skrevet {self.st.get('sist_skrevet_kl', {}).get(p['key'])})" if self.st.get("sist_skrevet_kl", {}).get(p["key"]) else ""))
 
+        # Tid siden forrige tick, ikke TICK_SEK: et ekstra tick fra en tjeneste (overstyr,
+        # leggetid …) la ellers til et helt minutt til i statistikken hver gang.
+        naa_mono = time.monotonic()
+        sek = min(TICK_SEK, naa_mono - getattr(self, "_sist_tick_mono", naa_mono - TICK_SEK))
+        self._sist_tick_mono = naa_mono
         if senket:
             self.st["rotasjon"] = self.st.get("rotasjon", 0) + 1
             h.lagre()
             flyttet = sum(p["effekt"] for p in senket)
-            h.tell("ki_stat_flyttet_kwh", flyttet * (TICK_SEK / 3600.0))
+            h.tell("ki_stat_flyttet_kwh", flyttet * (sek / 3600.0))
             # komfortavvik: grader under mål, integrert over tid
-            h.tell("ki_stat_komfortavvik", sum(p.get("senket", 0) for p in senket) * (TICK_SEK / 3600.0))
+            h.tell("ki_stat_komfortavvik", sum(p.get("senket", 0) for p in senket) * (sek / 3600.0))
             if not self.st.get("var_senket"):
                 h.tell("ki_stat_shed_hendelser", 1)
             self.st["var_senket"] = True
@@ -1471,15 +1464,6 @@ class KiEngine:
                     t = self.romtemperatur(konf)
                     if t is None:
                         continue
-                    ny[key] = (t, naa_tid)
-                    gammel = self.temp_forrige.get(key)
-                    if not gammel:
-                        continue
-                    t0, tid0 = gammel
-                    dt_timer = (naa_tid - tid0) / 3600.0
-                    if dt_timer <= 0 or dt_timer > 0.5:
-                        continue
-                    endring = (t - t0) / dt_timer
                     diff = t - ute
                     effekt = self.sone_effekt_w(konf)
                     if effekt is None:
@@ -1491,16 +1475,35 @@ class KiEngine:
                             effekt = 1000.0
                         elif handlinger and handlinger <= {"idle", "off"}:
                             effekt = 0.0
-                        else:
-                            continue
+                    tilstand = None if effekt is None else ("varmer" if effekt > 100 else "av" if effekt < 30 else None)
                     if any(h.pa(e) for e in (konf.get("vindu") or [])):
-                        continue   # åpent vindu forgifter både k og oppvarmingsrate — lær ikke nå
+                        tilstand = None   # åpent vindu forgifter både k og oppvarmingsrate — lær ikke nå
+
+                    # Målevindu på minst 30 min med samme tilstand hele veien. Før ble raten regnet
+                    # over 5 min, og bare intervaller med endring ble brukt: en termostat i 0,5 °C-steg
+                    # ga da alltid 6 °C/t, og k, oppvarmingsrate og -evne ble overvurdert (forvarmingen
+                    # startet for sent). Over 30 min, og med «ingen endring» tatt med for tapet, blir
+                    # avrundingen en liten feil i stedet for en skjevhet.
+                    gammel = self.temp_forrige.get(key)
+                    if not gammel or len(gammel) < 3 or gammel[2] != tilstand or tilstand is None:
+                        ny[key] = (t, naa_tid, tilstand)
+                        continue
+                    t0, tid0, _ = gammel
+                    dt_timer = (naa_tid - tid0) / 3600.0
+                    if dt_timer <= 0 or dt_timer > 1.5:
+                        ny[key] = (t, naa_tid, tilstand)
+                        continue
+                    if dt_timer < 0.5:
+                        ny[key] = gammel          # vinduet er ikke fullt ennå — behold startpunktet
+                        continue
+                    ny[key] = (t, naa_tid, tilstand)
+                    endring = (t - t0) / dt_timer
                     rad = h.minne["tau"].get(key, {"k": 0.08, "varme_rate": 1.2, "n": 0})
-                    if effekt < 30 and diff > 3 and endring < -0.05:
+                    if tilstand == "av" and diff > 3 and endring <= 0:
                         k = min(0.5, max(0.005, -endring / diff))
                         alfa = max(0.05, 1.0 / min(rad["n"] + 1, 30))
                         rad["k"] = round(rad["k"] * (1 - alfa) + k * alfa, 4)
-                    elif effekt > 100 and endring > 0.1:
+                    elif tilstand == "varmer" and endring > 0:
                         forrige = rad.get("varme_rate", 1.2)
                         if forrige <= 0:
                             forrige = 1.2
@@ -1531,11 +1534,34 @@ class KiEngine:
     #  Timeslutt og månedsskifte
     # ------------------------------------------------------------------
     async def timeslutt(self) -> None:
-        """Kjøres like etter hel time. Lukker timen i timemåleren og varsler hvis den passerte grensen."""
+        """Kjøres like etter hel time. Lukker timen i timemåleren (hvis ticket ikke rakk det)."""
+        if self.hub.nettleie is not None:
+            await self._timer_lukket(await self.hub.nettleie.oppdater())
+
+    async def _timer_lukket(self, lukket: list[dict]) -> None:
+        """Alt som skal skje når timer lukkes: prognoselæring, logg og varsel om grensen.
+
+        Timemåleren gir hver lukket time én gang, til den som spør først — timeslutt (:00:05)
+        eller ticket (et fast sekund satt ved oppstart). Før gjorde de hver sin halvdel: lukket
+        timeslutt, ble prognosene aldri evaluert; lukket ticket, kom aldri varselet om passert
+        grense. Hvem som vant, lå fast fra oppstart, så den ene halvdelen var død hele økten.
+        """
         h = self.hub
-        if h.nettleie is None:
+        if not lukket:
             return
-        lukket = await h.nettleie.oppdater()
+        if h.prognose is not None:
+            try:
+                n_obs = h.prognose.evaluer(lukket)
+                if n_obs:
+                    self.logg_hendelse(f"Prognoselæring: {n_obs} prognose(r) evaluert mot fullført time.")
+            except Exception as e:  # noqa: BLE001
+                _LOGGER.debug("ki_energi: prognoseevaluering feilet: %s", e)
+        for rad in lukket:
+            lok = dt_util.as_local(datetime.fromtimestamp(rad["start"], tz=timezone.utc))
+            if rad["kwh"] is None:
+                self.logg_hendelse(f"Timen {lok:%d.%m. %H}:00–{(lok.hour + 1) % 24:02d}:00 mangler måling — telles ikke som null.")
+            else:
+                self.logg_hendelse(f"Timen {lok:%d.%m. %H}:00–{(lok.hour + 1) % 24:02d}:00 endte på {rad['kwh']:.2f} kWh ({rad['kvalitet']}).")
         if not h.on("ki_energi_hovedbryter", True):
             return
         siste = [r for r in lukket if r.get("kwh") is not None]

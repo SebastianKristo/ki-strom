@@ -5,6 +5,7 @@ denne klassen. Det gjør logikken testbar og holder I/O på ett sted.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, time as dtime, timedelta
 from typing import Any
@@ -39,6 +40,8 @@ class KiHub:
         # fordi forrige fortsatt pågikk. Vises i diagnostikken og på statussensoren.
         self.feil_i_tick: dict[str, str] = {}
         self.tick_hoppet_over = 0
+        # Ett tick om gangen: minuttickeren og tjenestene (som også kjører tick) deler låsen.
+        self.tick_laas = asyncio.Lock()
         self.minne: dict[str, Any] = {
             "profil": {}, "tau": {}, "state": {"overstyringer": {}, "rotasjon": 0},
             "logg": [], "vvb": {}, "moduser": {}, "nettleie": {}, "sparing": {}, "prognose": {}, "lys": {}, "lading": {},
