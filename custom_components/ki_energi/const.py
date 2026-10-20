@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 DOMAIN = "ki_energi"
-VERSION = "2.33.1"   # holdes lik manifest.json — testen test_versjon passer på det
+VERSION = "2.33.2"   # holdes lik manifest.json — testen test_versjon passer på det
 DEVICE_NAME = "KI Energi"
 
 PLATFORMS = ["sensor", "binary_sensor", "switch", "number", "time", "datetime", "text"]

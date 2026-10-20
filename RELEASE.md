@@ -1,51 +1,46 @@
-# KI Energi 2.33.1
+# KI Energi 2.33.2
 
-Feilrettinger. Ingen oppsett må endres, og ingen nye entiteter.
+Mindre feilrettinger og ytelse. Ingen oppsett må endres, og ingen nye entiteter.
+
+## Lading
+
+- **Ladingen trappet ikke ned i tide.** Dødbånd og minsteavstand gjaldt begge veier, så 18 A kunne bli
+  stående mens bare 16 A var ledig, og timen gikk over budsjettet. Nå gjelder de bare oppover, og
+  ladingen trapper ned med en gang.
+- **Bilen ble aldri ladet med posisjonssensor uten stedsnavn.** Det ble lest som «vet ikke hvor bilen
+  står». Nå gir en sensor uten stedsnavn ingen stedssperre.
 
 ## Varmtvannsbereder
 
-- **Ble slått av midt i oppvarmingen.** Effekten leses én gang i minuttet. Ett minutt med 0 W eller
-  `unavailable` fra måleren fikk berederen til å regnes som ferdig. Var vinduet stengt eller timen ikke
-  lenger billig, slo KI av før termostaten koblet ut — og metningen ble aldri sett, så legionella ble
-  heller ikke bekreftet. Nå får en påbegynt oppvarming gå til termostaten kobler ut (høyst
-  `ki_vvb_maks_oppvarming_min`).
-- **«Tving syklus» ble slått av etter ett minutt** når vinduet var ferdig for natta.
-- **Nord Pool nede → kaldt vann i dagevis.** Med «følg spotpris» og ingen priser fantes ingen billige
-  timer, og berederen varmet først når legionellafristen tvang den. Nå følges vinduet når prisene mangler.
-- **Falsk varsel «Berederen styres av noe annet»** når KI selv slo av like etter påslag (timeskifte,
-  vinduet stenger), eller når releet var `unavailable` et øyeblikk. Ga også 30 minutters sperre.
-- **Releet klikket av og på hvert 11. minutt** under boost etter at vannet var varmt. Boosten avsluttes
-  nå ved metning.
+- **Feil billige timer med 15-minutterspriser.** Når Nord Pool leverte kvarterspriser, ble bare første
+  kvarter i timen brukt. Nå velges timene på snittet av de fire kvarterene.
 
-## Lading og effekttrinn
+## Lys og nærvær
 
-- **Bilen ble regnet som husets uregulerte forbruk.** Den spiste sin egen plass i budsjettet, så ladingen
-  stoppet og startet omtrent hvert minutt, presset ned varmen og ble lært inn i timeprofilen som fast
-  forbruk om natta. Ladeeffekten trekkes nå ut (målt, ellers trinnet KI satte). Med automatikken av
-  regnes manuell lading som uregulert, men telles ikke lenger to ganger i prognosen.
-- **Månedsmålet ble gitt opp etter én høy dag.** Snittet av én eller to kjente topper ble sammenlignet
-  med målet, og KI godtok neste effekttrinn for resten av måneden. Nå er målet tapt først når summen
-  av de kjente toppene delt på tre passerer det.
-- **Reserven eksploderte de siste minuttene av timen** når den adaptive marginen var lært (0,3 kWh med
-  ett minutt igjen ble 18 kW), og alle soner unntatt prioritet 1 ble senket ved hvert timeskifte.
-  Marginen skaleres nå ned med tiden igjen, slik den faste reserven alltid har gjort.
+- **Glemt lys ble slått av når nærværssensoren var `unavailable`/`unknown`.** Ukjent nærvær regnes
+  ikke lenger som tomt rom.
 
-## Moduser
+## Timeslutt, læring og prognose
 
-- **«Ja, sett sparemodus nå» fra varselet ble opphevet etter ett minutt.** Varselet sendes bare når noen
-  er hjemme, og «noen er hjemme» ble lest som «noen kom hjem». Nå er det overgangen borte → hjemme som
-  avslutter sparemodus og hjemkomst.
-- **Hjemkomst-bryteren virket bare første gang.** Den gamle, passerte planen ble stående, og hjemkomsten
-  ble avsluttet i neste tick. Nå lages en ny plan.
-- **Bad-vifta startet aldri på fukt** når fuktstyring av håndklevarmeren var av (standard). De to delte
-  tidsstempel, og det ene slettet det andre hvert minutt.
-- **Forsinket hjemkomst ga hvilenivå.** Etter planlagt ankomsttid falt forvarmingen bort og målet til
-  16 °C fram til hjemkomsten ble avsluttet (opptil 3 t). Nå holdes dagtemperatur.
+- **Prognoselæringen eller grensevarselet kunne forsvinne.** Timeslutt og tick lukket timen hver for
+  seg, og bare den som kom først fikk radene. Hvilken det var lå fast fra oppstart. Nå deler de én
+  avslutning.
+- **Forvarmingen startet for sent med termostater i 0,5 °C-steg.** Varmetap og oppvarmingsrate læres nå
+  over vinduer på minst 30 minutter med samme tilstand, og intervaller uten temperaturendring telles med
+  for tapet. Før ga slike termostater alltid 6 °C/t.
+- **Tjenestene deler tick-låsen**, og statistikken bruker faktisk tid siden forrige tick i stedet for et
+  fast minutt.
+
+## Ytelse
+
+- **Mindre skriving til `.storage`.** Registerprøver tynnes til én i minuttet midt i timen, mens alle
+  prøver nær timegrensen beholdes. Med HAN eller Pulse skrives noen hundre punkter i stedet for 5–7 000.
+- **Store lister holdes utenfor recorder**: laster, tankegang, logglinjer, døgnpriser, lysregler,
+  entiteter og soner. Databasen vokser mindre.
 
 ### Kontrollert
 
-Python 3.13.16 og Home Assistant 2026.2.3 (uten pytest-homeassistant-custom-component, som ikke lot
-seg installere): 148 tester bestått, 18 av dem nye (`tests/test_vvb_midt_i_syklus.py`,
-`tests/test_gjennomgang.py`). Hver feil over har minst én test som feilet på 2.33.0. `test_smoke`, `test_overhaul`,
-`test_hytte_og_hus`, `test_rom_temp` og `test_varmekilder` trenger HA-testinstansen og er ikke kjørt
-for denne versjonen.
+Python 3.13.16, Home Assistant 2026.2.3 og pytest-homeassistant-custom-component 0.13.316:
+**211 tester bestått**, hele samlingen inkludert `test_smoke`, `test_overhaul`, `test_hytte_og_hus`,
+`test_rom_temp` og `test_varmekilder`. 11 av dem er nye (`tests/test_mindre_funn.py`), og 10 av disse
+feilet på 2.33.1.
