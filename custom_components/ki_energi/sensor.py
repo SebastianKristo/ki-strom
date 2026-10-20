@@ -11,6 +11,12 @@ from .entity import KiSensorBase
 
 
 class KiSensor(KiSensorBase, SensorEntity):
+    # Store lister som skrives hvert minutt. Kortet leser dem fra tilstanden, ikke historikken,
+    # så recorder trenger dem ikke — der fylte de databasen med flere MB i døgnet.
+    _unrecorded_attributes = frozenset({
+        "laster", "tankegang", "linjer", "doegn", "regler", "entiteter", "soner",
+    })
+
     def __init__(self, hub, key, navn, ikon, enhet, device_class, state_class) -> None:
         super().__init__(hub, "sensor", key, navn, ikon)
         self._attr_native_unit_of_measurement = enhet

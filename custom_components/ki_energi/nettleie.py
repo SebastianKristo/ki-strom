@@ -34,6 +34,7 @@ MAKS_GAP_SEK = 3 * 3600    # lengre hull enn dette interpoleres ikke — da er v
                            # Registre som bare oppdateres hver time (eller sjeldnere) gir «estimert».
 VENT_PA_PROVE_SEK = 5 * 60 # så lenge venter vi på en forsinket prøve etter timeskiftet
 RESET_TOLERANSE = 0.5      # registeret falt mer enn dette → nullstilt/byttet måler
+TYNN_SEK = 60              # midt i timen holder én prøve i minuttet; nær timegrensen beholdes alle
 
 
 # ----------------------------------------------------------------------
@@ -206,7 +207,22 @@ class Timemaler:
                 self.m["reset"] = ts
                 _LOGGER.warning("ki_energi: energiregisteret falt fra %.3f til %.3f — tolkes som nullstilling/målerbytte",
                                 p[-1][1], verdi)
+                p.append([ts, verdi])
+                return
+            # Tynning: HAN og Tibber Pulse melder hvert 2.–3. sekund. Alle prøvene ble holdt i
+            # tre timer og skrevet til .storage ved hver lagring (5–7 000 par). Bare prøvene
+            # nær timegrensen (±TOL_MALT_SEK) gir «målt»; midt i timen er én i minuttet nok til
+            # interpolering. Den siste flyttes fram i stedet for å legge til en ny.
+            if (len(p) >= 2 and p[-1][0] - p[-2][0] < TYNN_SEK
+                    and not self._naer_grense(p[-1][0]) and not self._naer_grense(ts)):
+                p[-1] = [ts, verdi]
+                return
             p.append([ts, verdi])
+
+    @classmethod
+    def _naer_grense(cls, ts: float) -> bool:
+        rest = ts - cls.timestart(ts)
+        return rest <= TOL_MALT_SEK or rest >= 3600 - TOL_MALT_SEK
 
     def verdi_ved(self, ts: float) -> tuple[float | None, str]:
         """Registerverdi ved et tidspunkt: (verdi, 'malt'|'estimert'|'mangler')."""

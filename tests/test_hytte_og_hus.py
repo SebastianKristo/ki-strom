@@ -305,12 +305,13 @@ def test_tap_laeres_ikke_uten_effektsensor_mens_ovnen_gar():
                states={"sensor.outdoor_meter_temperature": _state(-5),
                        "climate.stue": _state("heat", current_temperature=20.0, hvac_action="heating")})
     t0 = dt_util.utcnow().timestamp()
-    m.temp_forrige = {"stue": (20.5, t0 - 600)}    # faller 0,5 °C på 10 min mens ovnen varmer
+    # Startpunkt: (temp, tid, tilstand). Læringen bruker vinduer på minst 30 min.
+    m.temp_forrige = {"stue": (20.5, t0 - 1800, "varmer")}   # faller 0,5 °C på 30 min mens ovnen varmer
     m._laering_indre()
     assert "stue" not in m.hub.minne["tau"]
     # idle: da er fallet et tap
     m.hub._states["climate.stue"] = _state("heat", current_temperature=20.0, hvac_action="idle")
-    m.temp_forrige = {"stue": (20.5, t0 - 600)}
+    m.temp_forrige = {"stue": (20.5, t0 - 1800, "av")}
     m._laering_indre()
     assert m.hub.minne["tau"]["stue"]["n"] == 1
 
@@ -322,7 +323,7 @@ def test_oppvarmingsevne_laeres_av_stigning_pluss_tap():
                        "climate.stue": _state("heat", current_temperature=20.0), "s.e": _state(900)})
     m.hub.minne["tau"]["stue"] = {"k": 0.1, "varme_rate": 1.2, "n": 10}
     t0 = dt_util.utcnow().timestamp()
-    m.temp_forrige = {"stue": (19.5, t0 - 1200)}   # +1,5 °C/t ved 20 °C over ute → evne 1,5 + 0,1·20 = 3,5
+    m.temp_forrige = {"stue": (19.25, t0 - 1800, "varmer")}   # +1,5 °C/t ved 20 °C over ute → evne 1,5 + 0,1·20 = 3,5
     m._laering_indre()
     assert m.hub.minne["tau"]["stue"]["rate_max"] == pytest.approx(3.5, abs=0.02)
     assert m._rate_max("stue") == pytest.approx(3.5, abs=0.02)

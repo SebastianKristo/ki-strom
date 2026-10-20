@@ -318,7 +318,9 @@ class KiLading:
             self.satt_trinn = None
             return {"handling": "borte", "trinn": None, "kw": 0.0,
                     "forklaring": f"Bilen står på {hvor} — rører ikke laderen"}
-        if hjemme is None and h.cfg(CONF_LADER_STED):
+        # Sensor uten stedsnavn er ikke et oppsett — da er det ingen stedssperre (som `hjemme`
+        # sier). Før ble det lest som «vet ikke hvor bilen står», og bilen ble aldri ladet.
+        if hjemme is None and h.cfg(CONF_LADER_STED) and (h.cfg(CONF_LADER_STED_NAVN) or "").strip():
             return {"handling": "borte", "trinn": None, "kw": 0.0,
                     "forklaring": "Vet ikke hvor bilen står — rører ikke laderen"}
 
@@ -371,6 +373,14 @@ class KiLading:
         if self.satt_trinn == ønsket:
             return {"handling": "hold", "trinn": ønsket, "kw": målt if målt is not None else self.kw_for(ønsket),
                     "forklaring": f"Lader på {ønsket} A"}
+
+        # Ned går alltid med en gang: budsjettet er det nettleiegrensen bygger på, og et
+        # avbrudd for bilen koster mindre enn en time over grensen. Dødbånd og minsteavstand
+        # gjelder bare oppover — før kunne 18 A bli stående mens bare 16 A var ledig.
+        if self.satt_trinn is not None and self.kw_for(ønsket) < self.kw_for(self.satt_trinn):
+            return {"handling": "endre", "trinn": ønsket, "kw": self.kw_for(ønsket),
+                    "forklaring": f"Bare {ledig_kw:.1f} kW ledig — går ned fra "
+                                  f"{self.satt_trinn} A til {ønsket} A"}
 
         # Dødbånd: vi bytter bare når det nye trinnet gir noe å hente.
         dødbånd = h.num("ki_lading_dodband_kw", 0.6)
