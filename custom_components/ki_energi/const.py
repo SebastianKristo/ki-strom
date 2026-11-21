@@ -125,7 +125,10 @@ PERSON_TIDER = {
     "voksen": [],
 }
 PERSON_BRYTERE = {"barn": [], "ungdom": [("ferie", "Ferie", False, "mdi:school-outline")], "voksen": []}
-CONF_PRESET = "preset"        # oslo | toten | tom
+CONF_PRESET = "preset"        # bolig | hytte | kristo | tom
+# Settes når et preset tas i bruk fra alternativene. Motoren legger inn presetets verdier
+# (temperaturer, tider) én gang per merke, så det ikke skjer på nytt ved hver omstart.
+CONF_PRESET_MERKE = "preset_merke"
 
 # Sonefelt
 Z_NAVN = "navn"
@@ -328,6 +331,104 @@ PRESETS: dict[str, dict] = {
             "ki_forvarming_maks_timer": 24,
         },
     },
+    "kristo": {
+        "navn": "Kristo (Homey-oppsettet)", "hustype": "bolig",
+        "beskrivelse": "Stue og kjøkken med to varmekilder hver, trappegang, Cybeles og Sebastians rom, bad og do. "
+                       "Bereder og håndklevarmer, Elvia og Norgespris. Bortehelger med automatisk bortetemperatur "
+                       "og forvarming til hjemkomst søndag kl. 13.",
+        "config": {
+            CONF_TOTAL_EFFEKT: "sensor.strommaler_power",
+            CONF_IMPORTERT_ENERGI: "sensor.strommaler_imported_energy",
+            CONF_UTE_TEMP: "sensor.outdoor_meter_temperatur",
+            CONF_VAER: "weather.home",
+            CONF_VVB_BRYTER: "switch.varmtvannsbereder", CONF_VVB_EFFEKT: "sensor.varmtvannsbereder_power",
+            CONF_HANKLEVARMER: "switch.hanklevarmer", CONF_HANKLEVARMER_EFFEKT: "sensor.hanklevarmer_power",
+            CONF_BAD_FUKT: "", CONF_BAD_VIFTE: "", CONF_GARDINER: "",
+            CONF_TOPP1: "sensor.nettleie_elvia_toppforbruk",
+            CONF_TOPP2: "sensor.nettleie_elvia_toppforbruk_2",
+            CONF_TOPP3: "sensor.nettleie_elvia_toppforbruk_3",
+            CONF_KAPASITETSTRINN: "sensor.nettleie_elvia_kapasitetstrinn",
+            # Elvia-integrasjonen har ett energiledd som skifter med tariffen, ikke ett for dag og
+            # ett for natt. Står det samme tallet i begge, tror motoren at natt og dag koster likt.
+            CONF_ENERGILEDD_DAG: "", CONF_ENERGILEDD_NATT: "",
+            CONF_STROMPRIS: "sensor.norgespris_total_strompris_norgespris",
+            CONF_NORGESPRIS_AKTIV: "binary_sensor.norgespris_norgespris_aktiv_na",
+            CONF_NORDPOOL: "sensor.nordpool_kwh_no1_nok_3_10_0",
+            CONF_HVITEVARER: ["sensor.komfyr_effekt", "sensor.platetopp_effekt",
+                              "sensor.oppvaskmaskin_power", "sensor.vannkoker_power"],
+            CONF_HAR_ELBIL: False,
+        },
+        "soner": {
+            "stue": dict(
+                navn="Stue", rom="Stue", climate=["climate.stue_panelovn", "climate.stue_oljefyr"],
+                effekt=["sensor.stue_panelovn_current_power", "sensor.stue_oljefyr_current_power"],
+                duty="", temp="sensor.stue_meter_pro_temperatur", type="panel", prio=3, nominell=3.0,
+                sol=True, profil="stue", aktiv=True,
+                temp_dag="ki_temp_stue_dag", temp_natt="ki_temp_stue_natt", temp_borte=""),
+            "kjokken": dict(
+                navn="Kjøkken", rom="Kjøkken", climate=["climate.kjokken_panelovn", "climate.kjokken_gulvvarme"],
+                effekt=["sensor.kjokken_panelovn_current_power", "sensor.kjokken_gulvvarme_power"],
+                duty="", temp="sensor.kjokken_meter_pro_temperatur", type="panel", prio=3, nominell=1.8,
+                sol=False, profil="fellesrom", aktiv=True,
+                temp_dag="ki_temp_kjokken_dag", temp_natt="ki_temp_kjokken_natt", temp_borte=""),
+            "trappegang": dict(
+                navn="Trappegang", rom="Trappegang", climate=["climate.trappegang_panelovn"],
+                effekt=["sensor.trappegang_panelovn_current_power"],
+                duty="", temp="sensor.trappegang_meter_pro_temperatur", type="panel", prio=3, nominell=0.8,
+                sol=False, profil="fellesrom", aktiv=True,
+                temp_dag="ki_temp_trappegang_dag", temp_natt="ki_temp_trappegang_natt", temp_borte=""),
+            "cybele_soverom": dict(
+                navn="Cybele soverom", rom="Cybele soverom", climate=["climate.cybele_panelovn"],
+                effekt=["sensor.cybele_panelovn_current_power"],
+                duty="", temp="", type="panel", prio=2, nominell=1.0, sol=False, profil="person:cybele", aktiv=True,
+                temp_dag="ki_temp_cybele_soverom_dag", temp_natt="ki_temp_cybele_soverom_natt",
+                temp_borte="ki_temp_cybele_soverom_borte"),
+            # Ovnen er ikke lagt til i Home Assistant ennå. Sonen venter og tar den når den dukker opp.
+            "sebastian_soverom": dict(
+                navn="Sebastian soverom", rom="Sebastian soverom", climate=["climate.sebastian_panelovn"],
+                effekt=["sensor.sebastian_panelovn_current_power"],
+                duty="", temp="", type="panel", prio=3, nominell=1.0, sol=False, profil="person:sebastian", aktiv=True,
+                temp_dag="ki_temp_sebastian_soverom_dag", temp_natt="ki_temp_sebastian_soverom_natt", temp_borte=""),
+            "bad": dict(
+                navn="Bad", rom="Bad", climate=["climate.bad_gulvvarme"], effekt=["sensor.bad_gulvvarme_power"],
+                duty="", temp="sensor.bad_gulvvarme_temperature", type="gulv", prio=2, nominell=0.7,
+                sol=False, profil="konstant", aktiv=True,
+                temp_dag="ki_temp_bad", temp_natt="", temp_borte=""),
+            "do": dict(
+                navn="Do", rom="Do", climate=["climate.do_gulvvarme"], effekt=["sensor.do_gulvvarme_power"],
+                duty="", temp="sensor.do_gulvvarme_room_temperature", type="gulv", prio=4, nominell=0.4,
+                sol=False, profil="sjelden", aktiv=True,
+                temp_dag="ki_temp_do", temp_natt="", temp_borte=""),
+        },
+        # Homey-bryterne for posisjon: på = hjemme.
+        "personer": [
+            {"key": "cybele", "navn": "Cybele", "type": "barn", "entity": "switch.homey_logic_cybele_posisjon"},
+            {"key": "sebastian", "navn": "Sebastian", "type": "ungdom", "entity": "switch.homey_logic_sebastian_posisjon"},
+            {"key": "rune", "navn": "Rune", "type": "voksen", "entity": "switch.homey_logic_rune_posisjon"},
+        ],
+        "verdier": {
+            # fellesrom 22/19, dag 06–23
+            "ki_temp_stue_dag": 22.0, "ki_temp_stue_natt": 19.0,
+            "ki_temp_kjokken_dag": 22.0, "ki_temp_kjokken_natt": 19.0,
+            "ki_temp_trappegang_dag": 22.0, "ki_temp_trappegang_natt": 19.0,
+            "ki_tid_dag_start": "06:00", "ki_tid_natt_start": "23:00",
+            # Cybele 22/20, opp 05:30, legger seg 19:00
+            "ki_temp_cybele_soverom_dag": 22.0, "ki_temp_cybele_soverom_natt": 20.0,
+            "ki_cybele_dag": "05:30", "ki_cybele_natt": "19:00",
+            "ki_temp_bad": 24.0, "ki_temp_do": 20.0,
+            # Bortehelg: spør bare fredag (og bare hvis noen er hjemme), sparemodus når siste har
+            # vært borte i 3 t, gulvvarmen senkes også, og huset er varmt til søndag kl. 13.
+            "ki_helg_spor_torsdag": False, "ki_helg_spor_fredag": True, "ki_helg_varsel_tid": "10:00",
+            "ki_helg_auto": True, "ki_helg_auto_timer": 3, "ki_helg_senk_gulvvarme": True,
+            "ki_hjemkomst_tid": "13:00", "ki_helg_sporsmal_tid": "08:00", "ki_helg_frist_tid": "10:00",
+            "ki_helg_forvarm_sondag": True,
+            # Algoritmen velger bortetemperaturen per rom, aldri under 12 °C. Forvarmingen kan
+            # starte opptil 12 t før dere kommer (fra 01 for kl. 13).
+            "ki_borte_auto_temp": True, "ki_borte_min_temp": 12.0,
+            "ki_prediktiv_forvarming": True, "ki_forvarming_maks_timer": 12,
+            "ki_vvb_borte_sparing": True, "ki_styr_hanklevarmer": True, "ki_styr_gardiner": False,
+        },
+    },
     "tom": {"navn": "Tomt oppsett (velg alt selv)", "hustype": "bolig", "beskrivelse": "", "config": {}, "soner": {}, "verdier": {}, "personer": []},
 }
 
@@ -344,6 +445,11 @@ SWITCHES = [
     ("ki_helg_auto", "KI Borte Auto-aktivering Ved Fravær", True, "mdi:home-export-outline"),
     ("ki_helg_venter_svar", "KI Helg Venter På Svar", False, "mdi:help-circle-outline"),
     ("ki_helg_senk_gulvvarme", "KI Helg Senk Gulvvarme", False, "mdi:heating-coil"),
+    # Bortetemperaturen velges per rom: den laveste rommet rekker å varme seg opp fra.
+    ("ki_borte_auto_temp", "KI Automatisk Bortetemperatur", False, "mdi:thermometer-auto"),
+    # Helgemodus i boligen: regn med hjemkomst søndag til fast tid, så forvarmingen kan
+    # starte tidlig om morgenen uten å vente på svaret på søndagsspørsmålet.
+    ("ki_helg_forvarm_sondag", "KI Helg Forvarm Til Hjemkomst Søndag", False, "mdi:home-clock"),
     ("ki_hjemkomst_aktiv", "KI Hjemkomst Pågår", False, "mdi:home-import-outline"),
     ("ki_sommermodus", "KI Sommermodus", False, "mdi:white-balance-sunny"),
     ("ki_sommer_auto", "KI Sommermodus Automatisk", False, "mdi:calendar-sync"),
@@ -468,6 +574,7 @@ NUMBERS = [
     ("ki_frost_alarm_temp", "KI Frostvakt Alarm Når Rom Under", 1, 12, 0.5, "°C", 5, "mdi:snowflake-alert"),
     ("ki_vvb_klar_for_ankomst_timer", "KI VVB Klart Før Ankomst", 0.5, 12, 0.5, "t", 3, "mdi:home-clock"),
     ("ki_forvarming_maks_timer", "KI Forvarming Maks Timer", 2, 36, 1, "t", 10, "mdi:timer-sand"),
+    ("ki_borte_min_temp", "KI Laveste Automatiske Bortetemperatur", 8, 20, 0.5, "°C", 12, "mdi:thermometer-low"),
     ("ki_komfort_vekt", "KI Komfortvekt", 10, 200, 5, "", 60, "mdi:sofa"),
     ("ki_trinn_kostnad_diff", "KI Kostnad Neste Kapasitetstrinn", 0, 500, 5, "kr", 170, "mdi:cash"),
     ("ki_mal_trinn_kw", "KI Ønsket Kapasitetstrinn Under", 2, 20, 0.5, "kW", 5.0, "mdi:target"),

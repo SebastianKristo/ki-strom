@@ -113,6 +113,7 @@
       "init": {
         "title": "KI Energi",
         "menu_options": {
+          "oppsett": "Bruk ferdig oppsett",
           "maling": "Måling",
           "utstyr": "Utstyr",
           "personer": "Personer",
@@ -293,6 +294,14 @@
           "dag_prosent": "Demping: lysstyrke om dagen (%)",
           "effekt_w": "Anslått effekt (W) — til besparelsen",
           "slett": "Slett regelen"
+        }
+      },
+      "oppsett": {
+        "title": "Bruk ferdig oppsett",
+        "description": "Skriver oppsettets måling, utstyr, soner og personer inn i integrasjonen. Det KI har lært (oppvarmingskurver, lastprofil, prognoser) beholdes. Soner som ikke finnes i oppsettet, fjernes.",
+        "data": {
+          "preset": "Oppsett",
+          "verdier": "Legg også inn oppsettets temperaturer og tider"
         }
       }
     },

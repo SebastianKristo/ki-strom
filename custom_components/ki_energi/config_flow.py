@@ -8,12 +8,13 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.helpers import selector
+from homeassistant.util import dt as dt_util
 
 from . import oppdag
 from .const import (
     CONF_AREAL, CONF_BYGGEAR, CONF_ENERGILEDD_DAG, CONF_ENERGILEDD_NATT, CONF_GARDINER,
     CONF_GLASS_M2, CONF_HANKLEVARMER, CONF_HANKLEVARMER_EFFEKT, CONF_HVITEVARER,
-    CONF_HAR_ELBIL, CONF_HUSTYPE, CONF_LYSREGLER, CONF_PERSONER, CONF_PRESET, LEGACY_PERSONER, PERSONTYPER, PRESETS, PROFIL_LEGACY,
+    CONF_HAR_ELBIL, CONF_HUSTYPE, CONF_LYSREGLER, CONF_PERSONER, CONF_PRESET, CONF_PRESET_MERKE, LEGACY_PERSONER, PERSONTYPER, PRESETS, PROFIL_LEGACY,
     CONF_STED_NAVN, CONF_NETTLEIE_MODELL, CONF_HOYLAST_FRA, CONF_HOYLAST_TIL, CONF_HOYLAST_HVERDAG, CONF_HOYLAST_MANEDER,
     CONF_LADER_FASER, CONF_LADER_VOLT, NETTLEIE_MODELLER,
     CONF_IMPORTERT_ENERGI, CONF_KAPASITETSTRINN, CONF_NORDPOOL, CONF_NORGESPRIS_AKTIV, CONF_SONER,
@@ -431,8 +432,39 @@ class KiEnergiOptionsFlow(config_entries.OptionsFlow):
                 if not any(self.hass.states.get(c) for c in (s.get("climate") if isinstance(s.get("climate"), list) else [s.get("climate")]) if c)]
         status = f"{len(soner)} soner" + (f" — termostat svarer ikke i: {', '.join(dode)}" if dode else "") \
             + (f". Ikke satt opp: {', '.join(mangler)}" if mangler else ". Alt er koblet.")
-        return self.async_show_menu(step_id="init", menu_options=["maling", "utstyr", "personer", "nettleie", "hus", "soner", "soner_auto", "lys"],
+        return self.async_show_menu(step_id="init", menu_options=["oppsett", "maling", "utstyr", "personer", "nettleie", "hus", "soner", "soner_auto", "lys"],
                                     description_placeholders={"status": status})
+
+    async def async_step_oppsett(self, user_input=None):
+        """Bruk et ferdig oppsett på en installasjon som alt kjører.
+
+        Før kunne et preset bare velges ved første installasjon. Å slette og legge til
+        integrasjonen på nytt ville kastet alt den har lært (tidskonstanter, lastprofil,
+        prognosemargin). Her skrives presetets måling, utstyr, soner og personer inn i
+        alternativene; temperaturer og tider legges inn på nytt av motoren ved neste tick.
+        Felter presetet ikke nevner, beholdes.
+        """
+        if user_input is not None:
+            key = user_input[CONF_PRESET]
+            preset = PRESETS[key]
+            endringer = dict(preset["config"])
+            endringer[CONF_PRESET] = key
+            endringer[CONF_HUSTYPE] = preset["hustype"]
+            if preset.get("personer"):
+                endringer[CONF_PERSONER] = [dict(p) for p in preset["personer"]]
+            if user_input.get("verdier", True):
+                # Motoren legger inn presetets verdier én gang per merke (se engine._bruk_preset).
+                endringer[CONF_PRESET_MERKE] = dt_util.utcnow().isoformat(timespec="seconds")
+            soner = {k: dict(v) for k, v in preset["soner"].items()} if preset.get("soner") else None
+            return self._lagre(endringer, soner)
+        gjeldende = self._gjeldende().get(CONF_PRESET, "bolig")
+        valg = [selector.SelectOptionDict(value=k, label=p["navn"] + (" — " + p["beskrivelse"] if p["beskrivelse"] else ""))
+                for k, p in PRESETS.items() if k != "tom"]
+        return self.async_show_form(step_id="oppsett", data_schema=vol.Schema({
+            vol.Required(CONF_PRESET, default=gjeldende if gjeldende in PRESETS else "bolig"): selector.SelectSelector(
+                selector.SelectSelectorConfig(options=valg, mode="list")),
+            vol.Optional("verdier", default=True): selector.BooleanSelector(),
+        }))
 
     async def async_step_soner_auto(self, user_input=None):
         """Lag/oppdater soner fra HA-områdene. Eksisterende soner med samme nøkkel beholder egne innstillinger."""
