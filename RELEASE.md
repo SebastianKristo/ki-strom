@@ -1,51 +1,47 @@
-# KI Energi 2.33.1
+# KI Energi 2.33.2
 
-Feilrettinger. Ingen oppsett må endres, og ingen nye entiteter.
+Ferdig oppsett for huset, bortetemperatur som velges av algoritmen, forvarming søndag og en
+rekke mindre rettelser. Ingen oppsett må endres; de nye funksjonene er av til de slås på eller
+et oppsett som bruker dem tas i bruk.
 
-## Varmtvannsbereder
+## Nytt
 
-- **Ble slått av midt i oppvarmingen.** Effekten leses én gang i minuttet. Ett minutt med 0 W eller
-  `unavailable` fra måleren fikk berederen til å regnes som ferdig. Var vinduet stengt eller timen ikke
-  lenger billig, slo KI av før termostaten koblet ut — og metningen ble aldri sett, så legionella ble
-  heller ikke bekreftet. Nå får en påbegynt oppvarming gå til termostaten kobler ut (høyst
-  `ki_vvb_maks_oppvarming_min`).
-- **«Tving syklus» ble slått av etter ett minutt** når vinduet var ferdig for natta.
-- **Nord Pool nede → kaldt vann i dagevis.** Med «følg spotpris» og ingen priser fantes ingen billige
-  timer, og berederen varmet først når legionellafristen tvang den. Nå følges vinduet når prisene mangler.
-- **Falsk varsel «Berederen styres av noe annet»** når KI selv slo av like etter påslag (timeskifte,
-  vinduet stenger), eller når releet var `unavailable` et øyeblikk. Ga også 30 minutters sperre.
-- **Releet klikket av og på hvert 11. minutt** under boost etter at vannet var varmt. Boosten avsluttes
-  nå ved metning.
+- **«Bruk ferdig oppsett»** under *Konfigurer*: legger et preset inn på en installasjon som alt
+  kjører — måling, utstyr, soner, personer og (valgfritt) temperaturer og tider. Det KI har lært
+  (oppvarmingskurver, lastprofil, prognoser) beholdes. Soner som ikke finnes i oppsettet, fjernes.
+- **Preset «Kristo (Homey-oppsettet)»**: stue og kjøkken med to varmekilder hver, trappegang,
+  Cybeles og Sebastians rom, bad og do; bereder og håndklevarmer; Elvia, Norgespris og Nord Pool;
+  personer via Homey-posisjon. Fellesrom 22/19 °C fra 06 til 23, bortehelg med spørsmål bare fredag
+  og hjemkomst søndag kl. 13.
+- **Automatisk bortetemperatur** (`switch.ki_borte_auto_temp`, `number.ki_borte_min_temp`): for
+  hvert rom velges den laveste temperaturen rommet rekker å varme seg opp fra før dere kommer, ut
+  fra lært oppvarmingsevne, varmetap og utetemperaturen. Kaldere vær gir høyere bortetemperatur.
+  Aldri under bunnen (standard 12 °C). Til rommet er lært, gjelder de faste bortetemperaturene.
+- **Forvarming søndag** (`switch.ki_helg_forvarm_sondag`): i helgemodus regnes hjemkomsten som
+  planlagt til `ki_hjemkomst_tid`, så hvert rom starter forvarmingen når modellen sier det må — ikke
+  først når søndagsspørsmålet er besvart. Etter tiden holdes dagtemperatur til noen kommer.
+  «Forleng helgen» stopper det for dagen.
 
-## Lading og effekttrinn
+## Rettet
 
-- **Bilen ble regnet som husets uregulerte forbruk.** Den spiste sin egen plass i budsjettet, så ladingen
-  stoppet og startet omtrent hvert minutt, presset ned varmen og ble lært inn i timeprofilen som fast
-  forbruk om natta. Ladeeffekten trekkes nå ut (målt, ellers trinnet KI satte). Med automatikken av
-  regnes manuell lading som uregulert, men telles ikke lenger to ganger i prognosen.
-- **Månedsmålet ble gitt opp etter én høy dag.** Snittet av én eller to kjente topper ble sammenlignet
-  med målet, og KI godtok neste effekttrinn for resten av måneden. Nå er målet tapt først når summen
-  av de kjente toppene delt på tre passerer det.
-- **Reserven eksploderte de siste minuttene av timen** når den adaptive marginen var lært (0,3 kWh med
-  ett minutt igjen ble 18 kW), og alle soner unntatt prioritet 1 ble senket ved hvert timeskifte.
-  Marginen skaleres nå ned med tiden igjen, slik den faste reserven alltid har gjort.
-
-## Moduser
-
-- **«Ja, sett sparemodus nå» fra varselet ble opphevet etter ett minutt.** Varselet sendes bare når noen
-  er hjemme, og «noen er hjemme» ble lest som «noen kom hjem». Nå er det overgangen borte → hjemme som
-  avslutter sparemodus og hjemkomst.
-- **Hjemkomst-bryteren virket bare første gang.** Den gamle, passerte planen ble stående, og hjemkomsten
-  ble avsluttet i neste tick. Nå lages en ny plan.
-- **Bad-vifta startet aldri på fukt** når fuktstyring av håndklevarmeren var av (standard). De to delte
-  tidsstempel, og det ene slettet det andre hvert minutt.
-- **Forsinket hjemkomst ga hvilenivå.** Etter planlagt ankomsttid falt forvarmingen bort og målet til
-  16 °C fram til hjemkomsten ble avsluttet (opptil 3 t). Nå holdes dagtemperatur.
+- Elbilladingen trappes ned med en gang når det blir mindre ledig effekt (dødbånd og minsteavstand
+  gjelder bare oppover), og en posisjonssensor uten stedsnavn sperrer ikke lenger ladingen.
+- Berederen velger billige timer etter snittet av kvartersprisene, ikke bare første kvarter.
+- Glemt lys slås ikke av når nærværssensoren har falt ut.
+- Prognoselæringen og varselet om passert effektgrense kjører nå begge, uansett om timeslutt eller
+  ticket lukker timen.
+- Varmetap og oppvarmingsrate læres over vinduer på minst 30 min, så termostater som melder i halve
+  grader ikke gir for høye verdier (forvarmingen startet for sent).
+- Tjenestekall venter på et tick som pågår, og statistikken telles ikke dobbelt.
+- Registerprøver fra HAN/Pulse tynnes til én i minuttet midt i timen, og store lister skrives ikke
+  til recorder hvert minutt.
 
 ### Kontrollert
 
-Python 3.13.16 og Home Assistant 2026.2.3 (uten pytest-homeassistant-custom-component, som ikke lot
-seg installere): 148 tester bestått, 18 av dem nye (`tests/test_vvb_midt_i_syklus.py`,
-`tests/test_gjennomgang.py`). Hver feil over har minst én test som feilet på 2.33.0. `test_smoke`, `test_overhaul`,
-`test_hytte_og_hus`, `test_rom_temp` og `test_varmekilder` trenger HA-testinstansen og er ikke kjørt
-for denne versjonen.
+Python 3.13, Home Assistant 2026.2.3, pytest-homeassistant-custom-component 0.13.316: hele
+testsamlingen, 223 tester, 23 av dem nye (`tests/test_mindre_funn.py`, `tests/test_preset_kristo.py`).
+`test_smoke.py::test_lysregler` avhenger av klokkeslettet (setter tiden til kl. 14 mens sensorens
+`last_changed` er ekte tid) og feiler når den kjøres etter ca. kl. 14.
+
+Ikke verifisert mot ditt utstyr: at Homey-bryterne for posisjon står på når personen er hjemme, og
+hvor raskt hvert rom faktisk varmes opp — det lærer KI de første ukene.
