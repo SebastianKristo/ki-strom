@@ -1,0 +1,25 @@
+# Lager tagg og GitHub-utgivelse for versjonen i manifest.json, med RELEASE.md som tekst.
+# Startes for hånd (Actions → Release → Run workflow), så ingenting slippes ut av seg selv.
+name: Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lag utgivelse
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          versjon=$(jq -r .version custom_components/ki_energi/manifest.json)
+          if gh release view "v$versjon" >/dev/null 2>&1; then
+            echo "v$versjon finnes allerede"; exit 1
+          fi
+          gh release create "v$versjon" --target "$GITHUB_SHA" \
+            --title "KI Energi $versjon" --notes-file RELEASE.md
