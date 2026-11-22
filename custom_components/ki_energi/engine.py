@@ -27,7 +27,7 @@ from .const import (
     CONF_VVB_BRYTER, CONF_HANKLEVARMER, CONF_HAR_ELBIL,
     CONF_GARDINER,
     CONF_ENERGILEDD_DAG, CONF_ENERGILEDD_NATT, CONF_GLASS_M2, CONF_HANKLEVARMER_EFFEKT,
-    CONF_HVITEVARER, CONF_IMPORTERT_ENERGI, CONF_PRESET, PRESETS, PROFIL_LEGACY, CONF_STROMPRIS,
+    CONF_HVITEVARER, CONF_IMPORTERT_ENERGI, CONF_PRESET, CONF_PRESET_MERKE, PRESETS, PROFIL_LEGACY, CONF_STROMPRIS,
     CONF_TOPP1, CONF_TOPP2, CONF_TOPP3, CONF_TOTAL_EFFEKT, CONF_UTE_TEMP,
     CONF_VAER, CONF_VVB_EFFEKT, MAKS_LOGG_LINJER, PRIO_VEKT, TICK_SEK, Z_PROFIL, Z_TEMP_BORTE,
     Z_TEMP_DAG, Z_TEMP_NATT,
@@ -541,6 +541,63 @@ class KiEngine:
         """Måltemperaturen som gjelder etter neste frist — brukes til forvarming."""
         return self.hub.num(konf.get(Z_TEMP_DAG) or "", 21.0)
 
+    # Alle rommene varmes opp samtidig og deler effektbudsjettet, så hvert rom kan ikke regne
+    # med full effekt hele tiden. Bortetemperaturen velges så modellen rekker det med denne
+    # margenen: et rom som alene trenger 6 t, får 7,8 t.
+    BORTE_MARGIN = 1.3
+
+    def bortetemp(self, key: str, konf: dict) -> tuple[float | None, str]:
+        """Den laveste bortetemperaturen rommet rekker å varme seg opp fra før dere kommer.
+
+        Jo lavere rommet står mens dere er borte, jo mindre strøm går med — også med
+        gjenoppvarmingen regnet med: varmen som ikke tilføres mens rommet kjøles ned, er den
+        som ellers ville lekket ut. Det som setter grensen, er tiden: rommet må nå dagmålet
+        innen forvarmingstiden (`ki_forvarming_maks_timer`), med lært oppvarmingsevne og tap
+        i dagens utetemperatur. Kaldere vær gir derfor høyere bortetemperatur. Aldri under
+        `ki_borte_min_temp` (fukt og kondens), aldri over dagmålet.
+
+        Returnerer (None, grunn) når modellen ikke er lært for rommet ennå — da gjelder de faste
+        bortetemperaturene.
+        """
+        h = self.hub
+        ute = h.ute()
+        if ute is None or self._rate_max(key) is None:
+            return None, "fast — rommets oppvarmingskurve er ikke lært ennå"
+        mal = self.dagmal(key, konf)
+        bunn = h.num("ki_borte_min_temp", 12.0)
+        grense = h.num("ki_forvarming_maks_timer", 10) * 60.0 / self.BORTE_MARGIN
+        if bunn >= mal:
+            return mal, f"automatisk: dagmålet {mal:.1f} °C er under bunnen"
+        t = bunn
+        while t < mal:
+            behov, _ = self.forvarming_minutter(key, t, mal, ute)
+            if behov is not None and behov <= grense:
+                return t, (f"automatisk: {behov / 60:.1f} t å varme opp til {mal:.1f} °C "
+                           f"ved {ute:.0f} °C ute")
+            t += 0.5
+        return None, f"fast — rommet rekker ikke {mal:.1f} °C i dette været uansett"
+
+    def sondag_hjemkomst(self) -> tuple[int, bool] | None:
+        """Helgemodus i boligen og søndag: (frist i minutter siden midnatt, passert?), ellers None.
+
+        Uten dette startet forvarmingen først når hjemkomsten ble startet — når dere svarte på
+        søndagsspørsmålet (kl. 08) eller fristen gikk ut (kl. 10). Med lav bortetemperatur
+        rekker ikke rommene det til kl. 13. Med `ki_helg_forvarm_sondag` regnes hjemkomsten
+        som planlagt til `ki_hjemkomst_tid`, så hvert rom starter når modellen sier det må.
+        «Forleng helgen» / «Nei» på søndagsspørsmålet stopper det for dagen.
+        """
+        h = self.hub
+        if (not h.on("ki_helg_forvarm_sondag", False) or not h.on("ki_helgemodus")
+                or h.on("ki_hjemkomst_aktiv") or h.fritidsbolig()):
+            return None
+        naa = dt_util.now()
+        if naa.weekday() != 6:
+            return None
+        if h.moduser is not None and h.moduser.m.get("forlenget_dag") == naa.strftime("%Y-%m-%d"):
+            return None
+        frist = h.tid_min("ki_hjemkomst_tid", "13:00")
+        return frist, h.naa_min() >= frist
+
     def hjemkomst_frist(self) -> int | None:
         """Minutter siden midnatt for planlagt hjemkomst, eller None."""
         h = self.hub
@@ -578,6 +635,12 @@ class KiEngine:
         t_helg_gulv = h.num("ki_temp_helg_gulvvarme", 18.0) + frost
         t_helg_bad = h.num("ki_temp_helg_bad", 22.0) + frost
         suffiks = f" ({frost_grunn})" if frost else ""
+        if h.on("ki_borte_auto_temp", False):
+            auto, auto_grunn = self.bortetemp(key, konf)
+            if auto is not None:
+                # Ett tall per rom: det gjelder uansett om rommet har panelovn, gulv eller er badet.
+                t_helg = t_helg_gulv = t_helg_bad = auto
+            suffiks = f" ({auto_grunn})"
         t_sommer = h.num("ki_temp_sommer", 17.0)
         dag_start = h.tid_min("ki_tid_dag_start", "06:30")
         natt_start = h.tid_min("ki_tid_natt_start", "22:30")
@@ -591,6 +654,14 @@ class KiEngine:
         plan = h.dt("ki_hjemkomst_planlagt") if hjemkomst is not None else None
         if plan is not None and plan <= dt_util.now():
             return t_dag, f"Hjemkomst kl. {dt_util.as_local(plan):%H:%M} — holder dagtemperatur", None
+
+        # --- Søndag i helgemodus: hjemkomsten regnes som planlagt (se `sondag_hjemkomst`) ---
+        sondag = self.sondag_hjemkomst() if hjemkomst is None else None
+        if sondag is not None:
+            frist_sondag, passert = sondag
+            if passert:
+                return t_dag, f"Søndag — dere ventes hjem kl. {frist_sondag // 60:02d}:{frist_sondag % 60:02d}, holder dagtemperatur", None
+            hjemkomst = frist_sondag
 
         # --- Hjemkomst: hold hvilenivå, men med frist så forvarmingen slår inn ---
         if hjemkomst is not None:
@@ -969,7 +1040,8 @@ class KiEngine:
     def _bruk_preset(self) -> None:
         """Første kjøring: sett hjelperverdier fra valgt preset (frosttemperaturer, elbil, grenser)."""
         h = self.hub
-        if self.st.get("preset_satt"):
+        merke = h.cfg(CONF_PRESET_MERKE)
+        if self.st.get("preset_satt") and (not merke or self.st.get("preset_merke") == merke):
             return
         preset = PRESETS.get(h.cfg(CONF_PRESET, "bolig"))
         if not preset:
@@ -986,6 +1058,7 @@ class KiEngine:
                 else:
                     h.sett(key, v)
         self.st["preset_satt"] = True
+        self.st["preset_merke"] = merke
         self.st["migrert_250"] = True   # nyinstallasjon trenger ikke løfte grensen
         h.lagre()
         if preset["verdier"]:
