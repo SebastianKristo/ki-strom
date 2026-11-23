@@ -300,6 +300,7 @@ class Stromkalkulator {
       trinn_nr: trinn.nummer,
       trinn_tekst: trinn.tekst,
       margin_kw: neste.marginKw,
+      neste_terskel_kw: neste.terskel,
       neste_pris: neste.nestePris,
       har_neste: !(neste.marginKw === 0 && neste.nestePris === trinn.pris),
     };
@@ -310,13 +311,16 @@ class Stromkalkulator {
    * Returnerer kWh, eller null når metoden ikke har trinn / ingen høyere trinn finnes.
    * Brukes av effektmotoren (trinn 2).
    */
-  takForIdag(ms) {
+  takForIdag(ms, maalKw = null) {
     const tariff = this.fastleddtariff();
     if (!fl.TRINNBASERTE.has(tariff.metode) || !tariff.trinn.length) return null;
     const idag = kal.osloDato(ms);
     const andre = this.topper().filter((x) => x.dato !== idag).map((x) => x.kw);
     const f = this._fastledd();
-    const terskel = f.har_neste ? f.grunnlag_kw + f.margin_kw : null;
+    // Et ønsket trinn («hold meg under 5 kW») gjelder så lenge det kan nås. Er det alt
+    // passert, er neste grense over dagens snitt det som står igjen å forsvare.
+    let terskel = f.har_neste ? f.neste_terskel_kw : null;
+    if (maalKw !== null && Number.isFinite(Number(maalKw)) && f.grunnlag_kw < Number(maalKw)) terskel = Number(maalKw);
     if (terskel === null) return null;
     if (tariff.metode === fl.METODE.MND_MAX) return terskel;
     // Dager vi ikke kjenner ennå regnes som om de når terskelen — ikke som null. Ellers ville
@@ -324,6 +328,26 @@ class Stromkalkulator {
     const toAndre = andre.slice(0, 2);
     while (toAndre.length < 2) toAndre.push(terskel);
     return 3 * terskel - toAndre[0] - toAndre[1];
+  }
+
+  /**
+   * Hva én kWh til koster i timen som begynner på `ms`: kraft (etter strømstøtte, eller
+   * Norgespris) pluss energiledd. Fastleddet er ikke med — det følger toppene, ikke kWh.
+   * Uten spotpris brukes `reserve` for kraften, så planleggeren fortsatt ser dag/natt-tariffen.
+   */
+  marginalpris(ms, spot, reserve = 1.0) {
+    const satser = this.satser(ms);
+    const mnd = this.t.kroner.kwh;
+    const eks = spot ? spot.snitt(kal.timestart(ms), kal.timestart(ms) + TIME_MS) : null;
+    let kraft;
+    if (satser.harNorgespris && mnd < satser.norgesprisMaksKwh) kraft = satser.norgesprisInklMva;
+    else if (eks === null) kraft = reserve;
+    else {
+      const inkl = eks * (1 + satser.mvaSats);
+      const stotte = !satser.harNorgespris && mnd < satser.stromstotteMaksKwh ? avg.stromstottePerKwh(inkl, satser.stromstotteTerskel) : 0;
+      kraft = inkl - stotte;
+    }
+    return kraft + satser.energileddInklMva;
   }
 
   /** Alt appen viser: priser nå, kapasitetstrinn, månedstall og forrige måned. */

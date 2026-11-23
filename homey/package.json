@@ -1,6 +1,6 @@
 {
   "name": "no.kristo.kienergi",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "KI Energi for Homey — strømkalkulator og smart energistyring",
   "main": "app.js",
   "license": "MIT",

@@ -27,7 +27,7 @@ test('Elvia: snitt av tre døgnmakser, grensetreff hører til trinnet over', () 
   assert.deepEqual(fl.fastleddForGrunnlag(t, 4.8), { pris: 250, nummer: 2, tekst: '2-5 kW' });
   assert.deepEqual(fl.fastleddForGrunnlag(t, 5.0), { pris: 420, nummer: 3, tekst: '5-10 kW' });
   assert.deepEqual(fl.fastleddForGrunnlag(t, 150), { pris: 6800, nummer: 10, tekst: '>100 kW' });
-  assert.deepEqual(fl.nesteTrinn(t, 4.8, 250), { marginKw: 0.2, nestePris: 420 });
+  assert.deepEqual(fl.nesteTrinn(t, 4.8, 250), { marginKw: 0.2, nestePris: 420, terskel: 5 });
   assert.equal(fl.fastleddGrunnlag(t, [6]), 6);          // færre enn tre dager: snitt av dem som finnes
   assert.equal(fl.fastleddGrunnlag(t, []), 0);
 });

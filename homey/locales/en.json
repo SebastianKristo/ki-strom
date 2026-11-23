@@ -1,3 +1,8 @@
 {
-  "enhet": { "navn": "Electricity calculator" }
+  "enhet": {
+    "navn": "Electricity calculator"
+  },
+  "motor": {
+    "navn": "Energy engine"
+  }
 }

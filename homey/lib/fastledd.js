@@ -130,17 +130,17 @@ function fastleddForGrunnlag(tariff, kw) {
  * betyr at det ikke finnes noe høyere trinn (eller at metoden ikke har trinn).
  */
 function nesteTrinn(tariff, kw, pris) {
-  if (!TRINNBASERTE.has(tariff.metode)) return { marginKw: 0, nestePris: pris };
+  if (!TRINNBASERTE.has(tariff.metode)) return { marginKw: 0, nestePris: pris, terskel: null };
   for (let i = 0; i < tariff.trinn.length; i++) {
     const [terskel] = tariff.trinn[i];
     if (iLavereTrinn(kw, terskel, tariff.terskelInkludert)) {
       if (i + 1 < tariff.trinn.length) {
-        return { marginKw: Math.round((terskel - kw) * 100) / 100, nestePris: tariff.trinn[i + 1][1] };
+        return { marginKw: Math.round((terskel - kw) * 100) / 100, nestePris: tariff.trinn[i + 1][1], terskel };
       }
       break;
     }
   }
-  return { marginKw: 0, nestePris: pris };
+  return { marginKw: 0, nestePris: pris, terskel: null };
 }
 
 /**

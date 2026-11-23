@@ -2,8 +2,8 @@
 
 Homey-versjonen av KI Energi. Appen bygges trinnvis:
 
-1. **Strømkalkulator** (denne versjonen): nettleie, kapasitetstrinn, strømstøtte, Norgespris og månedskostnad.
-2. Effektmotor og soner, med værvarsel og prisoptimal varmeplan.
+1. **Strømkalkulator:** nettleie, kapasitetstrinn, strømstøtte, Norgespris og månedskostnad.
+2. **Energimotor** (denne versjonen): timebudsjett, rom med prioritet, værvarsel og prisoptimal varmeplan.
 3. Bereder, moduser, helg, lading, lys og selvlærende vaner.
 4. Kontrollversjon i Home Assistant, som styrer denne appen.
 
@@ -42,6 +42,32 @@ av Fredrik Lindseth (MIT). Tariffene for 76 nettselskap (`lib/tariffer.json`) og
 Ikke med ennå: eksport/plusskunde, sammenligning mot strømleverandørens pris, og fakturakontrollen
 («avregning») fra originalen.
 
+## Energimotoren
+
+Legg til enheten **KI Energi → Energimotor**, og sett opp rommene i appens innstillinger
+(«Hent rom fra Homey-sonene» lager ett rom per sone med termostater).
+
+Hvert minutt:
+
+1. **Timens grense:** det høyeste timen kan ende på uten at kapasitetsleddet går opp et trinn,
+   mellom en laveste og en absolutt grense du setter.
+2. **Annet forbruk:** det motoren ikke styrer læres per ukedag og time, og brukes til å anslå resten av timen.
+3. **Mål per rom:** fra programmet (dag/natt), eller fra varmeplanen når rommet er lært.
+4. **Fordeling:** rommene får effekt etter prioritet. Blir timen for trang, senkes de minst viktige
+   noen grader, og de slippes ett om gangen når det er rom igjen. Prioritet 1 senkes aldri.
+
+**Varmeplanen** regner for hvert lærte rom den billigste måten å holde komforten på de neste 36 timene,
+med rommets egen kurve (hvor fort det varmes og kjøles), værvarselet fra Yr og prisen time for time
+(kraft etter strømstøtte eller Norgespris, pluss energiledd). Det gir nattsenking bare når den lønner seg,
+forvarming i billige timer, og start i tide før dagen begynner — tidligere jo kaldere det er.
+
+**Læringen** trenger effektmåling på ovnene (W) og noen døgn med data. Til et rom er lært, følger det programmet.
+
+**Skyggemodus** er på som standard: motoren regner og forklarer, men rører ikke termostatene.
+Slå den av på enheten eller i innstillingene når forslagene ser fornuftige ut.
+
+Personprogram, helg/bortemodus, bereder, lading og lys kommer i trinn 3.
+
 ## Sensorer
 
 Enheten **Strømkalkulator** har 33 sensorer: tariff, energiledd, kapasitetstrinn, de tre toppene, margin til neste trinn,
@@ -49,8 +75,10 @@ spotpris, strømstøtte, totalpris, forbruk og kostnad for timen, dagen og måne
 
 ## Flow-kort
 
-- **Når:** kapasitetsvarsel, kapasitetstrinnet endret seg, en time er ferdig, tariffen skiftet, strømprisen endret seg.
-- **Og:** tariffen er dagtariff, Norgespris er aktiv, kapasitetsvarsel er på, totalprisen er over …
+- **Når:** kapasitetsvarsel, kapasitetstrinnet endret seg, en time er ferdig, tariffen skiftet, strømprisen endret seg,
+  energimotorens status endret seg, et rom ble senket.
+- **Og:** tariffen er dagtariff, Norgespris er aktiv, kapasitetsvarsel er på, totalprisen er over …, energimotorens status er …
+- **Så:** overstyr temperaturen i et rom, fjern overstyringen, slå skyggemodus av eller på.
 
 ## Lokalt API
 
@@ -63,6 +91,10 @@ spotpris, strømstøtte, totalpris, forbruk og kostnad for timen, dagen og måne
 | GET | `/nettselskap` | Nettselskapene i katalogen |
 | GET | `/enheter` | Enheter som kan være strømmåler |
 | GET / PUT | `/innstillinger` | Les og endre innstillingene |
+| GET | `/motor` | Energimotorens bilde: budsjett, rom, settpunkter og forklaringer |
+| GET / PUT | `/motorinnstillinger` | Motorens innstillinger og rom |
+| GET | `/termostater`, `/temperatursensorer`, `/romforslag` | Til oppsettet |
+| POST | `/overstyr`, `/fjernoverstyring` | `{rom, temp, minutter}` / `{rom}` |
 
 ## Utvikling
 
