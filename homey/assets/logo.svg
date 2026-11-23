@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="KI Energi">
+<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1E88E5"/><stop offset="1" stop-color="#0D47A1"/></linearGradient></defs>
+<rect width="512" height="512" rx="112" fill="url(#g)"/>
+<g transform="translate(96 88) scale(5)"><path fill="#fff" fill-rule="evenodd" d="M32 5.5a3 3 0 0 1 1.95.72l25 21.5A3 3 0 0 1 57 33h-3v22a4 4 0 0 1-4 4H14a4 4 0 0 1-4-4V33H7a3 3 0 0 1-1.95-5.28l25-21.5A3 3 0 0 1 32 5.5ZM34.9 23L21.85 40.4L30.55 40.4L29.1 52L42.15 34.6L33.45 34.6Z"/></g>
+<g transform="translate(96 88) scale(5)"><path fill="#FFC107" d="M34.9 23L21.85 40.4L30.55 40.4L29.1 52L42.15 34.6L33.45 34.6Z"/></g>
+</svg>
