@@ -1,0 +1,8 @@
+{
+  "name": { "no": "KI Energi – oversikt", "en": "KI Energi – overview" },
+  "height": 260,
+  "settings": [],
+  "api": {
+    "oversikt": { "method": "GET", "path": "/" }
+  }
+}

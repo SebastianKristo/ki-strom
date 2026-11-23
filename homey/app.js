@@ -5,6 +5,7 @@ const tariffer = require('./lib/tariffer.json');
 const { Stromkalkulator, STANDARD_INNSTILLINGER } = require('./lib/stromkalkulator');
 const { Spotpriser, hentManglende } = require('./lib/spotpris');
 const { MotorKobling } = require('./kobling/motor');
+const { HusKobling } = require('./kobling/hus');
 
 const TICK_MS = 60 * 1000;
 const LAGRE_MS = 5 * 60 * 1000;
@@ -30,6 +31,7 @@ module.exports = class KiEnergiApp extends Homey.App {
     this.instanser = [];
     this.bilde = null;
     this.motor = new MotorKobling(this);
+    this.hus = new HusKobling(this);
 
     this._registrerFlow();
     this.homey.settings.on('set', (nokkel) => {
@@ -200,6 +202,7 @@ module.exports = class KiEnergiApp extends Homey.App {
   _lagre() {
     this.homey.settings.set('tilstand', this.tilstand);
     this.motor.lagre();
+    this.hus.lagre();
   }
 
   // ------------------------------------------------------------------
@@ -215,7 +218,18 @@ module.exports = class KiEnergiApp extends Homey.App {
       pris_endret: kort('pris_endret'),
       motor_status_endret: kort('motor_status_endret'),
       rom_senket: kort('rom_senket'),
+      bortemodus_endret: kort('bortemodus_endret'),
+      noen_kom_hjem: kort('noen_kom_hjem'),
+      bereder_varm: kort('bereder_varm'),
     };
+    const handling = (id, f) => this.homey.flow.getActionCard(id).registerRunListener(async (args) => { await f(args); });
+    handling('sett_bortemodus', (args) => this.hus.settBorte(args.modus === 'paa'));
+    handling('sett_hjemkomst', (args) => this.hus.settHjemkomst(args.tid));
+    handling('forleng_borte', () => this.hus.forleng());
+    handling('bereder_boost', (args) => this.hus.berederHandling('boost', args.minutter));
+    handling('bereder_tving', () => this.hus.berederHandling('tving'));
+    this.homey.flow.getConditionCard('bortemodus_er_paa').registerRunListener(async () => Boolean(this.hus.hus.t.borte));
+    this.homey.flow.getConditionCard('alle_er_borte').registerRunListener(async () => this.hus.hus.alleBorte() === true);
     const rom = async (sok) => this.motor.motor.soner()
       .filter((s) => (s.navn || s.key).toLowerCase().includes(String(sok || '').toLowerCase()))
       .map((s) => ({ name: s.navn || s.key, id: s.key }));

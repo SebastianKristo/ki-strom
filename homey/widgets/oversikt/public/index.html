@@ -1,0 +1,68 @@
+<html>
+<head>
+  <style>
+    body { margin: 0; font-family: var(--homey-font-family, sans-serif); color: var(--homey-text-color, #222); font-size: 13px; }
+    .topp { display: flex; align-items: center; gap: 8px; padding: 10px 12px 4px; }
+    .prikk { width: 12px; height: 12px; border-radius: 50%; background: #9e9e9e; flex: none; }
+    .gronn { background: #2e7d32; } .gul { background: #f9a825; } .oransje { background: #ef6c00; } .rod, .kritisk { background: #c62828; }
+    .forklaring { font-weight: 600; }
+    .linje { height: 8px; border-radius: 4px; background: rgba(128,128,128,.25); margin: 6px 12px; overflow: hidden; }
+    .fyll { height: 100%; background: #1565c0; }
+    .tall { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; padding: 4px 12px; text-align: center; }
+    .tall b { display: block; font-size: 16px; }
+    .tall span { opacity: .7; font-size: 11px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+    td { padding: 3px 12px; border-top: 1px solid rgba(128,128,128,.2); }
+    td.h { text-align: right; white-space: nowrap; }
+    .senket { color: #c62828; }
+    .liten { opacity: .7; font-size: 11px; padding: 4px 12px; }
+  </style>
+</head>
+<body class="homey-widget">
+  <div class="topp"><div id="prikk" class="prikk"></div><div id="forklaring" class="forklaring">Henter …</div></div>
+  <div class="linje"><div id="fyll" class="fyll" style="width: 0"></div></div>
+  <div class="tall">
+    <div><b id="time">–</b><span>kWh denne timen</span></div>
+    <div><b id="pris">–</b><span>kr/kWh nå</span></div>
+    <div><b id="maaned">–</b><span>kr denne måneden</span></div>
+  </div>
+  <div id="hus" class="liten"></div>
+  <table id="rom"></table>
+
+  <script type="text/javascript">
+    const sett = (id, tekst) => { document.getElementById(id).textContent = tekst; };
+    const tall = (v, n = 1) => (v === null || v === undefined ? '–' : Number(v).toFixed(n));
+
+    function tegn(d) {
+      document.getElementById('prikk').className = `prikk ${d.status}`;
+      sett('forklaring', d.forklaring);
+      if (d.time) {
+        sett('time', `${tall(d.time.forventet)} / ${tall(d.time.grense)}`);
+        document.getElementById('fyll').style.width = `${Math.min(100, (100 * d.time.forventet) / Math.max(d.time.grense, 0.1))}%`;
+      }
+      sett('pris', tall(d.pris, 2));
+      sett('maaned', tall(d.maaned.kr, 0));
+      const hus = [d.modus, d.hjemkomst ? `varmt til kl. ${d.hjemkomst}` : null, d.bereder ? `bereder: ${d.bereder.toLowerCase()}` : null,
+        `trinn ${d.trinn}`, d.skygge ? 'skyggemodus' : null].filter(Boolean);
+      sett('hus', hus.join(' · '));
+      const tabell = document.getElementById('rom');
+      tabell.innerHTML = '';
+      for (const r of d.rom) {
+        const rad = tabell.insertRow();
+        rad.insertCell().textContent = r.navn;
+        const c = rad.insertCell();
+        c.className = `h ${r.handling === 'senket' ? 'senket' : ''}`;
+        c.textContent = `${tall(r.temp)} → ${tall(r.settpunkt)} °C`;
+        rad.title = r.forklaring || '';
+      }
+    }
+
+    function onHomeyReady(Homey) {
+      const hent = () => Homey.api('GET', '/', {}).then(tegn).catch((e) => sett('forklaring', `Feil: ${e.message || e}`));
+      Homey.ready({ height: 260 });
+      hent();
+      setInterval(hent, 60000);
+    }
+  </script>
+</body>
+</html>

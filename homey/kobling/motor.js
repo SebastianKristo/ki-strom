@@ -82,6 +82,8 @@ class MotorKobling {
     const api = await this.app.api();
     const enheter = await api.devices.getDevices();
     const kalkBilde = this.app.bilde;
+    // Huset først: hvem er hjemme, bortemodus, og hva berederen trenger av effekt.
+    const hus = await this.app.hus.tick(naa, enheter, this.bilde ? this.bilde.status : null);
     this.bilde = this.motor.tick({
       ms: naa,
       kalk: this.app.kalkulator,
@@ -91,7 +93,12 @@ class MotorKobling {
       totalW: this.app.siste.effekt,
       timeKwh: kalkBilde && kalkBilde.time ? kalkBilde.time.kwh : null,
       maalinger: this.maalinger(enheter),
+      kontekst: hus.kontekst,
+      reservertKw: hus.reservertKw,
+      annetStyrtW: hus.annetStyrtW,
+      vaner: hus.vaner,
     });
+    this.bilde.hus = this.app.hus.bilde;
     await this._skriv(enheter, naa);
     return this.bilde;
   }

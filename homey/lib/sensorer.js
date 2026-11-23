@@ -67,6 +67,11 @@ const MOTOR_SENSORER = [
   { id: 'ki_styrt_effekt', type: 'number', no: 'Styrt varme', en: 'Controlled heating', enhet: 'W', desimaler: 0, hent: (b) => b.styrt_w },
   { id: 'ki_senkede_rom', type: 'number', no: 'Senkede rom', en: 'Lowered rooms', enhet: '', desimaler: 0, hent: (b) => b.soner.filter((p) => p.handling === 'senket').length },
   { id: 'ki_plan_spart', type: 'number', no: 'Varmeplanen sparer (36 t)', en: 'Heat plan saves (36 h)', enhet: 'kr', desimaler: 2, hent: (b) => b.plan_spart_kr },
+  // --- Huset ---
+  { id: 'ki_modus', type: 'string', no: 'Modus', en: 'Mode', hent: (b) => (b.hus ? b.hus.modus : null) },
+  { id: 'ki_hjemkomst', type: 'string', no: 'Huset er varmt til', en: 'House warm by', hent: (b) => (b.hus ? b.hus.hjemkomst_kl : null) },
+  { id: 'ki_bereder_status', type: 'string', no: 'Bereder', en: 'Water heater', hent: (b) => (b.hus && b.hus.bereder ? b.hus.bereder.status : null) },
+  { id: 'ki_bereder_dager', type: 'number', no: 'Dager siden berederen var varm', en: 'Days since heater was hot', enhet: 'd', desimaler: 1, hent: (b) => (b.hus && b.hus.bereder ? b.hus.bereder.dager_siden_varm : null) },
 ];
 
 module.exports.MOTOR_SENSORER = MOTOR_SENSORER;
