@@ -180,6 +180,14 @@
     "legionella_ok": true,
     "forfalt": false,
     "tvungen": false,
+    "legionella": "sikret",
+    "legionella_tekst": "Sikret: varm for 1.0 dager siden (målet er hver 3. dag).",
+    "sist_varm": "2026-11-22T12:00:10.000Z",
+    "frist": "05:00",
+    "klar_til_frist": null,
+    "frist_tekst": "Ikke sjekket ennå — første sjekk ved neste frist.",
+    "maa_rekke": false,
+    "behov_min": 180,
     "boost_til": "2026-11-23T13:31:10.000Z",
     "billige_timer": [
      14,
@@ -239,6 +247,14 @@
    "legionella_ok": true,
    "forfalt": false,
    "tvungen": false,
+   "legionella": "sikret",
+   "legionella_tekst": "Sikret: varm for 1.0 dager siden (målet er hver 3. dag).",
+   "sist_varm": "2026-11-22T12:00:10.000Z",
+   "frist": "05:00",
+   "klar_til_frist": null,
+   "frist_tekst": "Ikke sjekket ennå — første sjekk ved neste frist.",
+   "maa_rekke": false,
+   "behov_min": 180,
    "boost_til": "2026-11-23T13:31:10.000Z",
    "billige_timer": [
     14,
@@ -423,7 +439,9 @@
    "maksOppvarmingMin": 300,
    "nominellKw": 2,
    "borteSparing": true,
-   "klarForAnkomstTimer": 3
+   "klarForAnkomstTimer": 3,
+   "fristSjekk": true,
+   "standardOppvarmingMin": 180
   },
   "hanklevarmer": {
    "bryter": null,

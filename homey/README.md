@@ -125,8 +125,17 @@ oppvarmingen i tide rom for rom. Etter tiden holdes dagtemperatur til noen komme
 «Vi blir borte lenger» hopper over den faste hjemkomsten.
 
 **Berederen** varmer i vinduet (standard 22–05) eller i de billigste timene, slår av når termostaten kobler ut,
-og hviler når huset står tomt. Legionellasikringen går foran alt: har det gått for lenge siden vannet var varmt,
-varmes det uansett pris og effekt. En påbegynt oppvarming avbrytes ikke.
+og hviler når huset står tomt. En påbegynt oppvarming avbrytes ikke.
+
+- **Varmt til fristen.** Rekker ikke berederen å bli ferdig til «Ferdig innen» (standard kl. 05), varmer den uansett
+  pris og effekt. Hvor lang tid den trenger, lærer appen av berederens egne oppvarminger (tre timer til den vet).
+- **Morgensjekk.** Når fristen passerer, sjekkes det at termostaten har koblet ut siden vinduet åpnet. Hvis ikke,
+  får du et varsel med grunnen, og flow-kortet «Berederen ble ikke varm til fristen» utløses.
+- **Legionella.** Vannet skal ha vært varmt minst hver tredje dag. Går det lenger, får du et varsel, og etter sju
+  dager varmes det uansett pris og effekt. Sensoren «Legionellasikret» viser status.
+
+Sjekkene trenger et relé med effektmåling, og forutsetter at berederens termostat står på 65–70 °C. Uten
+effektmåling følger berederen bare vinduet, og morgensjekken sier at den ikke kan bekrefte.
 
 **Håndklevarmeren** står på i et morgen- og et kveldsvindu, og av når huset er tomt.
 
@@ -149,9 +158,9 @@ er erstattet av automatisk bortemodus og flow-kort.
 
 - **Strømkalkulator** har 33 sensorer: tariff, energiledd, kapasitetstrinn, de tre toppene, margin til neste trinn,
   spotpris, strømstøtte, totalpris, forbruk og kostnad for timen, dagen og måneden, og forrige måned til å sjekke fakturaen mot.
-- **Energimotor** har av/på, skyggemodus, bortemodus, utetemperatur og 15 sensorer: status og forklaring, timens grense,
+- **Energimotor** har av/på, skyggemodus, bortemodus, utetemperatur og 17 sensorer: status og forklaring, timens grense,
   forventet og brukt, ledig, uregulert og styrt effekt, senkede rom, spart med varmeplanen, modus, hjemkomst,
-  bereder og elbillading.
+  bereder (status, varmt til fristen, legionellasikret) og elbillading.
 - **Widgeten** «KI Energi – oversikt» viser status, timen, prisen nå, måneden, modus og hvert rom.
 
 Tallsensorene logges i Homey Insights.
@@ -160,7 +169,7 @@ Tallsensorene logges i Homey Insights.
 
 | | Kort |
 | --- | --- |
-| **Når** | Kapasitetsvarsel · kapasitetstrinnet endret seg · en time er ferdig · tariffen skiftet · strømprisen endret seg · energimotorens status endret seg · et rom ble senket · bortemodus ble slått av eller på · noen kom hjem · berederen er varm |
+| **Når** | Kapasitetsvarsel · kapasitetstrinnet endret seg · en time er ferdig · tariffen skiftet · strømprisen endret seg · energimotorens status endret seg · et rom ble senket · bortemodus ble slått av eller på · noen kom hjem · berederen er varm · berederen ble ikke varm til fristen |
 | **Og** | Tariffen er dagtariff · Norgespris er aktiv · kapasitetsvarsel er på · totalprisen er over … · energimotorens status er … · bortemodus er på · alle er borte |
 | **Så** | Overstyr temperaturen i et rom · fjern overstyringen · slå skyggemodus eller bortemodus av eller på · «vi kommer hjem kl. …» · «vi blir borte lenger» · varm opp berederen nå · kjør en full oppvarming av berederen · slå automatisk elbillading av eller på |
 
@@ -171,6 +180,9 @@ appen om til entiteter i Home Assistant. All beregning og styring skjer fortsatt
 
 1. Lag en API-nøkkel i Homey: *Innstillinger → API-nøkler*.
 2. I Home Assistant: legg til **KI Energi**, velg **På Homey**, og oppgi Homeys IP-adresse og nøkkelen.
+
+Home Assistant er da en fjernkontroll: den styrer ingen enheter selv. Oppsettet viser hva som ble funnet på Homey
+før det fullføres, og sensoren «Styres fra» sier «Homey-appen».
 
 Du får sensorer, rom som klimaenheter, brytere, tall og klokkeslett for innstillingene, og knapper for bereder og
 bortemodus. Svarer ikke Homey, blir entitetene utilgjengelige og kommer tilbake av seg selv.

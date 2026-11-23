@@ -42,6 +42,8 @@ const STANDARD = {
   nominellKw: 2.0,
   borteSparing: true,
   klarForAnkomstTimer: 3,
+  fristSjekk: true,             // varm uansett pris og effekt når det ellers ikke rekker å bli ferdig til fristen
+  standardOppvarmingMin: 180,   // antatt oppvarmingstid til berederen har vist sin egen
 };
 
 class Bereder {
@@ -50,7 +52,8 @@ class Bereder {
     this.m = tilstand;
     const m = this.m;
     for (const [k, v] of Object.entries({ siste_syklus: null, har_trukket: false, startet: null, tvungen: false, boost_til: null,
-      under_siden: null, var_aktiv: false, var_mettet: false, siste_bryter: null, allerede_varm: false, kritisk: false, billige: [] })) {
+      under_siden: null, var_aktiv: false, var_mettet: false, siste_bryter: null, allerede_varm: false, kritisk: false, billige: [],
+      varigheter: [], morgen: null, legionella_varslet: false })) {
       if (m[k] === undefined) m[k] = v;
     }
     this.settInnstillinger(innstillinger);
@@ -98,6 +101,72 @@ class Bereder {
     let start = osloTilUtc(d.aar, d.mnd, d.dag, Math.floor(startMin / 60), startMin % 60);
     if (ms < start) start -= DOGN_MS;
     return this.m.siste_syklus !== null && this.m.siste_syklus > start;
+  }
+
+  /** Neste frist (UTC-ms): når vannet skal være varmt. */
+  fristEtter(ms) {
+    const d = osloDeler(ms);
+    const klarMin = minutter(this.i.klarInnen, 5 * 60);
+    const klar = osloTilUtc(d.aar, d.mnd, d.dag, Math.floor(klarMin / 60), klarMin % 60);
+    return klar > ms ? klar : klar + DOGN_MS;
+  }
+
+  /** Hvor lang tid en oppvarming trenger (minutter): den lengste av de siste, med margin. */
+  behovMin() {
+    const v = this.m.varigheter;
+    const grunnlag = v.length ? Math.max(...v) * 1.2 + 15 : Number(this.i.standardOppvarmingMin) || 180;
+    return Math.round(Math.min(this.i.maksOppvarmingMin, Math.max(45, grunnlag)));
+  }
+
+  /**
+   * Fristen nærmer seg og vannet er ikke varmt: nå må berederen gå, uansett pris og effekt.
+   * Gjelder bare når KI styrer berederen; i bortemodus bestemmer hvilereglene.
+   */
+  maaRekke(ms, kontekst = {}) {
+    const i = this.i;
+    if (!i.fristSjekk || !i.prisstyring || i.alltidPa) return false;
+    if (this.m.var_mettet || this.ferdigIVinduet(ms)) return false;
+    if (this.borteSparing(ms, kontekst)[0]) return false;
+    return this.fristEtter(ms) - ms <= this.behovMin() * 60000;
+  }
+
+  /** Legionellastatus: 'sikret' (innen ønsket intervall), 'bor_varmes' eller 'forfalt' (hard frist passert). */
+  legionellaStatus(ms) {
+    if (this.forfalt(ms)) return 'forfalt';
+    return this.legionellaOk(ms) ? 'sikret' : 'bor_varmes';
+  }
+
+  /**
+   * Morgensjekken: én gang per døgn, i det fristen passerer. Ble vannet varmt siden vinduet åpnet?
+   * @returns {object|null} hendelse hvis vannet ikke ble varmt
+   */
+  morgensjekk(ms, effektW, kontekst) {
+    const m = this.m;
+    const i = this.i;
+    const d = osloDeler(ms);
+    const dato = `${d.aar}-${String(d.mnd).padStart(2, '0')}-${String(d.dag).padStart(2, '0')}`;
+    const klarMin = minutter(i.klarInnen, 5 * 60);
+    const frist = osloTilUtc(d.aar, d.mnd, d.dag, Math.floor(klarMin / 60), klarMin % 60);
+    if (ms < frist || ms - frist > TIME_MS || (m.morgen && m.morgen.dato === dato)) return null;
+    const startMin = minutter(i.vinduStart, 22 * 60);
+    let start = osloTilUtc(d.aar, d.mnd, d.dag, Math.floor(startMin / 60), startMin % 60);
+    if (start >= frist) start -= DOGN_MS;
+    let klar;
+    let tekst;
+    if (this.borteSparing(ms, kontekst)[0]) { klar = null; tekst = 'Huset står tomt — berederen hviler.'; }
+    else if (effektW === null) { klar = null; tekst = 'Kan ikke bekreftes: releet har ingen effektmåling.'; }
+    else if (m.siste_syklus !== null && m.siste_syklus > start) {
+      const t = osloDeler(m.siste_syklus);
+      klar = true;
+      tekst = `Vannet var varmt kl. ${String(t.time).padStart(2, '0')}:${String(t.minutt).padStart(2, '0')}.`;
+    } else {
+      klar = false;
+      tekst = m.kritisk ? 'Elementet trekker ikke strøm. Sjekk sikring og element.'
+        : m.var_aktiv ? 'Den varmer fortsatt.'
+          : `Termostaten har ikke koblet ut siden kl. ${i.vinduStart}.`;
+    }
+    m.morgen = { dato, ms, klar, tekst };
+    return klar === false ? { type: 'ikke_klar', tekst: `Berederen ble ikke varm til kl. ${i.klarInnen}. ${tekst}` } : null;
   }
 
   /** Elementet har trukket strøm siden påslag og termostaten har ikke koblet ut: la den varme ferdig. */
@@ -154,6 +223,7 @@ class Bereder {
     if (effektW === null) return this.iVindu(ms);          // uten effektmåling: følg vinduet, la termostaten styre
     if (this.m.var_mettet) return false;
     if (this.ferdigIVinduet(ms) && this.legionellaOk(ms)) return false;
+    if (this.maaRekke(ms, kontekst)) return true;          // fristen går foran pris og effekt
     if (this.billigTimeNaa(ms, kontekst)) return this.m.var_aktiv ? true : !kontekst.trangt;
     return false;
   }
@@ -196,6 +266,8 @@ class Bereder {
       const min = m.startet ? Math.round((ms - m.startet) / 60000) : 0;
       m.siste_syklus = ms;
       m.tvungen = false;
+      m.legionella_varslet = false;
+      if (min >= 10) m.varigheter = [...m.varigheter, min].slice(-5);
       if (this.boostAktiv(ms)) m.boost_til = ms;            // boosten har gjort jobben sin
       hendelser.push({ type: 'mettet', tekst: `Berederen er varm etter ${min} minutter. Legionellasikringen er bekreftet.` });
       if (i.prisstyring && !i.alltidPa) paa = false;
@@ -224,6 +296,16 @@ class Bereder {
       hendelser.push({ type: 'legionella', tekst: `Det er ${this.dagerSiden(ms).toFixed(1)} dager siden berederen sist var varm. Varmer nå uansett pris.` });
     }
 
+    // Legionella: si fra når ønsket intervall er passert, lenge før den harde fristen tvinger.
+    const dager = this.dagerSiden(ms);
+    if (i.legionellaAktiv && !m.legionella_varslet && !mettet && !this.forfalt(ms) && dager > i.intervallDager
+      && !this.borteSparing(ms, kontekst)[0]) {
+      m.legionella_varslet = true;
+      hendelser.push({ type: 'legionella_varsel', tekst: `Det er ${dager.toFixed(1)} dager siden berederen sist var varm (målet er hver ${i.intervallDager}. dag). Den varmes til termostaten kobler ut i neste vindu.` });
+    }
+    const morgen = this.morgensjekk(ms, effektW, kontekst);
+    if (morgen) hendelser.push(morgen);
+
     if (!m.billige_ms || ms - m.billige_ms >= 15 * 60000) { m.billige = this.billigeTimer(ms, spot); m.billige_ms = ms; }
 
     const bv = this.borVarme(ms, bryter, effektW, kontekst);
@@ -241,7 +323,7 @@ class Bereder {
     const nominell = Number(this.i.nominellKw) || 2;
     if (this.m.var_aktiv) return { kw: Math.max((effektW || 0) / 1000, nominell * 0.9), maa: true };
     if (this.m.var_mettet || this.borteSparing(ms, kontekst)[0]) return { kw: 0, maa: false };
-    if (this.forfalt(ms) || this.m.tvungen) return { kw: nominell, maa: true };
+    if (this.forfalt(ms) || this.m.tvungen || this.maaRekke(ms, kontekst)) return { kw: nominell, maa: true };
     if (this.borVarme(ms, bryter, effektW, kontekst)) return { kw: nominell, maa: false };
     if (this.iVindu(ms)) return { kw: nominell * 0.5, maa: false };
     return { kw: 0, maa: false };
@@ -261,6 +343,7 @@ class Bereder {
     else if (this.boostAktiv(ms)) { status = 'Boost'; forklaring = 'Boost — varmer nå.'; }
     else if (!this.i.prisstyring) { status = 'Manuell'; forklaring = 'Automatikken er av. Berederen står som den står.'; }
     else if (hviler) { status = 'Hviler (borte)'; forklaring = `Bortemodus: ${hvilegrunn}.`; }
+    else if (this.maaRekke(ms, kontekst || {})) { status = 'Må rekke fristen'; forklaring = `Varmer uansett pris og effekt for å være ferdig til kl. ${this.i.klarInnen}.`; }
     else if (this.ferdigIVinduet(ms)) { status = 'Ferdig for i natt'; forklaring = `Neste vindu åpner kl. ${this.i.vinduStart}.`; }
     else if (this.iVindu(ms)) { status = 'Venter på start'; forklaring = kontekst && kontekst.trangt ? 'I vinduet, men timen er for trang akkurat nå.' : 'I vinduet, venter på start.'; }
     else { status = 'Venter på vinduet'; forklaring = `Vinduet åpner kl. ${this.i.vinduStart}.`; }
@@ -269,9 +352,27 @@ class Bereder {
       bryter, effekt_w: effektW, varmer: m.var_aktiv, mettet: m.var_mettet,
       dager_siden_varm: d === null ? null : Math.round(d * 10) / 10,
       legionella_ok: this.legionellaOk(ms), forfalt: this.forfalt(ms), tvungen: m.tvungen,
+      legionella: this.legionellaStatus(ms),
+      legionella_tekst: this.legionellaTekst(ms),
+      sist_varm: m.siste_syklus === null ? null : new Date(m.siste_syklus).toISOString(),
+      frist: this.i.klarInnen,
+      klar_til_frist: m.morgen ? m.morgen.klar : null,
+      frist_tekst: m.morgen ? m.morgen.tekst : 'Ikke sjekket ennå — første sjekk ved neste frist.',
+      maa_rekke: this.maaRekke(ms, kontekst || {}),
+      behov_min: this.behovMin(),
       boost_til: this.boostAktiv(ms) ? new Date(m.boost_til).toISOString() : null,
       billige_timer: m.billige.map((t) => osloDeler(t).time),
     };
+  }
+
+  legionellaTekst(ms) {
+    const d = this.dagerSiden(ms);
+    const siden = d === null ? 'ukjent' : `${d.toFixed(1)} dager`;
+    if (!this.i.legionellaAktiv) return `Legionellasikringen er slått av. Sist varm for ${siden} siden.`;
+    const s = this.legionellaStatus(ms);
+    if (s === 'sikret') return `Sikret: varm for ${siden} siden (målet er hver ${this.i.intervallDager}. dag).`;
+    if (s === 'bor_varmes') return `Bør varmes: ${siden} siden sist. Tvinges etter ${this.i.maksDager} dager.`;
+    return `Forfalt: ${siden} siden sist. Varmes nå uansett pris og effekt.`;
   }
 
   boost(ms, min = 60) { this.m.boost_til = ms + min * 60000; }

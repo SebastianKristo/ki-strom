@@ -175,3 +175,75 @@ test('nyinstallert om kvelden: berederen varmer den første natta', () => {
   assert.equal(r.paa, true);
   assert.equal(r.bilde.dager_siden_varm, 1);
 });
+
+test('fristen går foran: varmer selv om timen er trang når det ellers ikke rekker', () => {
+  const s = oppsett(oslo(2026, 11, 23, 22, 30));
+  s.kontekst = { trangt: true };
+  s.minutter(60);
+  assert.equal(s.bryter, false, 'tidlig i vinduet venter den når timen er trang');
+  s.ms = oslo(2026, 11, 24, 1, 59);        // standard behov 180 min før kl. 05
+  s.minutter(2);
+  assert.equal(s.bryter, true);
+  assert.equal(s.b.bilde(s.ms, true, 0, s.kontekst).status, 'Må rekke fristen');
+  assert.deepEqual(s.b.reservasjon(s.ms, true, 0, s.kontekst), { kw: 2, maa: true });
+});
+
+test('fristen går foran de billigste timene, og kan slås av', () => {
+  const start = oslo(2026, 11, 23, 23, 0);
+  const s = oppsett(start, { folgSpotpris: true, billigsteTimer: 1 });
+  s.b.m.billige = [oslo(2026, 11, 23, 23, 0)]; s.b.m.billige_ms = Infinity;      // bare én billig time, alt passert kl. 03
+  s.ms = oslo(2026, 11, 24, 3, 0);
+  assert.equal(s.b.borVarme(s.ms, false, 0, {}), true);
+  s.b.settInnstillinger({ ...s.b.i, fristSjekk: false });
+  assert.equal(s.b.borVarme(s.ms, false, 0, {}), false);
+});
+
+test('behovet læres av berederens egne oppvarminger', () => {
+  const s = oppsett(oslo(2026, 11, 23, 22, 30));
+  assert.equal(s.b.behovMin(), 180);
+  s.tick(); s.effekt = 2000; s.minutter(100); s.effekt = 3; s.minutter(9);
+  assert.equal(s.b.m.varigheter.length, 1);
+  assert.equal(s.b.behovMin(), Math.round(s.b.m.varigheter[0] * 1.2 + 15));
+});
+
+test('morgensjekken: varm til fristen gir ingen alarm, kald gir varsel én gang', () => {
+  const varm = oppsett(oslo(2026, 11, 23, 22, 30));
+  varm.tick(); varm.effekt = 2000; varm.minutter(90); varm.effekt = 3; varm.minutter(9);
+  varm.ms = oslo(2026, 11, 24, 4, 59);
+  const r = varm.minutter(2);
+  assert.equal(r.bilde.klar_til_frist, true);
+  assert.ok(!varm.hendelser.includes('ikke_klar'));
+  assert.match(r.bilde.frist_tekst, /Vannet var varmt kl\. 00:0\d/);
+
+  const kald = oppsett(oslo(2026, 11, 24, 4, 50));
+  kald.tick(); kald.effekt = 2000;
+  const r2 = kald.minutter(30);
+  assert.equal(r2.bilde.klar_til_frist, false);
+  assert.equal(kald.hendelser.filter((h) => h === 'ikke_klar').length, 1);
+  assert.match(r2.bilde.frist_tekst, /varmer fortsatt/);
+});
+
+test('morgensjekken alarmerer ikke når huset står tomt eller releet mangler effektmåling', () => {
+  const borte = oppsett(oslo(2026, 11, 24, 4, 50));
+  borte.kontekst = { borte: true };
+  assert.equal(borte.minutter(20).bilde.klar_til_frist, null);
+  const uten = oppsett(oslo(2026, 11, 24, 4, 50));
+  uten.effekt = null;
+  const r = uten.minutter(20);
+  assert.equal(r.bilde.klar_til_frist, null);
+  assert.match(r.bilde.frist_tekst, /ingen effektmåling/);
+  assert.ok(!borte.hendelser.includes('ikke_klar') && !uten.hendelser.includes('ikke_klar'));
+});
+
+test('legionella: status og ett varsel når ønsket intervall er passert', () => {
+  const s = oppsett(oslo(2026, 11, 24, 12, 0));
+  assert.equal(s.tick().bilde.legionella, 'sikret');
+  s.b.m.siste_syklus = s.ms - 3.5 * 86400000;
+  const r = s.minutter(3);
+  assert.equal(r.bilde.legionella, 'bor_varmes');
+  assert.equal(r.bilde.legionella_ok, false);
+  assert.equal(s.hendelser.filter((h) => h === 'legionella_varsel').length, 1);
+  s.b.m.siste_syklus = s.ms - 8 * 86400000;
+  assert.equal(s.minutter(1).bilde.legionella, 'forfalt');
+  assert.ok(s.hendelser.includes('legionella'));
+});

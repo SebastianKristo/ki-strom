@@ -1,37 +1,35 @@
-# KI Energi 2.34.0
+# KI Energi 2.34.1
 
-Kontrollversjon for Homey. Eksisterende oppsett påvirkes ikke.
+Tydeligere oppsett, og sjekk av varmtvannsberederen i Homey-appen.
 
-## Nytt
+## Home Assistant
 
-- **Valg i starten av oppsettet:** «I Home Assistant» (som før — motoren regner og styrer her) eller
-  «På Homey» (kontrollversjon).
-- **Kontrollversjonen** kobler seg til KI Energi-appen på Homey over hjemmenettet og gjør den om til
-  entiteter i Home Assistant. All beregning og styring skjer på Homey; Home Assistant viser og betjener.
-  - **Sensorer:** tariff, kapasitetstrinn, priser, forbruk og kostnad, motorens status og forklaring,
-    timens grense, modus, hjemkomst, bereder og elbillading.
-  - **Rom som klimaenheter:** temperatur nå og settpunkt. Setter du temperaturen, overstyres rommet i to timer.
-  - **Brytere:** energimotor, skyggemodus, varmeplan, bortemodus, Norgespris, berederstyring og elbillading.
-  - **Tall og klokkeslett:** dag- og nattemperatur per rom, timegrenser, bortetemperatur, dag-/nattstart,
-    fast hjemkomst og «Vi kommer hjem kl.».
-  - **Knapper:** varm opp berederen, full oppvarming, «vi blir borte lenger» og fjern overstyringer.
-  - Én binær sensor per person (hjemme/borte).
-- Svarer ikke Homey, blir entitetene utilgjengelige og kommer tilbake av seg selv.
+- **Oppsettet sier rett ut hva du velger:** «Kjør her i Home Assistant (regner og styrer selv)» eller
+  «Fjernkontroll for Homey-appen (styrer ingenting selv)», med forklaring av forskjellen.
+- **Fjernkontrollen bekrefter tilkoblingen** før oppsettet fullføres: nettselskap, rom, personer, bereder og om
+  appen står i skyggemodus — og at Home Assistant ikke styrer noen enheter selv.
+- Enheten heter nå «KI Energi på Homey», og sensoren «Styres fra» viser «Homey-appen».
+- **Den lokale versjonen** har nummererte steg («Steg 1 av 7») og kortere forklaringer som sier hva som er
+  påkrevd og hva som er valgfritt.
+- Nye entiteter i fjernkontrollen: «Varmtvann klart til fristen», «Legionellasikret», «Bereder – morgensjekk»,
+  «Bereder – legionella» og «Berederen sist varm».
 
-## Slik setter du den opp
+Har du fjernkontrollen fra før, beholder oppføringen sitt gamle navn; entitetene er de samme.
 
-1. Installer KI Energi-appen på Homey (mappen `homey/` i dette repoet) og sett den opp der.
-2. Lag en API-nøkkel i Homey: *Innstillinger → API-nøkler*.
-3. I Home Assistant: legg til KI Energi, velg «På Homey», og oppgi Homeys IP-adresse og nøkkelen.
+## Homey-appen 0.4.3
 
-Bare ett oppsett av KI Energi kan finnes om gangen. For å bytte fra lokal versjon til kontrollversjonen
-må den lokale fjernes først — læringen der blir da borte.
+- **Varmt til fristen:** rekker ikke berederen å bli ferdig til «Ferdig innen» (standard kl. 05), varmer den
+  uansett pris og effekt. Oppvarmingstiden læres av berederens egne oppvarminger.
+- **Morgensjekk:** når fristen passerer, sjekkes det at vannet ble varmt. Hvis ikke, får du et varsel med grunnen,
+  og flow-kortet «Berederen ble ikke varm til fristen» utløses.
+- **Legionella:** varsel når det er mer enn tre dager siden vannet var varmt, lenge før tvangen etter sju dager.
+- Nye ikoner, logo, omskrevet dokumentasjon og innstillingsside i faner (0.4.2).
+
+Sjekkene gjelder Homey-appen. Den lokale Home Assistant-versjonen har legionellafristen fra før, men ikke
+morgensjekken.
 
 ### Kontrollert
 
-Python 3.13, Home Assistant 2026.2.3, pytest-homeassistant-custom-component 0.13.316: 232 tester, ni av dem
-nye (`tests/test_kontrollversjon.py`). De prøves mot svar skrevet av Homey-appens egen test, så formatet
-er det appen faktisk sender. Homey-appen: 99 tester.
+Python 3.13, Home Assistant 2026.2.3: 233 tester. Homey-appen: 105 tester, og `homey app validate --level publish`.
 
-Ikke verifisert mot en ekte Homey: at Homeys API-nøkkel godtas som Bearer-token mot appens lokale API,
-og adressen `http://<homey>/api/app/no.kristo.kienergi/…`.
+Ikke prøvd på en ekte Homey.

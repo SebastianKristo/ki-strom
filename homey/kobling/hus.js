@@ -8,7 +8,7 @@ const { Lading, STANDARD: LADING_STANDARD } = require('../lib/lading');
 const { Lys } = require('../lib/lys');
 const { osloDeler } = require('../lib/kalender');
 
-const VARSLES = new Set(['borte_paa', 'kom_hjem', 'kom_ikke', 'legionella', 'feil']);
+const VARSLES = new Set(['borte_paa', 'kom_hjem', 'kom_ikke', 'legionella', 'legionella_varsel', 'ikke_klar', 'feil']);
 const klokke = (ms) => { const d = osloDeler(ms); return `${String(d.time).padStart(2, '0')}:${String(d.minutt).padStart(2, '0')}`; };
 
 /**
@@ -239,6 +239,7 @@ class HusKobling {
       if (h.type === 'borte_paa') u.bortemodus_endret.trigger({ borte: true }).catch(this.app.error);
       if (h.type === 'kom_hjem') { u.noen_kom_hjem.trigger({}).catch(this.app.error); u.bortemodus_endret.trigger({ borte: false }).catch(this.app.error); }
       if (h.type === 'mettet') u.bereder_varm.trigger({}).catch(this.app.error);
+      if (h.type === 'ikke_klar') u.bereder_ikke_klar.trigger({ grunn: h.tekst }).catch(this.app.error);
     }
     if (hendelser.length) this.lagre();
     return kontekst;

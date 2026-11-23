@@ -14,6 +14,7 @@ const pakke = require('../package.json');
 const IKON_ID = {
   ki_tariff: 'tariff', ki_kapasitetstrinn: 'trinn', ki_motor_status: 'status', ki_motor_forklaring: 'forklaring',
   ki_modus: 'hus', ki_hjemkomst: 'hus', ki_senkede_rom: 'hus', ki_bereder_status: 'bereder', ki_bereder_dager: 'bereder',
+  ki_bereder_klar: 'bereder', ki_legionella_ok: 'bereder',
   ki_lading_status: 'lading', ki_norgespris_aktiv: 'status',
 };
 const IKON_ENHET = { 'kr/kWh': 'pris', 'kr/mnd': 'kostnad', kr: 'kostnad', kWh: 'energi', kW: 'effekt', W: 'effekt' };
@@ -189,6 +190,11 @@ const app = {
       },
       { id: 'noen_kom_hjem', title: { no: 'Noen kom hjem til tomt hus', en: 'Someone came home to an empty house' } },
       { id: 'bereder_varm', title: { no: 'Varmtvannsberederen er varm', en: 'The water heater is hot' } },
+      {
+        id: 'bereder_ikke_klar',
+        title: { no: 'Berederen ble ikke varm til fristen', en: 'The water heater was not hot by the deadline' },
+        tokens: [{ name: 'grunn', type: 'string', title: { no: 'Grunn', en: 'Reason' }, example: 'Den varmer fortsatt.' }],
+      },
     ],
     conditions: [
       { id: 'bortemodus_er_paa', title: { no: 'Bortemodus !{{er|er ikke}} på', en: 'Away mode !{{is|is not}} on' } },
