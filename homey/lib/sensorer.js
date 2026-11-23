@@ -73,6 +73,8 @@ const MOTOR_SENSORER = [
   { id: 'ki_bereder_status', type: 'string', no: 'Bereder', en: 'Water heater', hent: (b) => (b.hus && b.hus.bereder ? b.hus.bereder.status : null) },
   { id: 'ki_lading_status', type: 'string', no: 'Elbillading', en: 'EV charging', hent: (b) => (b.hus && b.hus.lading ? b.hus.lading.forklaring : null) },
   { id: 'ki_bereder_dager', type: 'number', no: 'Dager siden berederen var varm', en: 'Days since heater was hot', enhet: 'd', desimaler: 1, hent: (b) => (b.hus && b.hus.bereder ? b.hus.bereder.dager_siden_varm : null) },
+  { id: 'ki_bereder_klar', type: 'boolean', no: 'Varmtvann klart til fristen', en: 'Hot water ready by deadline', hent: (b) => (b.hus && b.hus.bereder ? b.hus.bereder.klar_til_frist : null) },
+  { id: 'ki_legionella_ok', type: 'boolean', no: 'Legionellasikret', en: 'Legionella safe', hent: (b) => (b.hus && b.hus.bereder ? b.hus.bereder.legionella_ok : null) },
 ];
 
 module.exports.MOTOR_SENSORER = MOTOR_SENSORER;

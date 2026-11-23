@@ -266,6 +266,14 @@
     <div class="homey-form-group rad">
       <label class="homey-form-checkbox"><input class="homey-form-checkbox-input" type="checkbox" id="v_borteSparing" /><span class="homey-form-checkbox-checkmark"></span><span class="homey-form-checkbox-text">La berederen hvile når huset står tomt</span></label>
     </div>
+    <div class="homey-form-group rad">
+      <label class="homey-form-checkbox"><input class="homey-form-checkbox-input" type="checkbox" id="v_fristSjekk" /><span class="homey-form-checkbox-checkmark"></span><span class="homey-form-checkbox-text">Sørg for at vannet er varmt til «Ferdig innen»</span></label>
+      <p class="hjelp">Rekker ikke berederen å bli ferdig, varmer den uansett pris og effekt. Hver morgen sjekkes det at vannet ble varmt, og du får et varsel hvis ikke.</p>
+    </div>
+    <div class="homey-form-group rad">
+      <label class="homey-form-checkbox"><input class="homey-form-checkbox-input" type="checkbox" id="v_legionellaAktiv" /><span class="homey-form-checkbox-checkmark"></span><span class="homey-form-checkbox-text">Legionellasikring</span></label>
+      <p class="hjelp">Vannet varmes til termostaten kobler ut minst så ofte som «Varm minst hver», og tvinges etter «Tving etter». Forutsetter at berederens termostat står på 65–70 °C.</p>
+    </div>
     <div class="rutenett">
       <div><label for="v_vinduStart">Vinduet åpner</label><input class="homey-form-input" id="v_vinduStart" type="time" /></div>
       <div><label for="v_klarInnen">Ferdig innen</label><input class="homey-form-input" id="v_klarInnen" type="time" /></div>
@@ -503,7 +511,7 @@
     // ---------------- Huset ----------------
     const H_KRYSS = ['borteAuto', 'borteAutoTemp', 'forvarmHjemkomst', 'vanerStyrer'];
     const H_TALL = ['borteAutoTimer', 'borteMinTemp', 'borteTempPanel', 'borteTempGulv', 'borteTempBad'];
-    const V_KRYSS = ['prisstyring', 'folgSpotpris', 'borteSparing'];
+    const V_KRYSS = ['prisstyring', 'folgSpotpris', 'borteSparing', 'fristSjekk', 'legionellaAktiv'];
     const V_TALL = ['billigsteTimer', 'nominellKw', 'intervallDager', 'maksDager'];
     const V_TEKST = ['vinduStart', 'klarInnen'];
     const K_TEKST = ['morgenStart', 'morgenSlutt', 'kveldStart', 'kveldSlutt'];
@@ -644,7 +652,11 @@
         if (feil || !h || !h.personer) return;
         const linjer = [`Modus: ${h.modus}${h.hjemkomst_kl ? ` — varmt til kl. ${h.hjemkomst_kl}` : ''}`];
         if (h.personer.length) linjer.push(h.personer.map((p) => `${p.navn}: ${p.hjemme === null ? 'ukjent' : p.hjemme ? 'hjemme' : 'borte'}`).join(' · '));
-        if (h.bereder) linjer.push(`Bereder: ${h.bereder.status}. ${h.bereder.forklaring} Sist varm for ${h.bereder.dager_siden_varm ?? '–'} dager siden.`);
+        if (h.bereder) {
+          linjer.push(`Bereder: ${h.bereder.status}. ${h.bereder.forklaring}`);
+          linjer.push(`${h.bereder.klar_til_frist === false ? '⚠' : h.bereder.klar_til_frist ? '✓' : '·'} Varmt til kl. ${h.bereder.frist}: ${h.bereder.frist_tekst}`);
+          linjer.push(`${h.bereder.legionella === 'sikret' ? '✓' : '⚠'} Legionella: ${h.bereder.legionella_tekst}`);
+        }
         if (h.hanklevarmer) linjer.push(`Håndklevarmer: ${h.hanklevarmer.paa ? 'på' : 'av'} (${h.hanklevarmer.grunn})`);
         if (h.lading) linjer.push(`Elbil: ${h.lading.forklaring}`);
         for (const r of Object.values(h.lys || {})) linjer.push(`Lys ${r.navn}: ${r.tekst}`);

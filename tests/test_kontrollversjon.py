@@ -96,7 +96,12 @@ async def test_oppsett_velger_homey_og_proever_tilkoblingen(hass, aioclient_mock
 
     _homey(aioclient_mock)
     r = await hass.config_entries.flow.async_configure(r["flow_id"], {CONF_HOMEY_HOST: " 192.168.1.20/ ", CONF_HOMEY_TOKEN: " hemmelig "})
-    assert r["type"] == "create_entry" and r["title"] == "KI Energi (Homey)"
+    # Bekreftelsen viser hva som ble funnet, og sier at Home Assistant bare er fjernkontroll
+    assert r["type"] == "form" and r["step_id"] == "homey_bekreft"
+    funnet = r["description_placeholders"]["funnet"]
+    assert "Nettselskap: Elvia (NO1)" in funnet and "Rom: 2 (" in funnet and "Varmtvannsbereder: satt opp" in funnet
+    r = await hass.config_entries.flow.async_configure(r["flow_id"], {})
+    assert r["type"] == "create_entry" and r["title"] == "KI Energi – fjernkontroll for Homey"
     assert r["data"] == {CONF_MODUS: MODUS_HOMEY, CONF_HOMEY_HOST: "192.168.1.20/", CONF_HOMEY_TOKEN: "hemmelig"}
     await hass.async_block_till_done()
     # API-nøkkelen sendes som Bearer
@@ -142,6 +147,20 @@ async def test_entitetene_viser_det_homey_sender(hass, aioclient_mock):
     assert stue.attributes["forklaring"]
     # Den lokale versjonens tjenester hører ikke hjemme her
     assert not any(hass.services.has_service(DOMAIN, t) for t in TJENESTER)
+
+
+async def test_berederens_sjekk_og_rollen_vises(hass, aioclient_mock):
+    svar = json.loads(json.dumps(SVAR))
+    svar["hus"]["bereder"].update(klar_til_frist=False, frist_tekst="Den varmer fortsatt.", legionella_ok=False,
+                                  legionella_tekst="Bør varmes: 3.5 dager siden sist. Tvinges etter 7 dager.")
+    await _sett_opp(hass, aioclient_mock, svar)
+    assert _tilstand(hass, "binary_sensor", "bereder_klar").state == "off"
+    assert _tilstand(hass, "binary_sensor", "legionella_ok").state == "off"
+    assert _tilstand(hass, "sensor", "bereder_frist").state == "Den varmer fortsatt."
+    assert _tilstand(hass, "sensor", "bereder_legionella").state.startswith("Bør varmes")
+    assert _tilstand(hass, "sensor", "bereder_sist_varm").state.startswith("2026-11-22T12:00:10")
+    rolle = _tilstand(hass, "sensor", "styres_fra")
+    assert rolle.state == "Homey-appen" and "fjernkontroll" in rolle.attributes["forklaring"]
 
 
 async def test_endringer_sendes_til_homey(hass, aioclient_mock):

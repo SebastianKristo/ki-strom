@@ -283,6 +283,39 @@ async def _prov_homey(hass, host: str, token: str) -> str | None:
     return None if isinstance(svar, dict) and "nettleie" in svar else "homey_mangler_app"
 
 
+TITTEL_HOMEY = "KI Energi – fjernkontroll for Homey"
+MERKNAD_HOMEY = ("Dette er fjernkontrollen for KI Energi-appen på Homey. Home Assistant regner og styrer ingenting selv: "
+                 "entitetene viser det appen gjør, og endringer du gjør her sendes til appen. Her endrer du bare tilkoblingen. "
+                 "Rom, personer, bereder og grenser settes opp i appen på Homey (Mer → Apper → KI Energi → Konfigurer).")
+
+
+async def _homey_sammendrag(hass, host: str, token: str) -> str:
+    """Kort tekst om hva appen på Homey har satt opp, til bekreftelsen i oppsettet."""
+    from homeassistant.helpers.aiohttp_client import async_get_clientsession  # noqa: PLC0415
+
+    from .fjern.klient import HomeyFeil, HomeyKlient  # noqa: PLC0415
+    klient = HomeyKlient(async_get_clientsession(hass), host, token)
+
+    async def hent(sti):
+        try:
+            svar = await klient.hent(sti)
+        except HomeyFeil:
+            return {}
+        return svar if isinstance(svar, dict) else {}
+
+    status, motor, hus = await hent("/status"), await hent("/motor"), await hent("/hus")
+    linjer = [f"Nettselskap: {status.get('nettselskap') or 'ikke valgt'}" + (f" ({status['prisomraade']})" if status.get("prisomraade") else "")]
+    rom = motor.get("soner") or []
+    linjer.append(f"Rom: {len(rom)}" + (f" ({', '.join(str(r.get('navn')) for r in rom[:8])})" if rom else " — sett opp rommene i appen på Homey"))
+    personer = hus.get("personer") or []
+    linjer.append(f"Personer: {len(personer)}")
+    linjer.append("Varmtvannsbereder: " + ("satt opp" if hus.get("bereder") else "ikke satt opp"))
+    if motor:
+        linjer.append("Energimotoren er " + ("på" if motor.get("aktiv") else "av")
+                      + (" — i skyggemodus, så appen styrer ingenting ennå" if motor.get("skygge") else ""))
+    return "\n".join(f"- {linje}" for linje in linjer)
+
+
 class KiEnergiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
@@ -321,11 +354,19 @@ class KiEnergiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             feilkode = await _prov_homey(self.hass, user_input[CONF_HOMEY_HOST], user_input[CONF_HOMEY_TOKEN])
             if feilkode is None:
-                return self.async_create_entry(title="KI Energi (Homey)", data={
-                    CONF_MODUS: MODUS_HOMEY, CONF_HOMEY_HOST: user_input[CONF_HOMEY_HOST].strip(),
-                    CONF_HOMEY_TOKEN: user_input[CONF_HOMEY_TOKEN].strip()})
+                self._homey = {CONF_MODUS: MODUS_HOMEY, CONF_HOMEY_HOST: user_input[CONF_HOMEY_HOST].strip(),
+                               CONF_HOMEY_TOKEN: user_input[CONF_HOMEY_TOKEN].strip()}
+                return await self.async_step_homey_bekreft()
             feil["base"] = feilkode
         return self.async_show_form(step_id="homey", data_schema=self.add_suggested_values_to_schema(SKJEMA_HOMEY, user_input or {}), errors=feil)
+
+    async def async_step_homey_bekreft(self, user_input=None):
+        """Vis hva som ble funnet på Homey, og si tydelig at Home Assistant bare er fjernkontroll."""
+        if user_input is not None:
+            return self.async_create_entry(title=TITTEL_HOMEY, data=self._homey)
+        funnet = await _homey_sammendrag(self.hass, self._homey[CONF_HOMEY_HOST], self._homey[CONF_HOMEY_TOKEN])
+        return self.async_show_form(step_id="homey_bekreft", data_schema=vol.Schema({}),
+                                    description_placeholders={"funnet": funnet, "adresse": self._homey[CONF_HOMEY_HOST]})
 
     async def async_step_lokal(self, user_input=None):
         """Velg hus (preset). Alt etterpå fylles med forslag fra valget."""
@@ -453,7 +494,7 @@ class KiHomeyOptionsFlow(config_entries.OptionsFlow):
         skjema = SKJEMA_HOMEY.extend({vol.Optional(CONF_HOMEY_INTERVALL, default=30): vol.All(vol.Coerce(int), vol.Range(min=10, max=300))})
         return self.async_show_form(step_id="init", data_schema=self.add_suggested_values_to_schema(
             skjema, user_input or {k: gjeldende.get(k) for k in (CONF_HOMEY_HOST, CONF_HOMEY_TOKEN, CONF_HOMEY_INTERVALL) if gjeldende.get(k) is not None}),
-            errors=feil, description_placeholders={"status": "Tilkoblingen til Homey. Rom, personer, bereder og grenser stilles inn i KI Energi-appen på Homey."})
+            errors=feil, description_placeholders={"status": MERKNAD_HOMEY})
 
 
 class KiEnergiOptionsFlow(config_entries.OptionsFlow):

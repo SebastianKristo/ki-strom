@@ -2,16 +2,16 @@
   "config": {
     "step": {
       "user": {
-        "title": "KI Energi",
-        "description": "Hvor skal KI Energi kjøre?",
+        "title": "KI Energi — hvor skal styringen skje?",
+        "description": "Velg én av to måter å bruke KI Energi på. Du kan bare ha én om gangen.\n\n**Kjør her i Home Assistant** — Home Assistant regner og styrer termostater, bereder og lader selv. Du setter opp alt her, steg for steg.\n\n**Fjernkontroll for Homey-appen** — KI Energi-appen på Homey gjør all regning og styring. Home Assistant styrer ingenting selv; den viser det appen gjør og lar deg betjene den herfra. Appen må være installert og satt opp på Homey først.",
         "menu_options": {
-          "lokal": "I Home Assistant — motoren regner og styrer her",
-          "homey": "På Homey — Home Assistant er kontrollpanel for appen"
+          "lokal": "Kjør her i Home Assistant (regner og styrer selv)",
+          "homey": "Fjernkontroll for Homey-appen (styrer ingenting selv)"
         }
       },
       "utstyr": {
-        "title": "Utstyr og funksjoner",
-        "description": "Alt er valgfritt. Det du ikke velger her, vises heller ikke i kortet: ingen bereder-bryter = ingen prisstyring, ingen gardin = ingen gardinblokk, ingen håndklevarmer = ingen underfane, elbil av = ingen elbil-innstillinger.",
+        "title": "Steg 3 av 7 — Utstyr",
+        "description": "**Alt er valgfritt.** Velg bare det du vil at KI Energi skal styre. Det du lar stå tomt, skjules i kortet.\n\n- **Varmtvannsbereder:** et relé, helst med effektmåling — da oppdages det når vannet er varmt, og legionellasikringen bekreftes.\n- **Håndklevarmer, gardiner og hvitevarer:** valgfritt.\n- **Elbillader:** kryss av hvis du har en; motoren holder da av effekt til ladingen.",
         "data": {
           "vvb_bryter": "Varmtvannsbereder – bryter/relé",
           "vvb_effekt": "Varmtvannsbereder – effektsensor (W)",
@@ -25,8 +25,8 @@
         }
       },
       "personer": {
-        "title": "Personer",
-        "description": "Hvem bor her? Navn brukes i kortet og på hjelperne (f.eks. time.ki_<navn>_vekking). Barn: fast opp/legg og borte på dagtid. Ungdom: vekking hverdag/helg og feriebryter. Voksen: bare tilstedeværelse. La navn stå tomt for å hoppe over. Flere kan legges til senere.",
+        "title": "Steg 4 av 7 — Personer",
+        "description": "**Valgfritt**, men trengs for bortemodus og personlige rom. La navnet stå tomt for å hoppe over en person — flere kan legges til senere.\n\n- **Voksen:** bare tilstedeværelse.\n- **Ungdom:** egen leggetid og vekking for hverdag og helg.\n- **Barn:** fast opp/legg og borte på dagtid.\n\nNavnet brukes i kortet og på hjelperne (f.eks. time.ki_<navn>_vekking).",
         "data": {
           "navn_1": "Person 1 – navn",
           "type_1": "Person 1 – type",
@@ -47,8 +47,8 @@
         }
       },
       "nettleie": {
-        "title": "Nettleie",
-        "description": "Alt er valgfritt. Motoren måler døgnmakser selv; toppsensorer fra Strømkalkulator gir bare startgrunnlag den første måneden. Nord Pool-sensor (med raw_today) trengs bare uten Norgespris.",
+        "title": "Steg 5 av 7 — Nettleie og pris",
+        "description": "**Alt er valgfritt.** Motoren måler døgnmaksene selv.\n\n- **Toppforbruk 1–3:** fra Strømkalkulator, gir bare et startgrunnlag den første måneden.\n- **Energiledd og strømpris:** brukes til å vise kostnad og velge billige timer.\n- **Nord Pool-sensor** (med raw_today): trengs bare hvis du ikke har Norgespris og vil prisstyre berederen.",
         "data": {
           "topp1": "Elvia toppforbruk 1 (kWh)",
           "topp2": "Elvia toppforbruk 2 (kWh)",
@@ -67,8 +67,8 @@
         }
       },
       "hus": {
-        "title": "Hus",
-        "description": "Husets data brukes til solkompensasjon og standardverdier for treghet. Fritidsbolig: frostsikring når ingen er der, oppvarming før ankomst, spørsmål torsdag/fredag om helgen.",
+        "title": "Steg 6 av 7 — Hus og varsler",
+        "description": "- **Areal, byggeår og glassflate:** gir fornuftige startverdier for hvor tregt huset er, og brukes til solkompensasjon.\n- **Varselmottakere:** telefonene som skal få varsler og spørsmål.\n- **Hustype:** fritidsbolig gir frostsikring når ingen er der og oppvarming før ankomst.",
         "data": {
           "areal_m2": "Boligareal (m²)",
           "byggear": "Byggeår",
@@ -80,8 +80,8 @@
         }
       },
       "maling": {
-        "title": "Måling",
-        "description": "Målesensorene alt annet bygger på. Forslagene under er gjenkjent automatisk: {funnet}. Effektmåleren skal være hovedmålerens øyeblikkseffekt i W. Energiregisteret skal være akkumulert importert energi i kWh (state_class total_increasing) — ikke dagsforbruk.",
+        "title": "Steg 2 av 7 — Måling",
+        "description": "**Påkrevd:** effektmåleren. Resten gir bedre resultat.\n\nGjenkjent automatisk: {funnet}\n\n- **Totaleffekt:** hovedmålerens øyeblikkseffekt i W.\n- **Importert energi:** målerens akkumulerte kWh-teller (state_class total_increasing) — ikke dagsforbruk.\n- **Utetemperatur og vær:** brukes til forvarming og solkompensasjon.",
         "data": {
           "total_effekt": "Totaleffekt fra strømmåleren (W)",
           "importert_energi": "Importert energi fra strømmåleren (kWh, akkumulert)",
@@ -90,28 +90,32 @@
         }
       },
       "soner_auto": {
-        "title": "Soner",
-        "description": "{antall} område(r) med termostat funnet. En sone er et rom: alle termostater i området styres likt, effektsensorer i området summeres, vindussensorer kobles på. Type og profil gjettes fra navnet og kan endres etterpå under Konfigurer → Soner.",
+        "title": "Steg 7 av 7 — Rom (soner)",
+        "description": "{antall} område(r) med termostat ble funnet.\n\nEn sone er et rom: alle termostatene i området styres likt, effektsensorer summeres og vindussensorer kobles på. Type og program gjettes fra navnet.\n\nEtter dette steget er oppsettet ferdig. Temperaturer, prioritet og program per rom finjusterer du under Konfigurer → Soner.",
         "data": {
           "kilde": "Hvor skal sonene komme fra?",
           "soner": "Områder som skal bli soner"
         }
       },
       "lokal": {
-        "title": "Velg hus",
-        "description": "Velg et ferdig oppsett. Alle entiteter og verdier kan endres i stegene som følger og senere under Konfigurer.",
+        "title": "Steg 1 av 7 — Velg utgangspunkt",
+        "description": "Du setter nå opp versjonen som kjører i Home Assistant: den regner og styrer termostater, bereder og lader herfra.\n\nVelg et utgangspunkt. Det fyller inn forslag i stegene som følger — alt kan endres der, og senere under Konfigurer.",
         "data": {
           "preset": "Oppsett"
         }
       },
       "homey": {
-        "title": "Koble til Homey",
-        "description": "KI Energi-appen må være installert på Homey. Lag en API-nøkkel i Homey (Innstillinger → API-nøkler) og lim den inn her. Adressen er Homeys IP-adresse på hjemmenettet, for eksempel 192.168.1.20.",
+        "title": "Fjernkontroll for Homey — koble til",
+        "description": "Home Assistant blir en fjernkontroll: all regning og styring skjer i KI Energi-appen på Homey.\n\n1. Installer KI Energi-appen på Homey og sett den opp der (strømmåler, nettselskap og rom).\n2. Lag en API-nøkkel i Homey: Innstillinger → API-nøkler.\n3. Skriv inn Homeys IP-adresse på hjemmenettet (f.eks. 192.168.1.20) og lim inn nøkkelen under.\n\nIP-adressen finner du i Homey-appen under Mer → Innstillinger → Generelt → Om.",
         "data": {
           "homey_host": "Adressen til Homey",
           "homey_token": "API-nøkkel",
           "homey_intervall": "Sekunder mellom oppdateringer"
         }
+      },
+      "homey_bekreft": {
+        "title": "Koblet til Homey",
+        "description": "Home Assistant fikk kontakt med KI Energi-appen på {adresse}:\n\n{funnet}\n\n**Hva dette betyr**\n\n- Home Assistant styrer ingen enheter selv. Entitetene viser det appen gjør, og det du endrer her sendes til appen.\n- Rom, personer, bereder og grenser settes opp i appen på Homey (Mer → Apper → KI Energi → Konfigurer).\n- Svarer ikke Homey, blir entitetene utilgjengelige og kommer tilbake av seg selv.\n\nTrykk Send for å fullføre."
       }
     },
     "abort": {
@@ -131,7 +135,7 @@
   "options": {
     "step": {
       "init": {
-        "title": "KI Energi",
+        "title": "KI Energi — innstillinger",
         "menu_options": {
           "oppsett": "Bruk ferdig oppsett",
           "maling": "Måling",

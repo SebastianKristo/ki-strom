@@ -242,6 +242,7 @@ module.exports = class KiEnergiApp extends Homey.App {
       bortemodus_endret: kort('bortemodus_endret'),
       noen_kom_hjem: kort('noen_kom_hjem'),
       bereder_varm: kort('bereder_varm'),
+      bereder_ikke_klar: kort('bereder_ikke_klar'),
     };
     const handling = (id, f) => this.homey.flow.getActionCard(id).registerRunListener(async (args) => { await f(args); });
     handling('sett_bortemodus', (args) => this.hus.settBorte(args.modus === 'paa'));

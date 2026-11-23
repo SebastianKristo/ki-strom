@@ -1,7 +1,7 @@
 {
   "_comment": "Bygget av scripts/lag-app-json.js — ikke rediger for hånd.",
   "id": "no.kristo.kienergi",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "compatibility": ">=12.3.0",
   "sdk": 3,
   "platforms": [
@@ -907,6 +907,46 @@
       "decimals": 1,
       "insights": true
     },
+    "ki_bereder_klar": {
+      "type": "boolean",
+      "title": {
+        "no": "Varmtvann klart til fristen",
+        "en": "Hot water ready by deadline"
+      },
+      "getable": true,
+      "setable": false,
+      "uiComponent": "sensor",
+      "icon": "/assets/ikoner/bereder.svg",
+      "insights": true,
+      "insightsTitleTrue": {
+        "no": "Varmtvann klart til fristen: ja",
+        "en": "Hot water ready by deadline: yes"
+      },
+      "insightsTitleFalse": {
+        "no": "Varmtvann klart til fristen: nei",
+        "en": "Hot water ready by deadline: no"
+      }
+    },
+    "ki_legionella_ok": {
+      "type": "boolean",
+      "title": {
+        "no": "Legionellasikret",
+        "en": "Legionella safe"
+      },
+      "getable": true,
+      "setable": false,
+      "uiComponent": "sensor",
+      "icon": "/assets/ikoner/bereder.svg",
+      "insights": true,
+      "insightsTitleTrue": {
+        "no": "Legionellasikret: ja",
+        "en": "Legionella safe: yes"
+      },
+      "insightsTitleFalse": {
+        "no": "Legionellasikret: nei",
+        "en": "Legionella safe: no"
+      }
+    },
     "ki_skyggemodus": {
       "type": "boolean",
       "title": {
@@ -1046,7 +1086,9 @@
         "ki_hjemkomst",
         "ki_bereder_status",
         "ki_lading_status",
-        "ki_bereder_dager"
+        "ki_bereder_dager",
+        "ki_bereder_klar",
+        "ki_legionella_ok"
       ],
       "capabilitiesOptions": {
         "onoff": {
@@ -1293,6 +1335,24 @@
           "no": "Varmtvannsberederen er varm",
           "en": "The water heater is hot"
         }
+      },
+      {
+        "id": "bereder_ikke_klar",
+        "title": {
+          "no": "Berederen ble ikke varm til fristen",
+          "en": "The water heater was not hot by the deadline"
+        },
+        "tokens": [
+          {
+            "name": "grunn",
+            "type": "string",
+            "title": {
+              "no": "Grunn",
+              "en": "Reason"
+            },
+            "example": "Den varmer fortsatt."
+          }
+        ]
       }
     ],
     "conditions": [

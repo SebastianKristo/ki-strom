@@ -12,9 +12,10 @@ from homeassistant.components.number import NumberEntity, NumberMode
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.components.time import TimeEntity
-from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
+from homeassistant.const import ATTR_TEMPERATURE, EntityCategory, UnitOfTemperature
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import dt as dt_util
 
 from ..const import DOMAIN
 from .koordinator import HomeyKoordinator
@@ -54,8 +55,9 @@ class Grunn(CoordinatorEntity[HomeyKoordinator]):
         self._attr_name = navn
         if ikon:
             self._attr_icon = ikon
-        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, "homey")}, name="KI Energi (Homey)",
-                                            manufacturer="KI Energi", model="Kontrollversjon")
+        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, "homey")}, name="KI Energi på Homey",
+                                            manufacturer="KI Energi", model="Fjernkontroll — styringen skjer i appen på Homey",
+                                            configuration_url="https://my.homey.app")
 
     @property
     def d(self) -> dict:
@@ -104,6 +106,9 @@ SENSORER = [
     ("bereder_status", "Bereder", ("hus", "bereder", "status"), None, None, None, "mdi:water-boiler"),
     ("lading", "Elbillading", ("hus", "lading", "forklaring"), None, None, None, "mdi:ev-station"),
     ("bereder_dager", "Dager siden berederen var varm", ("hus", "bereder", "dager_siden_varm"), "d", None, MAAL, "mdi:water-boiler-alert"),
+    ("bereder_frist", "Bereder – morgensjekk", ("hus", "bereder", "frist_tekst"), None, None, None, "mdi:clock-check-outline"),
+    ("bereder_legionella", "Bereder – legionella", ("hus", "bereder", "legionella_tekst"), None, None, None, "mdi:shield-check-outline"),
+    ("bereder_sist_varm", "Berederen sist varm", ("hus", "bereder", "sist_varm"), None, SensorDeviceClass.TIMESTAMP, None, None),
 ]
 
 
@@ -117,7 +122,27 @@ class KiHomeySensor(Grunn, SensorEntity):
 
     @property
     def native_value(self):
-        return grav(self.d, *self._sti)
+        v = grav(self.d, *self._sti)
+        if self._attr_device_class == SensorDeviceClass.TIMESTAMP:
+            return dt_util.parse_datetime(v) if isinstance(v, str) else None
+        return v
+
+
+class KiHomeyRolle(Grunn, SensorEntity):
+    """Sier rett ut hvor styringen skjer, så ingen tror at Home Assistant regner selv."""
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, k) -> None:
+        super().__init__(k, "styres_fra", "Styres fra", "mdi:remote")
+
+    @property
+    def native_value(self):
+        return "Homey-appen"
+
+    @property
+    def extra_state_attributes(self):
+        return {"forklaring": "Home Assistant er fjernkontroll. All beregning og styring skjer i KI Energi-appen på Homey."}
 
 
 class KiHomeyStatus(Grunn, SensorEntity):
@@ -153,6 +178,8 @@ BINAERE = [
     ("norgespris_aktiv", "Norgespris aktiv nå", lambda d: grav(d, "status", "pris", "norgespris_aktiv"), None, "mdi:cash-lock"),
     ("alle_borte", "Alle er borte", lambda d: grav(d, "hus", "alle_borte"), None, "mdi:home-export-outline"),
     ("bereder_varmer", "Berederen varmer", lambda d: grav(d, "hus", "bereder", "varmer"), BinarySensorDeviceClass.HEAT, None),
+    ("bereder_klar", "Varmtvann klart til fristen", lambda d: grav(d, "hus", "bereder", "klar_til_frist"), None, "mdi:water-check"),
+    ("legionella_ok", "Legionellasikret", lambda d: grav(d, "hus", "bereder", "legionella_ok"), None, "mdi:shield-check"),
     ("maleproblem", "Måledata-problem", lambda d: bool(grav(d, "status", "problemer")) if grav(d, "status") else None,
      BinarySensorDeviceClass.PROBLEM, None),
 ]
@@ -414,7 +441,7 @@ class KiHomeyRom(Grunn, ClimateEntity):
 def lag(plattform: str, k: HomeyKoordinator) -> list:
     """Entitetene for én plattform. Rom og personer lages fra det Homey har nå; nye rom krever omlasting."""
     if plattform == "sensor":
-        return [KiHomeyStatus(k)] + [KiHomeySensor(k, *s) for s in SENSORER]
+        return [KiHomeyStatus(k), KiHomeyRolle(k)] + [KiHomeySensor(k, *s) for s in SENSORER]
     if plattform == "binary_sensor":
         personer = grav(k.data, "hus", "personer") or []
         return [KiHomeyBinaer(k, *b) for b in BINAERE] + [KiHomeyPerson(k, p) for p in personer if p.get("key")]
