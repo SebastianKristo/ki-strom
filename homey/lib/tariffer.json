@@ -1,0 +1,4082 @@
+{
+ "kilde": "fredrik-lindseth/Stromkalkulator (MIT), dso.py ved commit e3d7249. Satsene kryssjekkes der mot kraftsystemet/fri-nettleie (CC-BY-4.0).",
+ "satser_gjelder_aar": 2026,
+ "fusjoner": {
+  "skiakernett": "vevig"
+ },
+ "nettselskap": {
+  "bkk": {
+   "name": "BKK",
+   "prisomrade": "NO5",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.2877,
+   "energiledd_natt_eks_mva": 0.105,
+   "url": "https://www.bkk.no/nettleiepriser/priser-privatkunder",
+   "helligdager_ekstra": [
+    "12-24",
+    "12-31"
+   ],
+   "kapasitetstrinn": [
+    [
+     2,
+     155
+    ],
+    [
+     5,
+     250
+    ],
+    [
+     10,
+     415
+    ],
+    [
+     15,
+     600
+    ],
+    [
+     20,
+     770
+    ],
+    [
+     25,
+     940
+    ],
+    [
+     50,
+     1800
+    ],
+    [
+     75,
+     2650
+    ],
+    [
+     100,
+     3500
+    ],
+    [
+     null,
+     6900
+    ]
+   ]
+  },
+  "elvia": {
+   "name": "Elvia",
+   "prisomrade": "NO1",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.2899,
+   "energiledd_natt_eks_mva": 0.1699,
+   "url": "https://www.elvia.no/nettleie/alt-om-nettleiepriser/nettleie-pris/",
+   "kapasitetstrinn": [
+    [
+     2,
+     150
+    ],
+    [
+     5,
+     250
+    ],
+    [
+     10,
+     420
+    ],
+    [
+     15,
+     585
+    ],
+    [
+     20,
+     755
+    ],
+    [
+     25,
+     925
+    ],
+    [
+     50,
+     1760
+    ],
+    [
+     75,
+     2600
+    ],
+    [
+     100,
+     3440
+    ],
+    [
+     null,
+     6800
+    ]
+   ]
+  },
+  "glitre": {
+   "name": "Glitre Nett",
+   "prisomrade": "NO1",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.2787,
+   "energiledd_natt_eks_mva": 0.1587,
+   "url": "https://www.glitrenett.no/kunde/nettleie-og-priser/nettleiepriser-privatkunde",
+   "helg_som_natt": false,
+   "kapasitetstrinn": [
+    [
+     2,
+     165
+    ],
+    [
+     5,
+     270
+    ],
+    [
+     10,
+     455
+    ],
+    [
+     15,
+     765
+    ],
+    [
+     20,
+     1025
+    ],
+    [
+     25,
+     1275
+    ],
+    [
+     50,
+     2062.5
+    ],
+    [
+     75,
+     3075
+    ],
+    [
+     100,
+     4105
+    ],
+    [
+     null,
+     7190
+    ]
+   ]
+  },
+  "norgesnett": {
+   "name": "Norgesnett (Glitre Nett)",
+   "prisomrade": "NO1",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.2787,
+   "energiledd_natt_eks_mva": 0.1587,
+   "helg_som_natt": false,
+   "url": "https://www.glitrenett.no/kunde/nettleie-og-priser/nettleiepriser-privatkunde",
+   "kapasitetstrinn": [
+    [
+     2,
+     165
+    ],
+    [
+     5,
+     270
+    ],
+    [
+     10,
+     455
+    ],
+    [
+     15,
+     765
+    ],
+    [
+     20,
+     1025
+    ],
+    [
+     25,
+     1275
+    ],
+    [
+     50,
+     2062.5
+    ],
+    [
+     75,
+     3075
+    ],
+    [
+     100,
+     4105
+    ],
+    [
+     null,
+     7190
+    ]
+   ]
+  },
+  "tensio_tn": {
+   "name": "Tensio TN",
+   "prisomrade": "NO3",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.27198,
+   "energiledd_natt_eks_mva": 0.13702,
+   "url": "https://www.tensio.no/no/kunde/nettleie/nettleiepriser-for-privat",
+   "helg_som_natt": false,
+   "kapasitetstrinn": [
+    [
+     2,
+     141
+    ],
+    [
+     5,
+     284
+    ],
+    [
+     10,
+     512
+    ],
+    [
+     15,
+     776
+    ],
+    [
+     20,
+     1041
+    ],
+    [
+     25,
+     1305
+    ],
+    [
+     50,
+     2274
+    ],
+    [
+     75,
+     3598
+    ],
+    [
+     100,
+     4921
+    ],
+    [
+     150,
+     7123
+    ],
+    [
+     200,
+     9770
+    ],
+    [
+     300,
+     14175
+    ],
+    [
+     400,
+     19467
+    ],
+    [
+     500,
+     24759
+    ],
+    [
+     null,
+     30046
+    ]
+   ]
+  },
+  "tensio_ts": {
+   "name": "Tensio TS",
+   "prisomrade": "NO3",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.22102,
+   "energiledd_natt_eks_mva": 0.10902,
+   "url": "https://www.tensio.no/no/kunde/nettleie/nettleiepriser-for-privat",
+   "helg_som_natt": false,
+   "kapasitetstrinn": [
+    [
+     2,
+     131
+    ],
+    [
+     5,
+     233
+    ],
+    [
+     10,
+     397
+    ],
+    [
+     15,
+     585
+    ],
+    [
+     20,
+     775
+    ],
+    [
+     25,
+     964
+    ],
+    [
+     50,
+     1655
+    ],
+    [
+     75,
+     2599
+    ],
+    [
+     100,
+     3544
+    ],
+    [
+     150,
+     5117
+    ],
+    [
+     200,
+     7003
+    ],
+    [
+     300,
+     10147
+    ],
+    [
+     400,
+     13925
+    ],
+    [
+     500,
+     17697
+    ],
+    [
+     null,
+     21473
+    ]
+   ]
+  },
+  "lede": {
+   "name": "Lede",
+   "prisomrade": "NO2",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.1141,
+   "energiledd_natt_eks_mva": 0.1141,
+   "url": "https://lede.no/priser/nettleie-privatkunder/",
+   "kapasitetstrinn": [
+    [
+     5,
+     269
+    ],
+    [
+     10,
+     459
+    ],
+    [
+     15,
+     648
+    ],
+    [
+     20,
+     838
+    ],
+    [
+     25,
+     1028
+    ],
+    [
+     50,
+     1596
+    ],
+    [
+     75,
+     2545
+    ],
+    [
+     100,
+     3493
+    ],
+    [
+     150,
+     4915
+    ],
+    [
+     200,
+     6810
+    ],
+    [
+     null,
+     9655
+    ]
+   ]
+  },
+  "lnett": {
+   "name": "Lnett",
+   "prisomrade": "NO2",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.256,
+   "energiledd_natt_eks_mva": 0.136,
+   "url": "https://www.l-nett.no/nettleie/priser-og-vilkar-privat/",
+   "kapasitetstrinn": [
+    [
+     2,
+     150
+    ],
+    [
+     5,
+     250
+    ],
+    [
+     10,
+     400
+    ],
+    [
+     15,
+     650
+    ],
+    [
+     20,
+     900
+    ],
+    [
+     25,
+     1150
+    ],
+    [
+     50,
+     2150
+    ],
+    [
+     75,
+     3150
+    ],
+    [
+     100,
+     4150
+    ],
+    [
+     null,
+     7000
+    ]
+   ]
+  },
+  "arva": {
+   "name": "Arva",
+   "prisomrade": "NO4",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.231,
+   "energiledd_natt_eks_mva": 0.116,
+   "url": "https://arva.no/ny-nettleie/Priser",
+   "kapasitetstrinn": [
+    [
+     2,
+     85
+    ],
+    [
+     5,
+     201
+    ],
+    [
+     10,
+     398
+    ],
+    [
+     15,
+     595
+    ],
+    [
+     20,
+     792
+    ],
+    [
+     25,
+     989
+    ],
+    [
+     50,
+     1972
+    ],
+    [
+     75,
+     2955
+    ],
+    [
+     100,
+     3938
+    ],
+    [
+     null,
+     5945
+    ]
+   ]
+  },
+  "fagne": {
+   "name": "Fagne",
+   "prisomrade": "NO2",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.27998,
+   "energiledd_natt_eks_mva": 0.19998,
+   "url": "https://fagne.no/kunde-og-nettleie/nettleie-priser-og-vilkar/priser-privatkunder/",
+   "kapasitetstrinn": [
+    [
+     5,
+     360
+    ],
+    [
+     10,
+     460
+    ],
+    [
+     15,
+     560
+    ],
+    [
+     20,
+     660
+    ],
+    [
+     25,
+     760
+    ],
+    [
+     50,
+     2200
+    ],
+    [
+     75,
+     3200
+    ],
+    [
+     100,
+     4200
+    ],
+    [
+     null,
+     5200
+    ]
+   ]
+  },
+  "foie": {
+   "name": "Føie",
+   "prisomrade": "NO1",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.21,
+   "energiledd_natt_eks_mva": 0.135,
+   "url": "https://www.foie.no/nettleie/priser",
+   "kapasitetstrinn": [
+    [
+     2,
+     300
+    ],
+    [
+     5,
+     387.5
+    ],
+    [
+     10,
+     550
+    ],
+    [
+     15,
+     862.5
+    ],
+    [
+     20,
+     1087.5
+    ],
+    [
+     25,
+     1393.8
+    ],
+    [
+     50,
+     1856.3
+    ],
+    [
+     75,
+     3062.5
+    ],
+    [
+     null,
+     3625
+    ]
+   ]
+  },
+  "linea": {
+   "name": "Linea",
+   "prisomrade": "NO4",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.235,
+   "energiledd_natt_eks_mva": 0.135,
+   "url": "https://www.linea.no/no/kunde/nettleie/nettleiepriser",
+   "kapasitetstrinn": [
+    [
+     2,
+     225
+    ],
+    [
+     5,
+     225
+    ],
+    [
+     10,
+     349
+    ],
+    [
+     15,
+     491
+    ],
+    [
+     20,
+     633
+    ],
+    [
+     25,
+     776
+    ],
+    [
+     50,
+     1297
+    ],
+    [
+     75,
+     2008
+    ],
+    [
+     100,
+     2719
+    ],
+    [
+     150,
+     3905
+    ],
+    [
+     200,
+     5326
+    ],
+    [
+     300,
+     7693
+    ],
+    [
+     400,
+     10541
+    ],
+    [
+     500,
+     13383
+    ],
+    [
+     null,
+     16228
+    ]
+   ]
+  },
+  "noranett": {
+   "name": "Noranett",
+   "prisomrade": "NO4",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.008,
+   "energiledd_natt_eks_mva": 0.008,
+   "url": "https://www.noranett.no/nettleiepriser/category2415.html",
+   "kapasitetstrinn": [
+    [
+     2,
+     310
+    ],
+    [
+     4,
+     440
+    ],
+    [
+     6,
+     530
+    ],
+    [
+     8,
+     610
+    ],
+    [
+     10,
+     680
+    ],
+    [
+     15,
+     750
+    ],
+    [
+     20,
+     890
+    ],
+    [
+     25,
+     1200
+    ],
+    [
+     30,
+     1400
+    ],
+    [
+     35,
+     1700
+    ],
+    [
+     40,
+     1900
+    ],
+    [
+     45,
+     2100
+    ],
+    [
+     50,
+     2400
+    ],
+    [
+     75,
+     3600
+    ],
+    [
+     100,
+     5300
+    ],
+    [
+     125,
+     7100
+    ],
+    [
+     150,
+     8900
+    ],
+    [
+     175,
+     10700
+    ],
+    [
+     200,
+     12500
+    ],
+    [
+     null,
+     17800
+    ]
+   ]
+  },
+  "elinett": {
+   "name": "Elinett",
+   "prisomrade": "NO3",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.25502,
+   "energiledd_natt_eks_mva": 0.17502,
+   "url": "https://www.elinett.no/kunde/nettleie-2/nettleie",
+   "kapasitetstrinn": [
+    [
+     2,
+     281
+    ],
+    [
+     5,
+     350
+    ],
+    [
+     10,
+     419
+    ],
+    [
+     15,
+     688
+    ],
+    [
+     20,
+     831
+    ],
+    [
+     25,
+     969
+    ],
+    [
+     50,
+     1381
+    ],
+    [
+     75,
+     1519
+    ],
+    [
+     100,
+     1656
+    ],
+    [
+     null,
+     2069
+    ]
+   ]
+  },
+  "mellom": {
+   "name": "Mellom",
+   "prisomrade": "NO3",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.2977,
+   "energiledd_natt_eks_mva": 0.2347,
+   "url": "https://mellom.no/nettleie/nettleiepriser/",
+   "kapasitetstrinn": [
+    [
+     2,
+     281
+    ],
+    [
+     5,
+     418
+    ],
+    [
+     10,
+     694
+    ],
+    [
+     15,
+     919
+    ],
+    [
+     20,
+     1162
+    ],
+    [
+     25,
+     1455
+    ],
+    [
+     50,
+     1833
+    ],
+    [
+     75,
+     2449
+    ],
+    [
+     100,
+     3272
+    ],
+    [
+     150,
+     4372
+    ],
+    [
+     200,
+     5841
+    ],
+    [
+     null,
+     7804
+    ]
+   ]
+  },
+  "linja": {
+   "name": "Linja",
+   "prisomrade": "NO5",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.22808,
+   "energiledd_natt_eks_mva": 0.14808,
+   "url": "https://www.linja.no/nettleige",
+   "kapasitetstrinn": [
+    [
+     2,
+     299
+    ],
+    [
+     5,
+     373
+    ],
+    [
+     10,
+     448
+    ],
+    [
+     15,
+     745
+    ],
+    [
+     20,
+     895
+    ],
+    [
+     25,
+     1044
+    ],
+    [
+     50,
+     1491
+    ],
+    [
+     75,
+     1640
+    ],
+    [
+     100,
+     1790
+    ],
+    [
+     null,
+     2236
+    ]
+   ]
+  },
+  "nettselskapet": {
+   "name": "Nettselskapet",
+   "prisomrade": "NO3",
+   "supported": true,
+   "kjent_fastledd_maks_kw": 75,
+   "kjent_fastledd_maks_kw_inkludert": false,
+   "energiledd_dag_eks_mva": 0.127,
+   "energiledd_natt_eks_mva": 0.027,
+   "energiledd_perioder": [
+    {
+     "fra": "11-01",
+     "til": "04-30",
+     "dag_eks_mva": 0.127,
+     "natt_eks_mva": 0.027
+    },
+    {
+     "fra": "05-01",
+     "til": "10-31",
+     "dag_eks_mva": 0.116,
+     "natt_eks_mva": 0.016
+    }
+   ],
+   "helg_som_natt": false,
+   "url": "https://nettselskapet.as/strompris",
+   "kapasitetstrinn": [
+    [
+     2,
+     162.5
+    ],
+    [
+     5,
+     300
+    ],
+    [
+     10,
+     512.5
+    ],
+    [
+     15,
+     762.5
+    ],
+    [
+     20,
+     987.5
+    ],
+    [
+     25,
+     1237.5
+    ],
+    [
+     50,
+     2125
+    ],
+    [
+     null,
+     3325
+    ]
+   ]
+  },
+  "custom": {
+   "name": "Egendefinert",
+   "prisomrade": "NO1",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.2387,
+   "energiledd_natt_eks_mva": 0.0787,
+   "url": "",
+   "kapasitetstrinn": []
+  },
+  "alut": {
+   "name": "Alut",
+   "prisomrade": "NO4",
+   "tiltakssone": true,
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.121,
+   "energiledd_natt_eks_mva": 0.121,
+   "url": "https://alut.no/nettleie/",
+   "fastledd_metode": "OV_TREFASE",
+   "fastledd_sikringstrinn": [
+    {
+     "id": "inntil_3x125a",
+     "label": "Inntil 3 x 125 A",
+     "kr_mnd": 292
+    },
+    {
+     "id": "over_3x125a",
+     "label": "Over 3 x 125 A",
+     "kr_mnd": 375
+    }
+   ],
+   "kapasitetstrinn": []
+  },
+  "area_nett_omrade1": {
+   "name": "Area Nett Område 1 (Nordkapp, Måsøy)",
+   "prisomrade": "NO4",
+   "tiltakssone": true,
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.2989,
+   "energiledd_natt_eks_mva": 0.2689,
+   "energiledd_perioder": [
+    {
+     "fra": "01-01",
+     "til": "03-31",
+     "dag_eks_mva": 0.2989,
+     "natt_eks_mva": 0.2689
+    },
+    {
+     "fra": "04-01",
+     "til": "12-31",
+     "dag_eks_mva": 0.2689,
+     "natt_eks_mva": 0.2489
+    }
+   ],
+   "url": "https://www.area.no/kunde-og-nettleie/priser-og-nettleie/",
+   "kapasitetstrinn": [
+    [
+     2,
+     525
+    ],
+    [
+     5,
+     551
+    ],
+    [
+     10,
+     604
+    ],
+    [
+     15,
+     840
+    ],
+    [
+     20,
+     945
+    ],
+    [
+     25,
+     1103
+    ],
+    [
+     null,
+     1365
+    ]
+   ],
+   "kapasitetstrinn_per_boligtype": {
+    "fritidsbolig": [
+     [
+      2,
+      578
+     ],
+     [
+      5,
+      667
+     ],
+     [
+      10,
+      731
+     ],
+     [
+      15,
+      1016
+     ],
+     [
+      20,
+      1143
+     ],
+     [
+      25,
+      1143
+     ],
+     [
+      null,
+      1143
+     ]
+    ]
+   }
+  },
+  "area_nett_omrade2": {
+   "name": "Area Nett Område 2 (Karasjok, Porsanger)",
+   "prisomrade": "NO4",
+   "tiltakssone": true,
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.2989,
+   "energiledd_natt_eks_mva": 0.2689,
+   "energiledd_perioder": [
+    {
+     "fra": "01-01",
+     "til": "03-31",
+     "dag_eks_mva": 0.2989,
+     "natt_eks_mva": 0.2689
+    },
+    {
+     "fra": "04-01",
+     "til": "12-31",
+     "dag_eks_mva": 0.2689,
+     "natt_eks_mva": 0.2489
+    }
+   ],
+   "url": "https://www.area.no/kunde-og-nettleie/priser-og-nettleie/",
+   "kapasitetstrinn": [
+    [
+     2,
+     390
+    ],
+    [
+     5,
+     527
+    ],
+    [
+     10,
+     585
+    ],
+    [
+     15,
+     840
+    ],
+    [
+     20,
+     945
+    ],
+    [
+     25,
+     1102
+    ],
+    [
+     null,
+     1365
+    ]
+   ],
+   "kapasitetstrinn_per_boligtype": {
+    "fritidsbolig": [
+     [
+      2,
+      578
+     ],
+     [
+      5,
+      667
+     ],
+     [
+      10,
+      731
+     ],
+     [
+      15,
+      1016
+     ],
+     [
+      20,
+      1143
+     ],
+     [
+      25,
+      1143
+     ],
+     [
+      null,
+      1143
+     ]
+    ]
+   }
+  },
+  "area_nett_omrade3": {
+   "name": "Area Nett Område 3 (Gamvik, Lebesby)",
+   "prisomrade": "NO4",
+   "tiltakssone": true,
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.269,
+   "energiledd_natt_eks_mva": 0.239,
+   "energiledd_perioder": [
+    {
+     "fra": "01-01",
+     "til": "03-31",
+     "dag_eks_mva": 0.269,
+     "natt_eks_mva": 0.239
+    },
+    {
+     "fra": "04-01",
+     "til": "12-31",
+     "dag_eks_mva": 0.239,
+     "natt_eks_mva": 0.219
+    }
+   ],
+   "url": "https://www.area.no/kunde-og-nettleie/priser-og-nettleie/",
+   "kapasitetstrinn": [
+    [
+     2,
+     358
+    ],
+    [
+     5,
+     465
+    ],
+    [
+     10,
+     572
+    ],
+    [
+     15,
+     840
+    ],
+    [
+     20,
+     945
+    ],
+    [
+     25,
+     1102
+    ],
+    [
+     null,
+     1365
+    ]
+   ],
+   "kapasitetstrinn_per_boligtype": {
+    "fritidsbolig": [
+     [
+      2,
+      578
+     ],
+     [
+      5,
+      667
+     ],
+     [
+      10,
+      731
+     ],
+     [
+      15,
+      1016
+     ],
+     [
+      20,
+      1143
+     ],
+     [
+      25,
+      1143
+     ],
+     [
+      null,
+      1143
+     ]
+    ]
+   }
+  },
+  "area_nett": {
+   "name": "Area Nett (velg område)",
+   "prisomrade": "NO4",
+   "tiltakssone": true,
+   "supported": false,
+   "delt_i": [
+    "area_nett_omrade1",
+    "area_nett_omrade2",
+    "area_nett_omrade3"
+   ],
+   "energiledd_dag_eks_mva": 0.2989,
+   "energiledd_natt_eks_mva": 0.2689,
+   "energiledd_perioder": [
+    {
+     "fra": "01-01",
+     "til": "03-31",
+     "dag_eks_mva": 0.2989,
+     "natt_eks_mva": 0.2689
+    },
+    {
+     "fra": "04-01",
+     "til": "12-31",
+     "dag_eks_mva": 0.2689,
+     "natt_eks_mva": 0.2489
+    }
+   ],
+   "url": "https://www.area.no/kunde-og-nettleie/priser-og-nettleie/",
+   "kapasitetstrinn": [
+    [
+     2,
+     390
+    ],
+    [
+     5,
+     527
+    ],
+    [
+     10,
+     585
+    ],
+    [
+     15,
+     840
+    ],
+    [
+     20,
+     945
+    ],
+    [
+     25,
+     1102
+    ],
+    [
+     null,
+     1365
+    ]
+   ]
+  },
+  "asker_nett": {
+   "name": "Asker Nett",
+   "prisomrade": "NO1",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.2987,
+   "energiledd_natt_eks_mva": 0.1987,
+   "url": "https://askernett.no/prisliste-for-privatkunder-okt-2026/",
+   "helg_som_natt": false,
+   "kapasitetstrinn": [
+    [
+     2,
+     225
+    ],
+    [
+     5,
+     320
+    ],
+    [
+     10,
+     500
+    ],
+    [
+     15,
+     850
+    ],
+    [
+     20,
+     1090
+    ],
+    [
+     25,
+     1350
+    ],
+    [
+     50,
+     2130
+    ],
+    [
+     75,
+     3150
+    ],
+    [
+     100,
+     4200
+    ],
+    [
+     null,
+     7300
+    ]
+   ]
+  },
+  "barents_nett": {
+   "name": "Barents Nett",
+   "prisomrade": "NO4",
+   "tiltakssone": true,
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.1075,
+   "energiledd_natt_eks_mva": 0.1075,
+   "url": "https://www.barents-nett.no/kundeservice/nett-og-nettleie/",
+   "kapasitetstrinn": [
+    [
+     2,
+     491
+    ],
+    [
+     5,
+     541
+    ],
+    [
+     10,
+     589
+    ],
+    [
+     15,
+     639
+    ],
+    [
+     20,
+     737
+    ],
+    [
+     999,
+     884
+    ]
+   ]
+  },
+  "bindal_kraftnett": {
+   "terskel_inkludert": false,
+   "name": "Bindal Kraftnett",
+   "prisomrade": "NO3",
+   "avgiftssone": "nord_norge",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.263,
+   "energiledd_natt_eks_mva": 0.213,
+   "url": "https://bindalkraftlag.no/tariffer",
+   "kapasitetstrinn": [
+    [
+     5,
+     264
+    ],
+    [
+     10,
+     395
+    ],
+    [
+     15,
+     580
+    ],
+    [
+     20,
+     738
+    ],
+    [
+     25,
+     896
+    ],
+    [
+     30,
+     1055
+    ],
+    [
+     50,
+     1318
+    ],
+    [
+     75,
+     2109
+    ],
+    [
+     100,
+     3164
+    ],
+    [
+     null,
+     3954
+    ]
+   ]
+  },
+  "breheim_nett": {
+   "name": "Breheim Nett",
+   "prisomrade": "NO5",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.14502,
+   "energiledd_natt_eks_mva": 0.06502,
+   "url": "https://www.breheimnett.no/nettleige-for-kundar-under-100-000-kwh-i-arsforbruk2026",
+   "kapasitetstrinn": [
+    [
+     5,
+     225
+    ],
+    [
+     10,
+     450
+    ],
+    [
+     15,
+     675
+    ],
+    [
+     20,
+     900
+    ],
+    [
+     25,
+     1138
+    ],
+    [
+     50,
+     2263
+    ],
+    [
+     75,
+     3400
+    ],
+    [
+     100,
+     4538
+    ],
+    [
+     150,
+     6800
+    ],
+    [
+     200,
+     9075
+    ],
+    [
+     null,
+     13613
+    ]
+   ]
+  },
+  "bomlo_kraftnett": {
+   "name": "Bømlo Kraftnett",
+   "prisomrade": "NO5",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.35502,
+   "energiledd_natt_eks_mva": 0.28998,
+   "url": "https://nett.finnas-kraftlag.no/nettleige-og-vilkar/category1618.html",
+   "kapasitetstrinn": [
+    [
+     2,
+     210
+    ],
+    [
+     5,
+     300
+    ],
+    [
+     10,
+     400
+    ],
+    [
+     15,
+     525
+    ],
+    [
+     20,
+     700
+    ],
+    [
+     25,
+     875
+    ],
+    [
+     50,
+     2000
+    ],
+    [
+     75,
+     3000
+    ],
+    [
+     100,
+     4000
+    ],
+    [
+     null,
+     5000
+    ]
+   ]
+  },
+  "de_nett": {
+   "name": "De Nett",
+   "prisomrade": "NO2",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.314,
+   "energiledd_natt_eks_mva": 0.284,
+   "energiledd_perioder": [
+    {
+     "fra": "10-01",
+     "til": "03-31",
+     "dag_eks_mva": 0.314,
+     "natt_eks_mva": 0.284
+    },
+    {
+     "fra": "04-01",
+     "til": "09-30",
+     "dag_eks_mva": 0.266,
+     "natt_eks_mva": 0.236
+    }
+   ],
+   "url": "https://denett.no/priser-tariffer/",
+   "kapasitetstrinn": [
+    [
+     2,
+     358
+    ],
+    [
+     5,
+     461
+    ],
+    [
+     10,
+     564
+    ],
+    [
+     15,
+     778
+    ],
+    [
+     20,
+     984
+    ],
+    [
+     25,
+     1196
+    ],
+    [
+     50,
+     1815
+    ],
+    [
+     75,
+     2860
+    ],
+    [
+     100,
+     3905
+    ],
+    [
+     150,
+     5500
+    ],
+    [
+     200,
+     7563
+    ],
+    [
+     null,
+     10690
+    ]
+   ]
+  },
+  "elmea": {
+   "name": "Elmea",
+   "prisomrade": "NO4",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.379,
+   "energiledd_natt_eks_mva": 0.256,
+   "url": "https://www.elmea.no/nettleiepriser/",
+   "kapasitetstrinn": [
+    [
+     2,
+     327
+    ],
+    [
+     5,
+     489
+    ],
+    [
+     10,
+     747
+    ],
+    [
+     15,
+     1070
+    ],
+    [
+     20,
+     1392
+    ],
+    [
+     25,
+     1715
+    ],
+    [
+     50,
+     2683
+    ],
+    [
+     75,
+     4297
+    ],
+    [
+     100,
+     5911
+    ],
+    [
+     200,
+     11558
+    ],
+    [
+     null,
+     24468
+    ]
+   ]
+  },
+  "enida": {
+   "name": "Enida",
+   "prisomrade": "NO2",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.27,
+   "energiledd_natt_eks_mva": 0.21,
+   "url": "https://enida.no/strompris",
+   "kapasitetstrinn": [
+    [
+     2,
+     290
+    ],
+    [
+     5,
+     350
+    ],
+    [
+     10,
+     475
+    ],
+    [
+     15,
+     569
+    ],
+    [
+     20,
+     679
+    ],
+    [
+     25,
+     790
+    ],
+    [
+     50,
+     1250
+    ],
+    [
+     75,
+     1875
+    ],
+    [
+     100,
+     2500
+    ],
+    [
+     null,
+     5000
+    ]
+   ]
+  },
+  "everket": {
+   "name": "Everket",
+   "prisomrade": "NO1",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.192,
+   "energiledd_natt_eks_mva": 0.192,
+   "url": "https://everket-notodden.no/nettleiepriser",
+   "kapasitetstrinn": [
+    [
+     2,
+     310
+    ],
+    [
+     5,
+     380
+    ],
+    [
+     10,
+     480
+    ],
+    [
+     15,
+     630
+    ],
+    [
+     20,
+     780
+    ],
+    [
+     25,
+     1000
+    ],
+    [
+     50,
+     1350
+    ],
+    [
+     75,
+     1850
+    ],
+    [
+     100,
+     2500
+    ],
+    [
+     150,
+     3400
+    ],
+    [
+     200,
+     4500
+    ],
+    [
+     null,
+     6000
+    ]
+   ]
+  },
+  "fjellnett": {
+   "name": "Fjellnett",
+   "prisomrade": "NO3",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.148,
+   "energiledd_natt_eks_mva": 0.148,
+   "url": "https://www.fjellnett.no/nettleie/nettleiepriser/",
+   "fastledd_metode": "FEM_VEKTET_ÅR",
+   "fastledd_lineaer": {
+    "grunnbelop_aar_eks_mva": 2000,
+    "sats_kw_aar_eks_mva": 589
+   },
+   "fastledd_sesongfaktor": {
+    "1": 1.0,
+    "2": 1.0,
+    "3": 0.85,
+    "4": 0.5,
+    "5": 0.3,
+    "6": 0.25,
+    "7": 0.25,
+    "8": 0.25,
+    "9": 0.3,
+    "10": 0.45,
+    "11": 0.7,
+    "12": 0.95
+   },
+   "kapasitetstrinn": []
+  },
+  "fore": {
+   "terskel_inkludert": false,
+   "name": "Føre",
+   "prisomrade": "NO2",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.1929,
+   "energiledd_natt_eks_mva": 0.1929,
+   "url": "https://foere.net/nettleie/",
+   "kapasitetstrinn": [
+    [
+     2,
+     329
+    ],
+    [
+     5,
+     428
+    ],
+    [
+     10,
+     526
+    ],
+    [
+     15,
+     625
+    ],
+    [
+     20,
+     724
+    ],
+    [
+     25,
+     1381
+    ],
+    [
+     50,
+     2039
+    ],
+    [
+     75,
+     2696
+    ],
+    [
+     100,
+     3354
+    ],
+    [
+     150,
+     4011
+    ],
+    [
+     200,
+     4669
+    ],
+    [
+     null,
+     5326
+    ]
+   ]
+  },
+  "griug": {
+   "name": "Griug",
+   "prisomrade": "NO1",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.12318,
+   "energiledd_natt_eks_mva": 0.12318,
+   "url": "https://www.griug.no/om-nettleie-og-priser/priser/nettleiepriser-2026/",
+   "kapasitetstrinn": [
+    [
+     2,
+     250
+    ],
+    [
+     5,
+     380
+    ],
+    [
+     10,
+     570
+    ],
+    [
+     15,
+     730
+    ],
+    [
+     20,
+     920
+    ],
+    [
+     25,
+     1115
+    ],
+    [
+     50,
+     2085
+    ],
+    [
+     75,
+     3060
+    ],
+    [
+     100,
+     4110
+    ],
+    [
+     null,
+     8150
+    ]
+   ]
+  },
+  "haringnett": {
+   "name": "Haringnett",
+   "prisomrade": "NO5",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.24502,
+   "energiledd_natt_eks_mva": 0.16502,
+   "url": "https://www.haringnett.no/nettleigeprisar2026",
+   "kapasitetstrinn": [
+    [
+     2,
+     275
+    ],
+    [
+     5,
+     375
+    ],
+    [
+     10,
+     575
+    ],
+    [
+     15,
+     875
+    ],
+    [
+     20,
+     1050
+    ],
+    [
+     25,
+     1250
+    ],
+    [
+     50,
+     2500
+    ],
+    [
+     75,
+     3750
+    ],
+    [
+     100,
+     5000
+    ],
+    [
+     null,
+     7500
+    ]
+   ]
+  },
+  "havnett": {
+   "name": "Havnett",
+   "prisomrade": "NO5",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.29718,
+   "energiledd_natt_eks_mva": 0.29718,
+   "url": "https://havnett.as/priser/nettleigetariff/",
+   "kapasitetstrinn": [
+    [
+     5,
+     250
+    ],
+    [
+     10,
+     320
+    ],
+    [
+     15,
+     563
+    ],
+    [
+     20,
+     788
+    ],
+    [
+     null,
+     863
+    ]
+   ]
+  },
+  "holand_setskog": {
+   "name": "Høland og Setskog Elverk",
+   "prisomrade": "NO1",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.27502,
+   "energiledd_natt_eks_mva": 0.23502,
+   "url": "https://hsev.no/nettleie",
+   "kapasitetstrinn": [
+    [
+     2,
+     265
+    ],
+    [
+     5,
+     300
+    ],
+    [
+     10,
+     470
+    ],
+    [
+     15,
+     590
+    ],
+    [
+     20,
+     760
+    ],
+    [
+     25,
+     925
+    ],
+    [
+     50,
+     1800
+    ],
+    [
+     75,
+     2700
+    ],
+    [
+     100,
+     3500
+    ],
+    [
+     null,
+     7000
+    ]
+   ]
+  },
+  "indre_hordaland": {
+   "name": "Indre Hordaland Kraftnett",
+   "prisomrade": "NO5",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.29,
+   "energiledd_natt_eks_mva": 0.29,
+   "url": "https://ihk.no/prisar/nettleige",
+   "kapasitetstrinn": [
+    [
+     2,
+     265
+    ],
+    [
+     5,
+     340
+    ],
+    [
+     10,
+     465
+    ],
+    [
+     15,
+     725
+    ],
+    [
+     20,
+     1000
+    ],
+    [
+     25,
+     1250
+    ],
+    [
+     50,
+     2000
+    ],
+    [
+     75,
+     3250
+    ],
+    [
+     100,
+     4500
+    ],
+    [
+     null,
+     7500
+    ]
+   ]
+  },
+  "jaren_everk": {
+   "name": "Jæren Everk",
+   "prisomrade": "NO2",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.15998,
+   "energiledd_natt_eks_mva": 0.09998,
+   "url": "https://jev.no/nettleie-for-kunder-med-forbruk-under-100-000-kwh-2-2-2-2-2-2-2-2",
+   "kapasitetstrinn": [
+    [
+     2,
+     198
+    ],
+    [
+     5,
+     319
+    ],
+    [
+     10,
+     510
+    ],
+    [
+     15,
+     750
+    ],
+    [
+     20,
+     991
+    ],
+    [
+     25,
+     1231
+    ],
+    [
+     50,
+     1951
+    ],
+    [
+     75,
+     3153
+    ],
+    [
+     100,
+     4354
+    ],
+    [
+     150,
+     6156
+    ],
+    [
+     200,
+     8555
+    ],
+    [
+     null,
+     10954
+    ]
+   ]
+  },
+  "ke_nett": {
+   "name": "KE Nett",
+   "prisomrade": "NO2",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.24,
+   "energiledd_natt_eks_mva": 0.13,
+   "url": "https://ke-nett.no/kunde-og-nettleie/priser-og-vilkar/nettleiepriser/",
+   "kapasitetstrinn": [
+    [
+     5,
+     262.5
+    ],
+    [
+     10,
+     387.5
+    ],
+    [
+     15,
+     575
+    ],
+    [
+     20,
+     850
+    ],
+    [
+     25,
+     1025
+    ],
+    [
+     50,
+     2075
+    ],
+    [
+     75,
+     2637.5
+    ],
+    [
+     100,
+     3512.5
+    ],
+    [
+     null,
+     6750
+    ]
+   ]
+  },
+  "klive": {
+   "name": "Klive",
+   "prisomrade": "NO3",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.1763,
+   "energiledd_natt_eks_mva": 0.1763,
+   "url": "https://klive.no/har-strom/nettleiepriser/",
+   "kapasitetstrinn": [
+    [
+     5,
+     481
+    ],
+    [
+     10,
+     597
+    ],
+    [
+     15,
+     792
+    ],
+    [
+     20,
+     1057
+    ],
+    [
+     25,
+     1321
+    ],
+    [
+     50,
+     2642
+    ],
+    [
+     75,
+     3963
+    ],
+    [
+     100,
+     5284
+    ],
+    [
+     150,
+     7926
+    ],
+    [
+     200,
+     10568
+    ],
+    [
+     300,
+     15852
+    ],
+    [
+     500,
+     26419
+    ],
+    [
+     null,
+     36987
+    ]
+   ]
+  },
+  "kystnett": {
+   "name": "Kystnett",
+   "prisomrade": "NO4",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.17,
+   "energiledd_natt_eks_mva": 0.17,
+   "url": "https://kystnett.no/nettleie",
+   "kapasitetstrinn": [
+    [
+     5,
+     508
+    ],
+    [
+     10,
+     916
+    ],
+    [
+     15,
+     1324
+    ],
+    [
+     20,
+     1733
+    ],
+    [
+     25,
+     2141
+    ],
+    [
+     50,
+     3366
+    ],
+    [
+     75,
+     5407
+    ],
+    [
+     100,
+     7448
+    ],
+    [
+     150,
+     10510
+    ],
+    [
+     null,
+     14593
+    ]
+   ]
+  },
+  "lucerna": {
+   "name": "Lucerna",
+   "prisomrade": "NO4",
+   "tiltakssone": true,
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.1932,
+   "energiledd_natt_eks_mva": 0.1332,
+   "url": "https://www.lucerna.no/priser",
+   "kapasitetstrinn": [
+    [
+     2,
+     259
+    ],
+    [
+     5,
+     311
+    ],
+    [
+     10,
+     376
+    ],
+    [
+     15,
+     415
+    ],
+    [
+     20,
+     519
+    ],
+    [
+     25,
+     584
+    ],
+    [
+     50,
+     649
+    ],
+    [
+     75,
+     713
+    ],
+    [
+     null,
+     778
+    ]
+   ]
+  },
+  "lysna": {
+   "name": "Lysna",
+   "prisomrade": "NO5",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.3203,
+   "energiledd_natt_eks_mva": 0.2603,
+   "url": "https://lysna.no/prisar-for-private-kundar",
+   "kapasitetstrinn": [
+    [
+     2,
+     375
+    ],
+    [
+     5,
+     456
+    ],
+    [
+     10,
+     550
+    ],
+    [
+     15,
+     725
+    ],
+    [
+     20,
+     944
+    ],
+    [
+     25,
+     1225
+    ],
+    [
+     null,
+     1875
+    ]
+   ]
+  },
+  "meloy_energi": {
+   "name": "Meløy Energi",
+   "prisomrade": "NO4",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.274,
+   "energiledd_natt_eks_mva": 0.174,
+   "url": "https://www.meloyenergi.no/ac/nettleie-avregning",
+   "kapasitetstrinn": [
+    [
+     2,
+     305
+    ],
+    [
+     5,
+     366
+    ],
+    [
+     10,
+     396
+    ],
+    [
+     15,
+     427
+    ],
+    [
+     20,
+     457
+    ],
+    [
+     25,
+     533
+    ],
+    [
+     50,
+     579
+    ],
+    [
+     75,
+     640
+    ],
+    [
+     100,
+     701
+    ],
+    [
+     null,
+     762
+    ]
+   ]
+  },
+  "midtnett": {
+   "name": "Midtnett",
+   "prisomrade": "NO1",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.31,
+   "energiledd_natt_eks_mva": 0.26,
+   "url": "https://midtnett.no/nettleie-informasjon-og-priser/",
+   "helg_som_natt": false,
+   "kapasitetstrinn": [
+    [
+     5,
+     275
+    ],
+    [
+     10,
+     413
+    ],
+    [
+     15,
+     625
+    ],
+    [
+     20,
+     938
+    ],
+    [
+     25,
+     1250
+    ],
+    [
+     50,
+     1746
+    ],
+    [
+     75,
+     2620
+    ],
+    [
+     100,
+     3250
+    ],
+    [
+     null,
+     3750
+    ]
+   ],
+   "kapasitetstrinn_per_boligtype": {
+    "fritidsbolig": [
+     [
+      5,
+      330
+     ],
+     [
+      10,
+      495
+     ],
+     [
+      15,
+      750
+     ],
+     [
+      20,
+      1125
+     ],
+     [
+      25,
+      1500
+     ],
+     [
+      50,
+      2096
+     ],
+     [
+      75,
+      3144
+     ],
+     [
+      100,
+      3900
+     ],
+     [
+      null,
+      4500
+     ]
+    ]
+   }
+  },
+  "modalen_kraftlag": {
+   "name": "Modalen Kraftlag",
+   "prisomrade": "NO5",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.39,
+   "energiledd_natt_eks_mva": 0.39,
+   "url": "https://www.mostraumnett.no/nettprisar",
+   "kapasitetstrinn": [
+    [
+     2,
+     78.13
+    ],
+    [
+     5,
+     128.75
+    ],
+    [
+     10,
+     218.75
+    ],
+    [
+     15,
+     308.75
+    ],
+    [
+     20,
+     398.75
+    ],
+    [
+     25,
+     488.13
+    ],
+    [
+     50,
+     900
+    ],
+    [
+     75,
+     2650
+    ],
+    [
+     100,
+     3500
+    ],
+    [
+     null,
+     6900
+    ]
+   ]
+  },
+  "netera": {
+   "name": "Netera",
+   "prisomrade": "NO3",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.2,
+   "energiledd_natt_eks_mva": 0.2,
+   "url": "https://www.netera.no/nettleie/avtaler/privat/",
+   "fastledd_metode": "OV_TREFASE",
+   "fastledd_sikringstrinn": [
+    {
+     "id": "230v_0_10",
+     "label": "0-10 A (230 V)",
+     "kr_mnd": 167
+    },
+    {
+     "id": "230v_11_63",
+     "label": "11-63 A (230 V)",
+     "kr_mnd": 333
+    },
+    {
+     "id": "230v_63_125",
+     "label": "63-125 A (230 V)",
+     "kr_mnd": 667
+    },
+    {
+     "id": "400v_0_40",
+     "label": "0-40 A (400 V)",
+     "kr_mnd": 333
+    },
+    {
+     "id": "400v_40_80",
+     "label": "40-80 A (400 V)",
+     "kr_mnd": 667
+    }
+   ],
+   "kapasitetstrinn": []
+  },
+  "noranett_andoy": {
+   "name": "Noranett Andøy",
+   "prisomrade": "NO4",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.164,
+   "energiledd_natt_eks_mva": 0.164,
+   "url": "https://www.noranett.no/nettleiepriser/nettleiepriser-andoy-fra-1-1-2026-article4140-2415.html",
+   "kapasitetstrinn": [
+    [
+     2,
+     310
+    ],
+    [
+     4,
+     410
+    ],
+    [
+     6,
+     520
+    ],
+    [
+     8,
+     630
+    ],
+    [
+     10,
+     730
+    ],
+    [
+     15,
+     920
+    ],
+    [
+     20,
+     1180
+    ],
+    [
+     25,
+     1450
+    ],
+    [
+     30,
+     1700
+    ],
+    [
+     35,
+     1980
+    ],
+    [
+     40,
+     2260
+    ],
+    [
+     45,
+     2540
+    ],
+    [
+     50,
+     2830
+    ],
+    [
+     75,
+     3600
+    ],
+    [
+     100,
+     4950
+    ],
+    [
+     125,
+     6340
+    ],
+    [
+     150,
+     7730
+    ],
+    [
+     175,
+     9120
+    ],
+    [
+     200,
+     10520
+    ],
+    [
+     null,
+     11910
+    ]
+   ]
+  },
+  "noranett_hadsel": {
+   "name": "Noranett Hadsel",
+   "prisomrade": "NO4",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.14,
+   "energiledd_natt_eks_mva": 0.09,
+   "url": "https://www.noranett.no/nettleiepriser/nettleiepriser-hadsel-fra-1-1-2026-article4141-2415.html",
+   "kapasitetstrinn": [
+    [
+     2,
+     270
+    ],
+    [
+     4,
+     350
+    ],
+    [
+     6,
+     420
+    ],
+    [
+     8,
+     490
+    ],
+    [
+     10,
+     560
+    ],
+    [
+     15,
+     650
+    ],
+    [
+     20,
+     820
+    ],
+    [
+     25,
+     980
+    ],
+    [
+     30,
+     1170
+    ],
+    [
+     35,
+     1330
+    ],
+    [
+     40,
+     1490
+    ],
+    [
+     45,
+     1650
+    ],
+    [
+     50,
+     1820
+    ],
+    [
+     75,
+     2280
+    ],
+    [
+     100,
+     3090
+    ],
+    [
+     125,
+     3940
+    ],
+    [
+     150,
+     4810
+    ],
+    [
+     175,
+     5690
+    ],
+    [
+     200,
+     6560
+    ],
+    [
+     null,
+     7430
+    ]
+   ]
+  },
+  "nordvest_nett": {
+   "name": "Nordvest Nett",
+   "prisomrade": "NO3",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.3123,
+   "energiledd_natt_eks_mva": 0.2523,
+   "url": "https://www.nvn.no/nettleige/nettleie-privatkunder",
+   "kapasitetstrinn": [
+    [
+     2,
+     190
+    ],
+    [
+     5,
+     466
+    ],
+    [
+     10,
+     573
+    ],
+    [
+     15,
+     871
+    ],
+    [
+     20,
+     1033
+    ],
+    [
+     25,
+     1205
+    ],
+    [
+     50,
+     2311
+    ],
+    [
+     75,
+     3420
+    ],
+    [
+     100,
+     4528
+    ],
+    [
+     null,
+     8904
+    ]
+   ]
+  },
+  "norefjell_nett": {
+   "name": "Norefjell Nett",
+   "prisomrade": "NO1",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.2353,
+   "energiledd_natt_eks_mva": 0.1858,
+   "url": "https://norefjell-nett.no/strompris",
+   "kapasitetstrinn": [
+    [
+     2,
+     266
+    ],
+    [
+     5,
+     346
+    ],
+    [
+     10,
+     479
+    ],
+    [
+     15,
+     719
+    ],
+    [
+     20,
+     931
+    ],
+    [
+     25,
+     1144
+    ],
+    [
+     50,
+     1863
+    ],
+    [
+     75,
+     2794
+    ],
+    [
+     100,
+     3725
+    ],
+    [
+     null,
+     5321
+    ]
+   ]
+  },
+  "r_nett": {
+   "name": "R-Nett",
+   "prisomrade": "NO1",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.2647,
+   "energiledd_natt_eks_mva": 0.1687,
+   "url": "https://r-nett.no/overforingspriser/",
+   "kapasitetstrinn": [
+    [
+     5,
+     343
+    ],
+    [
+     10,
+     514
+    ],
+    [
+     15,
+     754
+    ],
+    [
+     20,
+     1439
+    ],
+    [
+     25,
+     2124
+    ],
+    [
+     50,
+     3152
+    ],
+    [
+     75,
+     4866
+    ],
+    [
+     100,
+     6921
+    ],
+    [
+     null,
+     9663
+    ]
+   ]
+  },
+  "rakkestad_energi": {
+   "name": "Rakkestad Energi",
+   "prisomrade": "NO1",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.2899,
+   "energiledd_natt_eks_mva": 0.1699,
+   "url": "https://www.elvia.no/nettleie/alt-om-nettleiepriser/nettleie-pris/",
+   "kapasitetstrinn": [
+    [
+     2,
+     150
+    ],
+    [
+     5,
+     250
+    ],
+    [
+     10,
+     420
+    ],
+    [
+     15,
+     585
+    ],
+    [
+     20,
+     755
+    ],
+    [
+     25,
+     925
+    ],
+    [
+     50,
+     1760
+    ],
+    [
+     75,
+     2600
+    ],
+    [
+     100,
+     3440
+    ],
+    [
+     null,
+     6800
+    ]
+   ]
+  },
+  "rk_nett": {
+   "name": "RK Nett",
+   "prisomrade": "NO2",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.2302,
+   "energiledd_natt_eks_mva": 0.2302,
+   "url": "https://www.rauland-nett.no/nettleige",
+   "kapasitetstrinn": [
+    [
+     2,
+     305
+    ],
+    [
+     5,
+     396
+    ],
+    [
+     10,
+     549
+    ],
+    [
+     15,
+     701
+    ],
+    [
+     20,
+     854
+    ],
+    [
+     25,
+     1006
+    ],
+    [
+     50,
+     1768
+    ],
+    [
+     75,
+     2531
+    ],
+    [
+     100,
+     3293
+    ],
+    [
+     150,
+     4817
+    ],
+    [
+     200,
+     6342
+    ],
+    [
+     null,
+     9147
+    ]
+   ]
+  },
+  "romsdalsnett": {
+   "name": "Romsdalsnett",
+   "prisomrade": "NO3",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.3229,
+   "energiledd_natt_eks_mva": 0.2178,
+   "url": "https://www.romsdalsnettas.no/nettleie/",
+   "kapasitetstrinn": [
+    [
+     2,
+     305
+    ],
+    [
+     5,
+     381
+    ],
+    [
+     10,
+     459
+    ],
+    [
+     15,
+     762
+    ],
+    [
+     20,
+     1067
+    ],
+    [
+     25,
+     1219
+    ],
+    [
+     50,
+     1675
+    ],
+    [
+     75,
+     2285
+    ],
+    [
+     100,
+     2590
+    ],
+    [
+     null,
+     3047
+    ]
+   ]
+  },
+  "s_nett": {
+   "name": "S-Nett",
+   "prisomrade": "NO3",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.264,
+   "energiledd_natt_eks_mva": 0.2141,
+   "url": "https://snett.no/nettleie-forbruk-under-100-000-kwh",
+   "kapasitetstrinn": [
+    [
+     2,
+     263
+    ],
+    [
+     5,
+     364
+    ],
+    [
+     10,
+     526
+    ],
+    [
+     15,
+     728
+    ],
+    [
+     20,
+     930
+    ],
+    [
+     25,
+     1133
+    ],
+    [
+     50,
+     1740
+    ],
+    [
+     75,
+     2751
+    ],
+    [
+     100,
+     3763
+    ],
+    [
+     150,
+     5281
+    ],
+    [
+     200,
+     7304
+    ],
+    [
+     null,
+     10340
+    ]
+   ]
+  },
+  "stannum": {
+   "name": "Stannum",
+   "prisomrade": "NO2",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.2501,
+   "energiledd_natt_eks_mva": 0.2201,
+   "url": "https://stannum.no/nettleiepriser",
+   "helg_som_natt": false,
+   "kapasitetstrinn": [
+    [
+     2,
+     316
+    ],
+    [
+     5,
+     379
+    ],
+    [
+     10,
+     411
+    ],
+    [
+     15,
+     474
+    ],
+    [
+     20,
+     537
+    ],
+    [
+     25,
+     553
+    ],
+    [
+     50,
+     600
+    ],
+    [
+     75,
+     664
+    ],
+    [
+     100,
+     727
+    ],
+    [
+     null,
+     790
+    ]
+   ]
+  },
+  "stram": {
+   "terskel_inkludert": false,
+   "name": "Stram",
+   "prisomrade": "NO4",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.1411,
+   "energiledd_natt_eks_mva": 0.0411,
+   "url": "https://www.stram.no/nettleiepris",
+   "kapasitetstrinn": [
+    [
+     2,
+     110
+    ],
+    [
+     5,
+     330
+    ],
+    [
+     10,
+     441
+    ],
+    [
+     15,
+     551
+    ],
+    [
+     20,
+     661
+    ],
+    [
+     25,
+     771
+    ],
+    [
+     50,
+     1982
+    ],
+    [
+     75,
+     3194
+    ],
+    [
+     100,
+     4405
+    ],
+    [
+     null,
+     6828
+    ]
+   ]
+  },
+  "straumen_nett": {
+   "name": "Straumen Nett",
+   "prisomrade": "NO3",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.18302,
+   "energiledd_natt_eks_mva": 0.18302,
+   "url": "https://straumen-nett.no/nettleige/nettleige-private-2026",
+   "kapasitetstrinn": [
+    [
+     5,
+     290
+    ],
+    [
+     10,
+     334
+    ],
+    [
+     15,
+     495
+    ],
+    [
+     20,
+     582
+    ],
+    [
+     25,
+     873
+    ],
+    [
+     null,
+     1163
+    ]
+   ]
+  },
+  "straumnett": {
+   "name": "Straumnett",
+   "prisomrade": "NO5",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.2096,
+   "energiledd_natt_eks_mva": 0.1596,
+   "url": "https://straumnett.no/prisar-for-nettleige",
+   "kapasitetstrinn": [
+    [
+     2,
+     438
+    ],
+    [
+     5,
+     526
+    ],
+    [
+     10,
+     570
+    ],
+    [
+     15,
+     614
+    ],
+    [
+     20,
+     658
+    ],
+    [
+     25,
+     766
+    ],
+    [
+     50,
+     833
+    ],
+    [
+     75,
+     920
+    ],
+    [
+     100,
+     1008
+    ],
+    [
+     null,
+     1095
+    ]
+   ]
+  },
+  "sygnir": {
+   "name": "Sygnir",
+   "prisomrade": "NO5",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.22054,
+   "energiledd_natt_eks_mva": 0.22054,
+   "url": "https://www.sygnir.no/s/Nettleigeprisar-1-januar-2026.pdf",
+   "kapasitetstrinn": [
+    [
+     1,
+     240
+    ],
+    [
+     2,
+     288
+    ],
+    [
+     3,
+     338
+    ],
+    [
+     4,
+     384
+    ],
+    [
+     5,
+     431
+    ],
+    [
+     6,
+     504
+    ],
+    [
+     7,
+     575
+    ],
+    [
+     8,
+     648
+    ],
+    [
+     9,
+     720
+    ],
+    [
+     10,
+     791
+    ],
+    [
+     12,
+     938
+    ],
+    [
+     14,
+     1081
+    ],
+    [
+     16,
+     1225
+    ],
+    [
+     18,
+     1369
+    ],
+    [
+     20,
+     1519
+    ],
+    [
+     40,
+     2713
+    ],
+    [
+     null,
+     3913
+    ]
+   ]
+  },
+  "tendranett": {
+   "name": "Tendranett",
+   "prisomrade": "NO5",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.2587,
+   "energiledd_natt_eks_mva": 0.2035,
+   "url": "https://www.tendranett.no/",
+   "kapasitetstrinn": [
+    [
+     2,
+     230
+    ],
+    [
+     5,
+     299
+    ],
+    [
+     10,
+     368
+    ],
+    [
+     15,
+     506
+    ],
+    [
+     20,
+     644
+    ],
+    [
+     25,
+     782
+    ],
+    [
+     50,
+     966
+    ],
+    [
+     75,
+     1151
+    ],
+    [
+     100,
+     1335
+    ],
+    [
+     null,
+     1381
+    ]
+   ]
+  },
+  "telemark_nett": {
+   "name": "TNett (tidligere Telemark Nett)",
+   "prisomrade": "NO2",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.28,
+   "energiledd_natt_eks_mva": 0.28,
+   "url": "https://www.tnett.no/prisar/nettleige-1/",
+   "kapasitetstrinn": [
+    [
+     5,
+     398
+    ],
+    [
+     10,
+     506
+    ],
+    [
+     15,
+     948
+    ],
+    [
+     20,
+     1275
+    ],
+    [
+     25,
+     1571
+    ],
+    [
+     50,
+     2716
+    ],
+    [
+     75,
+     4273
+    ],
+    [
+     null,
+     5958
+    ]
+   ]
+  },
+  "uvdal_kraftforsyning": {
+   "name": "Uvdal Kraftforsyning",
+   "prisomrade": "NO1",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.23118,
+   "energiledd_natt_eks_mva": 0.15118,
+   "url": "https://www.uvdalkraft.no/contact/nett/",
+   "kapasitetstrinn": [
+    [
+     5,
+     347
+    ],
+    [
+     10,
+     521
+    ],
+    [
+     15,
+     764
+    ],
+    [
+     20,
+     1458
+    ],
+    [
+     25,
+     2153
+    ],
+    [
+     50,
+     3194
+    ],
+    [
+     75,
+     4930
+    ],
+    [
+     100,
+     7014
+    ],
+    [
+     null,
+     9791
+    ]
+   ]
+  },
+  "vang_energiverk": {
+   "name": "Vang Energiverk",
+   "prisomrade": "NO1",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.13,
+   "energiledd_natt_eks_mva": 0.13,
+   "url": "https://vangenergi.no/forbrukarkundar",
+   "kapasitetstrinn": [
+    [
+     2,
+     563
+    ],
+    [
+     5,
+     688
+    ],
+    [
+     8,
+     819
+    ],
+    [
+     12,
+     950
+    ],
+    [
+     18,
+     1106
+    ],
+    [
+     25,
+     1269
+    ],
+    [
+     null,
+     1456
+    ]
+   ]
+  },
+  "vestall": {
+   "name": "Vestall",
+   "prisomrade": "NO4",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.06,
+   "energiledd_natt_eks_mva": 0.03,
+   "url": "https://vestall.no/nettleiepriser-fra-01-01-2026/",
+   "kapasitetstrinn": [
+    [
+     2,
+     306
+    ],
+    [
+     5,
+     457
+    ],
+    [
+     10,
+     763
+    ],
+    [
+     15,
+     1078
+    ],
+    [
+     20,
+     1394
+    ],
+    [
+     25,
+     1696
+    ],
+    [
+     50,
+     2630
+    ],
+    [
+     75,
+     2970
+    ],
+    [
+     100,
+     4062
+    ],
+    [
+     null,
+     5879
+    ]
+   ]
+  },
+  "vestmar_nett": {
+   "name": "Vestmar Nett",
+   "prisomrade": "NO2",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.171,
+   "energiledd_natt_eks_mva": 0.171,
+   "url": "https://vestmar-nett.no/wp-content/uploads/2026/01/Tariffer-01.01.2026.pdf",
+   "kapasitetstrinn": [
+    [
+     5,
+     364
+    ],
+    [
+     10,
+     643
+    ],
+    [
+     15,
+     931
+    ],
+    [
+     20,
+     1213
+    ],
+    [
+     25,
+     1494
+    ],
+    [
+     50,
+     2338
+    ],
+    [
+     75,
+     3750
+    ],
+    [
+     100,
+     5125
+    ],
+    [
+     150,
+     7250
+    ],
+    [
+     200,
+     10063
+    ],
+    [
+     null,
+     14250
+    ]
+   ]
+  },
+  "vevig": {
+   "name": "Vevig",
+   "prisomrade": "NO3",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.25198,
+   "energiledd_natt_eks_mva": 0.15798,
+   "url": "https://www.vevig.no/nettleie-og-vilkar/nettleie-privat",
+   "kapasitetstrinn": [
+    [
+     2,
+     251
+    ],
+    [
+     5,
+     326
+    ],
+    [
+     10,
+     454
+    ],
+    [
+     15,
+     581
+    ],
+    [
+     20,
+     710
+    ],
+    [
+     25,
+     835
+    ],
+    [
+     30,
+     963
+    ],
+    [
+     40,
+     1218
+    ],
+    [
+     50,
+     1556
+    ],
+    [
+     75,
+     2104
+    ],
+    [
+     100,
+     2739
+    ],
+    [
+     125,
+     3371
+    ],
+    [
+     150,
+     4008
+    ],
+    [
+     200,
+     5275
+    ],
+    [
+     300,
+     7301
+    ],
+    [
+     400,
+     10206
+    ],
+    [
+     null,
+     20488
+    ]
+   ]
+  },
+  "viermie": {
+   "name": "Viermie",
+   "prisomrade": "NO3",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.22798,
+   "energiledd_natt_eks_mva": 0.16398,
+   "url": "https://viermie.no/nettleiepriser/priser-for-kunder-med-forbruk-under-100-000-kwh-ar/",
+   "kapasitetstrinn": [
+    [
+     5,
+     355
+    ],
+    [
+     10,
+     515
+    ],
+    [
+     15,
+     721
+    ],
+    [
+     20,
+     1001
+    ],
+    [
+     25,
+     1299
+    ],
+    [
+     50,
+     2469
+    ],
+    [
+     100,
+     4528
+    ],
+    [
+     200,
+     8173
+    ],
+    [
+     null,
+     12578
+    ]
+   ]
+  },
+  "vissi": {
+   "name": "Vissi",
+   "prisomrade": "NO4",
+   "tiltakssone": true,
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.29,
+   "energiledd_natt_eks_mva": 0.13,
+   "url": "https://www.vissi.no/priser-og-vilkar/nettleie-privat/",
+   "kapasitetstrinn": [
+    [
+     5,
+     280
+    ],
+    [
+     10,
+     480
+    ],
+    [
+     15,
+     650
+    ],
+    [
+     20,
+     820
+    ],
+    [
+     25,
+     990
+    ],
+    [
+     50,
+     1550
+    ],
+    [
+     75,
+     2075
+    ],
+    [
+     100,
+     2550
+    ],
+    [
+     150,
+     3050
+    ],
+    [
+     200,
+     3450
+    ],
+    [
+     null,
+     3950
+    ]
+   ]
+  },
+  "elvenett": {
+   "name": "Elvenett",
+   "prisomrade": "NO1",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.2,
+   "energiledd_natt_eks_mva": 0.05,
+   "url": "https://www.elvenett.no/priser-og-avtaler/",
+   "kapasitetstrinn": [
+    [
+     2,
+     160
+    ],
+    [
+     5,
+     233
+    ],
+    [
+     10,
+     331
+    ],
+    [
+     15,
+     496
+    ],
+    [
+     20,
+     638
+    ],
+    [
+     25,
+     803
+    ],
+    [
+     50,
+     1133
+    ],
+    [
+     75,
+     1511
+    ],
+    [
+     100,
+     1894
+    ],
+    [
+     null,
+     2275
+    ]
+   ]
+  },
+  "etna_nett": {
+   "name": "Etna Nett",
+   "prisomrade": "NO1",
+   "supported": true,
+   "kjent_fastledd_maks_kw": 25,
+   "energiledd_dag_eks_mva": 0.2755,
+   "energiledd_natt_eks_mva": 0.2059,
+   "url": "https://etna.no/om-nettleie",
+   "kapasitetstrinn": [
+    [
+     2,
+     350
+    ],
+    [
+     5,
+     525
+    ],
+    [
+     10,
+     623.7
+    ],
+    [
+     15,
+     768.8
+    ],
+    [
+     20,
+     1015.3
+    ],
+    [
+     null,
+     1269.2
+    ]
+   ]
+  },
+  "tinfos": {
+   "name": "Tinfos",
+   "prisomrade": "NO2",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.18998,
+   "energiledd_natt_eks_mva": 0.18998,
+   "url": "https://www.tinfos.no/tinfos-nett/",
+   "fastledd_metode": "UKJENT",
+   "kapasitetstrinn": [
+    [
+     5,
+     329
+    ],
+    [
+     10,
+     516
+    ],
+    [
+     15,
+     704
+    ],
+    [
+     20,
+     891
+    ],
+    [
+     25,
+     1079
+    ],
+    [
+     50,
+     1641
+    ],
+    [
+     null,
+     4688
+    ]
+   ]
+  },
+  "sor_aurdal_energi": {
+   "name": "Sør Aurdal Energi",
+   "prisomrade": "NO1",
+   "supported": true,
+   "energiledd_dag_eks_mva": 0.2952,
+   "energiledd_natt_eks_mva": 0.2952,
+   "energiledd_perioder": [
+    {
+     "fra": "10-01",
+     "til": "03-31",
+     "dag_eks_mva": 0.2952,
+     "natt_eks_mva": 0.2952
+    },
+    {
+     "fra": "04-01",
+     "til": "09-30",
+     "dag_eks_mva": 0.2552,
+     "natt_eks_mva": 0.2552
+    }
+   ],
+   "url": "https://sae.no/tariffer",
+   "fastledd_metode": "MND_MAX",
+   "terskel_inkludert": false,
+   "kapasitetstrinn": [
+    [
+     5,
+     563
+    ],
+    [
+     8,
+     650
+    ],
+    [
+     15,
+     775
+    ],
+    [
+     30,
+     900
+    ],
+    [
+     50,
+     1013
+    ],
+    [
+     null,
+     1375
+    ]
+   ]
+  }
+ }
+}

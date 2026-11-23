@@ -1,0 +1,858 @@
+{
+  "_comment": "Bygget av scripts/lag-app-json.js — ikke rediger for hånd.",
+  "id": "no.kristo.kienergi",
+  "version": "0.1.0",
+  "compatibility": ">=12.0.0",
+  "sdk": 3,
+  "platforms": [
+    "local"
+  ],
+  "name": {
+    "no": "KI Energi",
+    "en": "KI Energi"
+  },
+  "description": {
+    "no": "Strømkalkulator og smart energistyring: nettleie, kapasitetstrinn, strømstøtte og Norgespris.",
+    "en": "Electricity calculator and smart energy control for Norway: grid rent, capacity steps and subsidies."
+  },
+  "category": [
+    "energy"
+  ],
+  "brandColor": "#1565C0",
+  "permissions": [
+    "homey:manager:api"
+  ],
+  "images": {
+    "small": "/assets/images/small.png",
+    "large": "/assets/images/large.png",
+    "xlarge": "/assets/images/xlarge.png"
+  },
+  "author": {
+    "name": "Sebastian Kristo"
+  },
+  "api": {
+    "status": {
+      "method": "GET",
+      "path": "/status"
+    },
+    "priser": {
+      "method": "GET",
+      "path": "/priser"
+    },
+    "nettselskap": {
+      "method": "GET",
+      "path": "/nettselskap"
+    },
+    "enheter": {
+      "method": "GET",
+      "path": "/enheter"
+    },
+    "hentInnstillinger": {
+      "method": "GET",
+      "path": "/innstillinger"
+    },
+    "settInnstillinger": {
+      "method": "PUT",
+      "path": "/innstillinger"
+    }
+  },
+  "capabilities": {
+    "ki_tariff": {
+      "type": "string",
+      "title": {
+        "no": "Tariff",
+        "en": "Tariff"
+      },
+      "getable": true,
+      "setable": false,
+      "uiComponent": "sensor",
+      "icon": "/assets/sensor.svg"
+    },
+    "ki_energiledd": {
+      "type": "number",
+      "title": {
+        "no": "Energiledd",
+        "en": "Energy charge"
+      },
+      "getable": true,
+      "setable": false,
+      "uiComponent": "sensor",
+      "icon": "/assets/sensor.svg",
+      "units": {
+        "no": "kr/kWh",
+        "en": "kr/kWh"
+      },
+      "decimals": 4,
+      "insights": true
+    },
+    "ki_kapasitetsledd": {
+      "type": "number",
+      "title": {
+        "no": "Kapasitetsledd",
+        "en": "Capacity charge"
+      },
+      "getable": true,
+      "setable": false,
+      "uiComponent": "sensor",
+      "icon": "/assets/sensor.svg",
+      "units": {
+        "no": "kr/mnd",
+        "en": "kr/mnd"
+      },
+      "decimals": 0,
+      "insights": true
+    },
+    "ki_kapasitetstrinn": {
+      "type": "string",
+      "title": {
+        "no": "Kapasitetstrinn",
+        "en": "Capacity step"
+      },
+      "getable": true,
+      "setable": false,
+      "uiComponent": "sensor",
+      "icon": "/assets/sensor.svg"
+    },
+    "ki_snitt_topp": {
+      "type": "number",
+      "title": {
+        "no": "Snitt toppforbruk",
+        "en": "Average peak"
+      },
+      "getable": true,
+      "setable": false,
+      "uiComponent": "sensor",
+      "icon": "/assets/sensor.svg",
+      "units": {
+        "no": "kW",
+        "en": "kW"
+      },
+      "decimals": 2,
+      "insights": true
+    },
+    "ki_topp_1": {
+      "type": "number",
+      "title": {
+        "no": "Toppforbruk 1",
+        "en": "Peak 1"
+      },
+      "getable": true,
+      "setable": false,
+      "uiComponent": "sensor",
+      "icon": "/assets/sensor.svg",
+      "units": {
+        "no": "kW",
+        "en": "kW"
+      },
+      "decimals": 2,
+      "insights": true
+    },
+    "ki_topp_2": {
+      "type": "number",
+      "title": {
+        "no": "Toppforbruk 2",
+        "en": "Peak 2"
+      },
+      "getable": true,
+      "setable": false,
+      "uiComponent": "sensor",
+      "icon": "/assets/sensor.svg",
+      "units": {
+        "no": "kW",
+        "en": "kW"
+      },
+      "decimals": 2,
+      "insights": true
+    },
+    "ki_topp_3": {
+      "type": "number",
+      "title": {
+        "no": "Toppforbruk 3",
+        "en": "Peak 3"
+      },
+      "getable": true,
+      "setable": false,
+      "uiComponent": "sensor",
+      "icon": "/assets/sensor.svg",
+      "units": {
+        "no": "kW",
+        "en": "kW"
+      },
+      "decimals": 2,
+      "insights": true
+    },
+    "ki_margin_trinn": {
+      "type": "number",
+      "title": {
+        "no": "Margin til neste trinn",
+        "en": "Margin to next step"
+      },
+      "getable": true,
+      "setable": false,
+      "uiComponent": "sensor",
+      "icon": "/assets/sensor.svg",
+      "units": {
+        "no": "kW",
+        "en": "kW"
+      },
+      "decimals": 2,
+      "insights": true
+    },
+    "ki_tak_idag": {
+      "type": "number",
+      "title": {
+        "no": "Høyeste time i dag uten nytt trinn",
+        "en": "Max hour today within step"
+      },
+      "getable": true,
+      "setable": false,
+      "uiComponent": "sensor",
+      "icon": "/assets/sensor.svg",
+      "units": {
+        "no": "kWh",
+        "en": "kWh"
+      },
+      "decimals": 2,
+      "insights": true
+    },
+    "ki_kapasitetsvarsel": {
+      "type": "boolean",
+      "title": {
+        "no": "Kapasitetsvarsel",
+        "en": "Capacity warning"
+      },
+      "getable": true,
+      "setable": false,
+      "uiComponent": "sensor",
+      "icon": "/assets/sensor.svg",
+      "insights": true,
+      "insightsTitleTrue": {
+        "no": "Kapasitetsvarsel: ja",
+        "en": "Capacity warning: yes"
+      },
+      "insightsTitleFalse": {
+        "no": "Kapasitetsvarsel: nei",
+        "en": "Capacity warning: no"
+      }
+    },
+    "ki_spotpris": {
+      "type": "number",
+      "title": {
+        "no": "Spotpris inkl. mva",
+        "en": "Spot price incl. VAT"
+      },
+      "getable": true,
+      "setable": false,
+      "uiComponent": "sensor",
+      "icon": "/assets/sensor.svg",
+      "units": {
+        "no": "kr/kWh",
+        "en": "kr/kWh"
+      },
+      "decimals": 4,
+      "insights": true
+    },
+    "ki_stromstotte": {
+      "type": "number",
+      "title": {
+        "no": "Strømstøtte",
+        "en": "Electricity subsidy"
+      },
+      "getable": true,
+      "setable": false,
+      "uiComponent": "sensor",
+      "icon": "/assets/sensor.svg",
+      "units": {
+        "no": "kr/kWh",
+        "en": "kr/kWh"
+      },
+      "decimals": 4,
+      "insights": true
+    },
+    "ki_spot_etter_stotte": {
+      "type": "number",
+      "title": {
+        "no": "Spotpris etter støtte",
+        "en": "Spot price after subsidy"
+      },
+      "getable": true,
+      "setable": false,
+      "uiComponent": "sensor",
+      "icon": "/assets/sensor.svg",
+      "units": {
+        "no": "kr/kWh",
+        "en": "kr/kWh"
+      },
+      "decimals": 4,
+      "insights": true
+    },
+    "ki_totalpris": {
+      "type": "number",
+      "title": {
+        "no": "Total strømpris",
+        "en": "Total electricity price"
+      },
+      "getable": true,
+      "setable": false,
+      "uiComponent": "sensor",
+      "icon": "/assets/sensor.svg",
+      "units": {
+        "no": "kr/kWh",
+        "en": "kr/kWh"
+      },
+      "decimals": 4,
+      "insights": true
+    },
+    "ki_prisforskjell_norgespris": {
+      "type": "number",
+      "title": {
+        "no": "Prisforskjell Norgespris",
+        "en": "Norgespris difference"
+      },
+      "getable": true,
+      "setable": false,
+      "uiComponent": "sensor",
+      "icon": "/assets/sensor.svg",
+      "units": {
+        "no": "kr/kWh",
+        "en": "kr/kWh"
+      },
+      "decimals": 4,
+      "insights": true
+    },
+    "ki_norgespris_aktiv": {
+      "type": "boolean",
+      "title": {
+        "no": "Norgespris aktiv nå",
+        "en": "Norgespris active"
+      },
+      "getable": true,
+      "setable": false,
+      "uiComponent": "sensor",
+      "icon": "/assets/sensor.svg",
+      "insights": true,
+      "insightsTitleTrue": {
+        "no": "Norgespris aktiv nå: ja",
+        "en": "Norgespris active: yes"
+      },
+      "insightsTitleFalse": {
+        "no": "Norgespris aktiv nå: nei",
+        "en": "Norgespris active: no"
+      }
+    },
+    "ki_mnd_forbruk": {
+      "type": "number",
+      "title": {
+        "no": "Forbruk denne måneden",
+        "en": "Consumption this month"
+      },
+      "getable": true,
+      "setable": false,
+      "uiComponent": "sensor",
+      "icon": "/assets/sensor.svg",
+      "units": {
+        "no": "kWh",
+        "en": "kWh"
+      },
+      "decimals": 1,
+      "insights": true
+    },
+    "ki_mnd_forbruk_dag": {
+      "type": "number",
+      "title": {
+        "no": "Forbruk dagtariff",
+        "en": "Consumption day tariff"
+      },
+      "getable": true,
+      "setable": false,
+      "uiComponent": "sensor",
+      "icon": "/assets/sensor.svg",
+      "units": {
+        "no": "kWh",
+        "en": "kWh"
+      },
+      "decimals": 1,
+      "insights": true
+    },
+    "ki_mnd_forbruk_natt": {
+      "type": "number",
+      "title": {
+        "no": "Forbruk natt/helg",
+        "en": "Consumption night/weekend"
+      },
+      "getable": true,
+      "setable": false,
+      "uiComponent": "sensor",
+      "icon": "/assets/sensor.svg",
+      "units": {
+        "no": "kWh",
+        "en": "kWh"
+      },
+      "decimals": 1,
+      "insights": true
+    },
+    "ki_mnd_nettleie": {
+      "type": "number",
+      "title": {
+        "no": "Nettleie denne måneden",
+        "en": "Grid rent this month"
+      },
+      "getable": true,
+      "setable": false,
+      "uiComponent": "sensor",
+      "icon": "/assets/sensor.svg",
+      "units": {
+        "no": "kr",
+        "en": "kr"
+      },
+      "decimals": 2,
+      "insights": true
+    },
+    "ki_mnd_stromstotte": {
+      "type": "number",
+      "title": {
+        "no": "Strømstøtte denne måneden",
+        "en": "Subsidy this month"
+      },
+      "getable": true,
+      "setable": false,
+      "uiComponent": "sensor",
+      "icon": "/assets/sensor.svg",
+      "units": {
+        "no": "kr",
+        "en": "kr"
+      },
+      "decimals": 2,
+      "insights": true
+    },
+    "ki_mnd_kostnad": {
+      "type": "number",
+      "title": {
+        "no": "Strømkostnad denne måneden",
+        "en": "Electricity cost this month"
+      },
+      "getable": true,
+      "setable": false,
+      "uiComponent": "sensor",
+      "icon": "/assets/sensor.svg",
+      "units": {
+        "no": "kr",
+        "en": "kr"
+      },
+      "decimals": 2,
+      "insights": true
+    },
+    "ki_mnd_estimert": {
+      "type": "number",
+      "title": {
+        "no": "Estimert månedskostnad",
+        "en": "Estimated monthly cost"
+      },
+      "getable": true,
+      "setable": false,
+      "uiComponent": "sensor",
+      "icon": "/assets/sensor.svg",
+      "units": {
+        "no": "kr",
+        "en": "kr"
+      },
+      "decimals": 0,
+      "insights": true
+    },
+    "ki_mnd_norgespris_besparelse": {
+      "type": "number",
+      "title": {
+        "no": "Norgespris besparelse",
+        "en": "Norgespris savings"
+      },
+      "getable": true,
+      "setable": false,
+      "uiComponent": "sensor",
+      "icon": "/assets/sensor.svg",
+      "units": {
+        "no": "kr",
+        "en": "kr"
+      },
+      "decimals": 2,
+      "insights": true
+    },
+    "ki_dag_forbruk": {
+      "type": "number",
+      "title": {
+        "no": "Forbruk i dag",
+        "en": "Consumption today"
+      },
+      "getable": true,
+      "setable": false,
+      "uiComponent": "sensor",
+      "icon": "/assets/sensor.svg",
+      "units": {
+        "no": "kWh",
+        "en": "kWh"
+      },
+      "decimals": 2,
+      "insights": true
+    },
+    "ki_dag_kostnad": {
+      "type": "number",
+      "title": {
+        "no": "Dagens kostnad",
+        "en": "Cost today"
+      },
+      "getable": true,
+      "setable": false,
+      "uiComponent": "sensor",
+      "icon": "/assets/sensor.svg",
+      "units": {
+        "no": "kr",
+        "en": "kr"
+      },
+      "decimals": 2,
+      "insights": true
+    },
+    "ki_time_forbruk": {
+      "type": "number",
+      "title": {
+        "no": "Forbruk denne timen",
+        "en": "Consumption this hour"
+      },
+      "getable": true,
+      "setable": false,
+      "uiComponent": "sensor",
+      "icon": "/assets/sensor.svg",
+      "units": {
+        "no": "kWh",
+        "en": "kWh"
+      },
+      "decimals": 3,
+      "insights": true
+    },
+    "ki_forrige_forbruk": {
+      "type": "number",
+      "title": {
+        "no": "Forrige måned forbruk",
+        "en": "Last month consumption"
+      },
+      "getable": true,
+      "setable": false,
+      "uiComponent": "sensor",
+      "icon": "/assets/sensor.svg",
+      "units": {
+        "no": "kWh",
+        "en": "kWh"
+      },
+      "decimals": 1,
+      "insights": true
+    },
+    "ki_forrige_nettleie": {
+      "type": "number",
+      "title": {
+        "no": "Forrige måned nettleie",
+        "en": "Last month grid rent"
+      },
+      "getable": true,
+      "setable": false,
+      "uiComponent": "sensor",
+      "icon": "/assets/sensor.svg",
+      "units": {
+        "no": "kr",
+        "en": "kr"
+      },
+      "decimals": 2,
+      "insights": true
+    },
+    "ki_forrige_kostnad": {
+      "type": "number",
+      "title": {
+        "no": "Forrige måned strømkostnad",
+        "en": "Last month cost"
+      },
+      "getable": true,
+      "setable": false,
+      "uiComponent": "sensor",
+      "icon": "/assets/sensor.svg",
+      "units": {
+        "no": "kr",
+        "en": "kr"
+      },
+      "decimals": 2,
+      "insights": true
+    },
+    "ki_forrige_topp": {
+      "type": "number",
+      "title": {
+        "no": "Forrige måned toppforbruk",
+        "en": "Last month peak"
+      },
+      "getable": true,
+      "setable": false,
+      "uiComponent": "sensor",
+      "icon": "/assets/sensor.svg",
+      "units": {
+        "no": "kW",
+        "en": "kW"
+      },
+      "decimals": 2,
+      "insights": true
+    },
+    "ki_maleproblem": {
+      "type": "boolean",
+      "title": {
+        "no": "Måledata-problem",
+        "en": "Measurement problem"
+      },
+      "getable": true,
+      "setable": false,
+      "uiComponent": "sensor",
+      "icon": "/assets/sensor.svg",
+      "insights": true,
+      "insightsTitleTrue": {
+        "no": "Måledata-problem: ja",
+        "en": "Measurement problem: yes"
+      },
+      "insightsTitleFalse": {
+        "no": "Måledata-problem: nei",
+        "en": "Measurement problem: no"
+      }
+    }
+  },
+  "drivers": [
+    {
+      "id": "stromkalkulator",
+      "name": {
+        "no": "Strømkalkulator",
+        "en": "Electricity calculator"
+      },
+      "class": "sensor",
+      "capabilities": [
+        "measure_power",
+        "ki_tariff",
+        "ki_energiledd",
+        "ki_kapasitetsledd",
+        "ki_kapasitetstrinn",
+        "ki_snitt_topp",
+        "ki_topp_1",
+        "ki_topp_2",
+        "ki_topp_3",
+        "ki_margin_trinn",
+        "ki_tak_idag",
+        "ki_kapasitetsvarsel",
+        "ki_spotpris",
+        "ki_stromstotte",
+        "ki_spot_etter_stotte",
+        "ki_totalpris",
+        "ki_prisforskjell_norgespris",
+        "ki_norgespris_aktiv",
+        "ki_mnd_forbruk",
+        "ki_mnd_forbruk_dag",
+        "ki_mnd_forbruk_natt",
+        "ki_mnd_nettleie",
+        "ki_mnd_stromstotte",
+        "ki_mnd_kostnad",
+        "ki_mnd_estimert",
+        "ki_mnd_norgespris_besparelse",
+        "ki_dag_forbruk",
+        "ki_dag_kostnad",
+        "ki_time_forbruk",
+        "ki_forrige_forbruk",
+        "ki_forrige_nettleie",
+        "ki_forrige_kostnad",
+        "ki_forrige_topp",
+        "ki_maleproblem"
+      ],
+      "images": {
+        "small": "/drivers/stromkalkulator/assets/images/small.png",
+        "large": "/drivers/stromkalkulator/assets/images/large.png"
+      },
+      "pair": [
+        {
+          "id": "list_devices",
+          "template": "list_devices",
+          "navigation": {
+            "next": "add_devices"
+          }
+        },
+        {
+          "id": "add_devices",
+          "template": "add_devices"
+        }
+      ]
+    }
+  ],
+  "flow": {
+    "triggers": [
+      {
+        "id": "kapasitetsvarsel_paa",
+        "title": {
+          "no": "Kapasitetsvarsel: nær neste trinn",
+          "en": "Capacity warning: close to next step"
+        },
+        "tokens": [
+          {
+            "name": "margin",
+            "type": "number",
+            "title": {
+              "no": "Margin (kW)",
+              "en": "Margin (kW)"
+            },
+            "example": 0.4
+          },
+          {
+            "name": "neste_pris",
+            "type": "number",
+            "title": {
+              "no": "Neste trinn (kr/mnd)",
+              "en": "Next step (kr/month)"
+            },
+            "example": 420
+          }
+        ]
+      },
+      {
+        "id": "kapasitetstrinn_endret",
+        "title": {
+          "no": "Kapasitetstrinnet endret seg",
+          "en": "Capacity step changed"
+        },
+        "tokens": [
+          {
+            "name": "trinn",
+            "type": "string",
+            "title": {
+              "no": "Trinn",
+              "en": "Step"
+            },
+            "example": "5-10 kW"
+          },
+          {
+            "name": "pris",
+            "type": "number",
+            "title": {
+              "no": "Kr per måned",
+              "en": "Kr per month"
+            },
+            "example": 420
+          }
+        ]
+      },
+      {
+        "id": "time_lukket",
+        "title": {
+          "no": "En time er ferdig",
+          "en": "An hour has ended"
+        },
+        "tokens": [
+          {
+            "name": "kwh",
+            "type": "number",
+            "title": {
+              "no": "Forbruk (kWh)",
+              "en": "Consumption (kWh)"
+            },
+            "example": 3.2
+          },
+          {
+            "name": "ny_topp",
+            "type": "boolean",
+            "title": {
+              "no": "Ny døgntopp",
+              "en": "New daily peak"
+            }
+          }
+        ]
+      },
+      {
+        "id": "tariff_endret",
+        "title": {
+          "no": "Tariffen skiftet (dag/natt)",
+          "en": "Tariff changed (day/night)"
+        },
+        "tokens": [
+          {
+            "name": "tariff",
+            "type": "string",
+            "title": {
+              "no": "Tariff",
+              "en": "Tariff"
+            },
+            "example": "natt"
+          }
+        ]
+      },
+      {
+        "id": "pris_endret",
+        "title": {
+          "no": "Strømprisen endret seg",
+          "en": "Electricity price changed"
+        },
+        "tokens": [
+          {
+            "name": "total",
+            "type": "number",
+            "title": {
+              "no": "Totalpris (kr/kWh)",
+              "en": "Total price (kr/kWh)"
+            },
+            "example": 1.42
+          },
+          {
+            "name": "spot",
+            "type": "number",
+            "title": {
+              "no": "Spotpris inkl. mva",
+              "en": "Spot incl. VAT"
+            },
+            "example": 1.1
+          }
+        ]
+      }
+    ],
+    "conditions": [
+      {
+        "id": "tariff_er_dag",
+        "title": {
+          "no": "Tariffen !{{er|er ikke}} dagtariff",
+          "en": "Tariff !{{is|is not}} day tariff"
+        }
+      },
+      {
+        "id": "norgespris_aktiv",
+        "title": {
+          "no": "Norgespris !{{er|er ikke}} aktiv",
+          "en": "Norgespris !{{is|is not}} active"
+        }
+      },
+      {
+        "id": "kapasitetsvarsel",
+        "title": {
+          "no": "Kapasitetsvarsel !{{er|er ikke}} på",
+          "en": "Capacity warning !{{is|is not}} on"
+        }
+      },
+      {
+        "id": "totalpris_over",
+        "title": {
+          "no": "Totalprisen !{{er|er ikke}} over …",
+          "en": "Total price !{{is|is not}} above …"
+        },
+        "titleFormatted": {
+          "no": "Totalprisen !{{er|er ikke}} over [[grense]] kr/kWh",
+          "en": "Total price !{{is|is not}} above [[grense]] kr/kWh"
+        },
+        "args": [
+          {
+            "name": "grense",
+            "type": "number",
+            "min": 0,
+            "max": 20,
+            "step": 0.01,
+            "placeholder": {
+              "no": "1.50",
+              "en": "1.50"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
