@@ -24,6 +24,7 @@ const { Lastprofil } = require('./profil');
 
 const TIME_MS = 3600000;
 const TREGE = new Set(['gulv', 'vannbaaren']);
+const BORTE_MARGIN = 1.3;
 const TYPER = ['panel', 'gulv', 'vannbaaren', 'varmepumpe'];
 
 const STANDARD = {
@@ -141,11 +142,13 @@ class Motor {
    * Hva rommet skal ha nå: krav fra programmet, og mål fra varmeplanen når rommet er lært.
    * Returnerer {krav, mal, grunn, plan, modell}.
    */
-  maal(sone, ms, maaling, { kalk, spot, uteTimer }) {
-    const i = this.i;
+  maal(sone, ms, maaling, { kalk, spot, uteTimer, kontekst = {} }) {
+    const i = { ...this.i, ...(kontekst.husinnst || {}) };
     const o = this._overstyring(sone.key, ms);
-    const krav = kravVed(sone, ms, i, o);
     const modell = this.laering.modell(sone.key);
+    // Bortetemperaturen for dette rommet, hvis huset er i bortemodus og motoren skal velge den.
+    const kx = { ...kontekst, bortetemp: kontekst.borte && i.borteAutoTemp !== false ? this.bortetemp(sone, uteTimer) : null };
+    const krav = kravVed(sone, ms, i, o, kx);
     const temp = maaling.temp;
     const ut = { krav: krav.min, mal: krav.min, grunn: krav.grunn, plan: null, laert: modell.laert };
     if (krav.fast || temp === null || temp === undefined) return ut;
@@ -158,7 +161,7 @@ class Motor {
       const timer = [];
       for (let h = 0; h < n; h++) {
         // Kravet gjelder ved timens slutt: da må rommet være varmt når kravet stiger.
-        const k = kravVed(sone, start + (h + 1) * TIME_MS, i, o);
+        const k = kravVed(sone, start + (h + 1) * TIME_MS, i, o, kx);
         timer.push({ ute: uteTimer[h], pris: kalk ? kalk.marginalpris(start + h * TIME_MS, spot) : 1, min: k.min, maks: k.min + opp });
       }
       // Før kravet stiger må rommet få varme seg opp mot det nye nivået. Båndet åpnes så
@@ -190,7 +193,7 @@ class Motor {
     // Ulært rom: programmet, med enkel forvarming mot neste gang kravet stiger.
     const maksMin = Number(i.forvarmingMaksTimer) * 60;
     for (let m = 15; m <= maksMin; m += 15) {
-      const neste = kravVed(sone, ms + m * 60000, i, o);
+      const neste = kravVed(sone, ms + m * 60000, i, o, kx);
       if (neste.min > krav.min + 0.2) {
         const ute = uteTimer && uteTimer.length ? uteTimer[0] : 0;
         let behov = forvarmingMinutter(modell, temp, neste.min, ute);
@@ -206,13 +209,36 @@ class Motor {
     return ut;
   }
 
+  /**
+   * Den laveste bortetemperaturen rommet rekker å varme seg opp fra til dagtemperaturen
+   * innen forvarmingstiden, i det kaldeste været varselet viser. Null når rommet ikke er lært.
+   *
+   * Jo lavere rommet står mens huset er tomt, jo mindre strøm går med — også med
+   * gjenoppvarmingen regnet med. Det som setter grensen, er tiden: rommene varmes samtidig
+   * og deler effektbudsjettet, så hvert rom får en margin (BORTE_MARGIN).
+   */
+  bortetemp(sone, uteTimer) {
+    const modell = this.laering.modell(sone.key);
+    if (!modell.laert || !uteTimer || !uteTimer.length) return null;
+    const i = this.i;
+    const ute = Math.min(...uteTimer);
+    const dag = Number.isFinite(Number(sone.dag)) ? Number(sone.dag) : 21;
+    const bunn = Number(i.borteMinTemp ?? 12);
+    const grense = (Number(i.forvarmingMaksTimer) * 60) / BORTE_MARGIN;
+    for (let t = bunn; t < dag; t += 0.5) {
+      const behov = forvarmingMinutter(modell, t, dag, ute);
+      if (behov !== null && behov <= grense) return t;
+    }
+    return null;
+  }
+
   // ------------------------------------------------------------------
   //  Fordeling
   // ------------------------------------------------------------------
   /** Fordel tillatt effekt på rommene etter prioritet. Returnerer {plan, ledig}. */
-  fordel(laster, budsjett, prognoseKw, ms) {
+  fordel(laster, budsjett, prognoseKw, ms, reservertKw = 0) {
     const i = this.i;
-    let tilgjengelig = budsjett.tillatt_kw - prognoseKw - i.reserveUregulertKw;
+    let tilgjengelig = budsjett.tillatt_kw - prognoseKw - i.reserveUregulertKw - reservertKw;
     const romslig = tilgjengelig - laster.filter((l) => l.trenger).reduce((s, l) => s + l.effekt, 0) > 1.0;
     const intervall = Number(i.gradvisIntervallMin) * 60000;
     const forrige = this.t.senket;
@@ -267,6 +293,9 @@ class Motor {
    * @param {number|null} inn.totalW husets effekt nå
    * @param {number|null} inn.timeKwh forbrukt denne timen
    * @param {object} inn.maalinger {key: {temp, settpunkt, effektW, levende}}
+   * @param {object} inn.kontekst fra Hus.kontekst(): bortemodus, hjemkomst og personer
+   * @param {number} inn.reservertKw effekt som er holdt av til annet motoren kjenner (berederen)
+   * @param {number} inn.annetStyrtW effekt motoren kjenner, men som ikke er romvarme (bereder, håndklevarmer)
    */
   tick(inn) {
     const { ms, kalk, spot, vaer } = inn;
@@ -282,9 +311,13 @@ class Motor {
       const m = inn.maalinger[s.key] || {};
       if (Number.isFinite(m.effektW) && m.effektW > 0) styrtW += m.effektW;
     }
-    const uregulertKw = totalKw === null ? null : Math.max(totalKw - styrtW / 1000, 0);
+    const annetStyrtW = Number.isFinite(inn.annetStyrtW) ? inn.annetStyrtW : 0;
+    const reservertKw = Number.isFinite(inn.reservertKw) ? inn.reservertKw : 0;
+    const kontekst = inn.kontekst || {};
+    const uregulertKw = totalKw === null ? null : Math.max(totalKw - (styrtW + annetStyrtW) / 1000, 0);
     if (uregulertKw !== null && (!this.t.sist_profil_ms || ms - this.t.sist_profil_ms >= 5 * 60000)) {
       this.profil.laer(ms, uregulertKw);
+      if (inn.vaner) inn.vaner.last(ms, uregulertKw);
       this.t.sist_profil_ms = ms;
     }
     const prognose = this.profil.prognose(ms, uregulertKw ?? 0.5, 15);
@@ -297,7 +330,7 @@ class Motor {
       // Læring: ovnen går (over 100 W) eller står (under 30 W). Uten effektmåling vet vi ikke.
       const tilstand = !Number.isFinite(m.effektW) ? null : m.effektW > 100 ? 'varmer' : m.effektW < 30 ? 'av' : null;
       if (ute !== null && m.temp !== null) this.laering.observer(s.key, { ms, temp: m.temp, ute, tilstand });
-      const maal = this.maal(s, ms, m, { kalk, spot, uteTimer });
+      const maal = this.maal(s, ms, m, { kalk, spot, uteTimer, kontekst });
       if (maal.plan) spart += maal.plan.spart;
       const avvik = m.temp === null ? 0.3 : maal.mal - m.temp;
       const trenger = avvik > 0.2;
@@ -312,9 +345,9 @@ class Motor {
       });
     }
 
-    const { plan, ledig } = this.fordel(laster, budsjett, prognose, ms);
+    const { plan, ledig } = this.fordel(laster, budsjett, prognose, ms, reservertKw);
     const styrtKw = plan.filter((p) => p.handling === 'normal').reduce((s, p) => s + p.effekt, 0);
-    const forventetKw = prognose + styrtKw;
+    const forventetKw = prognose + styrtKw + reservertKw;
     const farge = sonefarge(forventetKw, budsjett.tillatt_kw);
     const senket = plan.filter((p) => p.handling === 'senket');
     const forventetTime = budsjett.forbrukt + forventetKw * Math.max(budsjett.minutter_igjen / 60, 0);
@@ -343,6 +376,7 @@ class Motor {
       ute: rund(ute, 1),
       vaervarsel: Boolean(vaer && vaer.punkter.length && !vaer.utdatert(ms)),
       plan_spart_kr: rund(spart),
+      reservert_kw: rund(reservertKw),
       soner: plan,
     };
   }
@@ -356,4 +390,4 @@ class Motor {
   }
 }
 
-module.exports = { Motor, STANDARD, TYPER, TREGE, sonefarge };
+module.exports = { Motor, STANDARD, TYPER, TREGE, BORTE_MARGIN, sonefarge };

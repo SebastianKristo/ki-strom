@@ -32,6 +32,12 @@ kapabiliteter.ki_skyggemodus = {
   type: 'boolean', title: { no: 'Skyggemodus', en: 'Shadow mode' }, getable: true, setable: true,
   uiComponent: 'toggle', icon: '/assets/sensor.svg', insights: false,
 };
+kapabiliteter.ki_bortemodus = {
+  type: 'boolean', title: { no: 'Bortemodus', en: 'Away mode' }, getable: true, setable: true,
+  uiComponent: 'toggle', icon: '/assets/sensor.svg', insights: true,
+  insightsTitleTrue: { no: 'Bortemodus på', en: 'Away mode on' }, insightsTitleFalse: { no: 'Bortemodus av', en: 'Away mode off' },
+};
+const paaAv = [{ id: 'paa', label: { no: 'på', en: 'on' } }, { id: 'av', label: { no: 'av', en: 'off' } }];
 
 const statusvalg = [['gronn', 'God margin', 'Good margin'], ['gul', 'Følger med', 'Watching'], ['oransje', 'Nær grensen', 'Near the limit'],
   ['rod', 'På grensen', 'At the limit'], ['kritisk', 'Over grensen', 'Over the limit'], ['av', 'Av', 'Off']]
@@ -47,7 +53,7 @@ const app = {
   _comment: 'Bygget av scripts/lag-app-json.js — ikke rediger for hånd.',
   id: pakke.name,
   version: pakke.version,
-  compatibility: '>=12.0.0',
+  compatibility: '>=12.3.0',
   sdk: 3,
   platforms: ['local'],
   name: { no: 'KI Energi', en: 'KI Energi' },
@@ -75,8 +81,19 @@ const app = {
     romforslag: { method: 'GET', path: '/romforslag' },
     overstyr: { method: 'POST', path: '/overstyr' },
     fjernOverstyring: { method: 'POST', path: '/fjernoverstyring' },
+    hus: { method: 'GET', path: '/hus' },
+    hentHusinnstillinger: { method: 'GET', path: '/husinnstillinger' },
+    settHusinnstillinger: { method: 'PUT', path: '/husinnstillinger' },
+    personkilder: { method: 'GET', path: '/personkilder' },
+    brytere: { method: 'GET', path: '/brytere' },
+    bortemodus: { method: 'POST', path: '/bortemodus' },
+    hjemkomst: { method: 'POST', path: '/hjemkomst' },
+    forleng: { method: 'POST', path: '/forleng' },
+    bereder: { method: 'POST', path: '/bereder' },
   },
   capabilities: kapabiliteter,
+  widgets: Object.fromEntries(fs.readdirSync(path.join(__dirname, '..', 'widgets')).map((id) => [id,
+    { ...JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'widgets', id, 'widget.compose.json'), 'utf8')), id }])),
   drivers: [{
     id: 'stromkalkulator',
     name: { no: 'Strømkalkulator', en: 'Electricity calculator' },
@@ -88,7 +105,7 @@ const app = {
     id: 'energimotor',
     name: { no: 'Energimotor', en: 'Energy engine' },
     class: 'other',
-    capabilities: ['onoff', 'ki_skyggemodus', 'measure_temperature', ...MOTOR_SENSORER.map((s) => s.id)],
+    capabilities: ['onoff', 'ki_skyggemodus', 'ki_bortemodus', 'measure_temperature', ...MOTOR_SENSORER.map((s) => s.id)],
     capabilitiesOptions: {
       onoff: { title: { no: 'Motoren er på', en: 'Engine on' } },
       measure_temperature: { title: { no: 'Utetemperatur', en: 'Outdoor temperature' } },
@@ -151,8 +168,17 @@ const app = {
           { name: 'grader', type: 'number', title: { no: 'Grader', en: 'Degrees' }, example: 1.5 },
         ],
       },
+      {
+        id: 'bortemodus_endret',
+        title: { no: 'Bortemodus ble slått av eller på', en: 'Away mode was turned on or off' },
+        tokens: [{ name: 'borte', type: 'boolean', title: { no: 'Bortemodus er på', en: 'Away mode is on' } }],
+      },
+      { id: 'noen_kom_hjem', title: { no: 'Noen kom hjem til tomt hus', en: 'Someone came home to an empty house' } },
+      { id: 'bereder_varm', title: { no: 'Varmtvannsberederen er varm', en: 'The water heater is hot' } },
     ],
     conditions: [
+      { id: 'bortemodus_er_paa', title: { no: 'Bortemodus !{{er|er ikke}} på', en: 'Away mode !{{is|is not}} on' } },
+      { id: 'alle_er_borte', title: { no: 'Alle !{{er|er ikke}} borte', en: 'Everyone !{{is|is not}} away' } },
       { id: 'tariff_er_dag', title: { no: 'Tariffen !{{er|er ikke}} dagtariff', en: 'Tariff !{{is|is not}} day tariff' } },
       { id: 'norgespris_aktiv', title: { no: 'Norgespris !{{er|er ikke}} aktiv', en: 'Norgespris !{{is|is not}} active' } },
       { id: 'kapasitetsvarsel', title: { no: 'Kapasitetsvarsel !{{er|er ikke}} på', en: 'Capacity warning !{{is|is not}} on' } },
@@ -188,8 +214,28 @@ const app = {
         id: 'sett_skyggemodus',
         title: { no: 'Slå skyggemodus av eller på', en: 'Turn shadow mode on or off' },
         titleFormatted: { no: 'Slå skyggemodus [[modus]]', en: 'Turn shadow mode [[modus]]' },
-        args: [{ name: 'modus', type: 'dropdown', values: [{ id: 'paa', label: { no: 'på', en: 'on' } }, { id: 'av', label: { no: 'av', en: 'off' } }] }],
+        args: [{ name: 'modus', type: 'dropdown', values: paaAv }],
       },
+      {
+        id: 'sett_bortemodus',
+        title: { no: 'Slå bortemodus av eller på', en: 'Turn away mode on or off' },
+        titleFormatted: { no: 'Slå bortemodus [[modus]]', en: 'Turn away mode [[modus]]' },
+        args: [{ name: 'modus', type: 'dropdown', values: paaAv }],
+      },
+      {
+        id: 'sett_hjemkomst',
+        title: { no: 'Vi kommer hjem klokka …', en: 'We will be home at …' },
+        titleFormatted: { no: 'Vi kommer hjem kl. [[tid]]', en: 'We will be home at [[tid]]' },
+        args: [{ name: 'tid', type: 'time', placeholder: { no: '17:00', en: '17:00' } }],
+      },
+      { id: 'forleng_borte', title: { no: 'Vi blir borte lenger (hopp over fast hjemkomst)', en: 'We are staying away longer' } },
+      {
+        id: 'bereder_boost',
+        title: { no: 'Varm opp berederen nå', en: 'Boost the water heater' },
+        titleFormatted: { no: 'Varm opp berederen i [[minutter]] minutter', en: 'Boost the water heater for [[minutter]] minutes' },
+        args: [{ name: 'minutter', type: 'number', min: 10, max: 300, step: 10, placeholder: { no: '60', en: '60' } }],
+      },
+      { id: 'bereder_tving', title: { no: 'Kjør en full oppvarming av berederen (legionella)', en: 'Run a full water heater cycle' } },
     ],
   },
 };

@@ -147,6 +147,89 @@
   <button id="lagreMotor" class="homey-button-primary-full">Lagre energimotor</button>
   <div id="motorstatus" class="hjelp" style="white-space: pre-line; margin: 12px 0;"></div>
 
+  <header class="homey-header">
+    <h1 class="homey-title">Huset</h1>
+    <p class="homey-subtitle">Hvem som bor her, bortemodus, bereder og håndklevarmer</p>
+  </header>
+
+  <fieldset class="homey-form-fieldset">
+    <legend class="homey-form-legend">Personer</legend>
+    <p class="hjelp">Hver person følger en Homey-bruker eller en ja/nei-variabel der «ja» betyr hjemme. Et rom kan følge en person (velg det under Program for rommet).</p>
+    <div id="personer"></div>
+    <button id="nyPerson" class="homey-button-secondary-full">Legg til person</button>
+  </fieldset>
+
+  <fieldset class="homey-form-fieldset">
+    <legend class="homey-form-legend">Bortemodus og hjemkomst</legend>
+    <div class="homey-form-group rad">
+      <label class="homey-form-checkbox"><input class="homey-form-checkbox-input" type="checkbox" id="h_borteAuto" /><span class="homey-form-checkbox-checkmark"></span><span class="homey-form-checkbox-text">Slå på bortemodus når alle har vært ute en stund</span></label>
+    </div>
+    <div class="homey-form-group rad">
+      <label class="homey-form-checkbox"><input class="homey-form-checkbox-input" type="checkbox" id="h_borteAutoTemp" /><span class="homey-form-checkbox-checkmark"></span><span class="homey-form-checkbox-text">La motoren velge bortetemperatur for hvert rom</span></label>
+      <p class="hjelp">Den laveste temperaturen rommet rekker å varme seg opp fra til dere kommer. Rom som ikke er lært ennå bruker de faste temperaturene under.</p>
+    </div>
+    <div class="homey-form-group rad">
+      <label class="homey-form-checkbox"><input class="homey-form-checkbox-input" type="checkbox" id="h_forvarmHjemkomst" /><span class="homey-form-checkbox-checkmark"></span><span class="homey-form-checkbox-text">Varm opp til fast hjemkomst</span></label>
+    </div>
+    <div class="homey-form-group rad">
+      <label class="homey-form-checkbox"><input class="homey-form-checkbox-input" type="checkbox" id="h_vanerStyrer" /><span class="homey-form-checkbox-checkmark"></span><span class="homey-form-checkbox-text">Bruk lært hjemkomsttid når den finnes</span></label>
+    </div>
+    <div class="rutenett">
+      <div><label for="h_borteAutoTimer">Timer uten noen hjemme</label><input class="homey-form-input" id="h_borteAutoTimer" type="number" min="1" max="48" step="1" /></div>
+      <div><label for="h_borteMinTemp">Laveste bortetemperatur (°C)</label><input class="homey-form-input" id="h_borteMinTemp" type="number" min="8" max="20" step="0.5" /></div>
+      <div><label for="h_hjemkomstUkedag">Fast hjemkomst</label><select class="homey-form-select" id="h_hjemkomstUkedag">
+        <option value="">Ingen</option><option value="0">Mandag</option><option value="1">Tirsdag</option><option value="2">Onsdag</option><option value="3">Torsdag</option><option value="4">Fredag</option><option value="5">Lørdag</option><option value="6">Søndag</option></select></div>
+      <div><label for="h_hjemkomstTid">Klokka</label><input class="homey-form-input" id="h_hjemkomstTid" type="time" /></div>
+      <div><label for="h_borteTempPanel">Fast bortetemp. panelovn</label><input class="homey-form-input" id="h_borteTempPanel" type="number" min="5" max="22" step="0.5" /></div>
+      <div><label for="h_borteTempGulv">Fast bortetemp. gulv</label><input class="homey-form-input" id="h_borteTempGulv" type="number" min="5" max="24" step="0.5" /></div>
+      <div><label for="h_borteTempBad">Fast bortetemp. bad</label><input class="homey-form-input" id="h_borteTempBad" type="number" min="5" max="26" step="0.5" /></div>
+    </div>
+    <div id="forslag" class="hjelp" style="white-space: pre-line; margin-top: 10px;"></div>
+  </fieldset>
+
+  <fieldset class="homey-form-fieldset">
+    <legend class="homey-form-legend">Varmtvannsbereder</legend>
+    <div class="homey-form-group rad">
+      <label class="homey-form-label" for="v_bryter">Relé</label>
+      <select class="homey-form-select" id="v_bryter"></select>
+      <p class="hjelp">Har releet effektmåling, oppdager KI når termostaten kobler ut. Det bekrefter også legionellasikringen, forutsatt at termostaten står på 65–70 °C.</p>
+    </div>
+    <div class="homey-form-group rad">
+      <label class="homey-form-checkbox"><input class="homey-form-checkbox-input" type="checkbox" id="v_prisstyring" /><span class="homey-form-checkbox-checkmark"></span><span class="homey-form-checkbox-text">KI styrer berederen</span></label>
+    </div>
+    <div class="homey-form-group rad">
+      <label class="homey-form-checkbox"><input class="homey-form-checkbox-input" type="checkbox" id="v_folgSpotpris" /><span class="homey-form-checkbox-checkmark"></span><span class="homey-form-checkbox-text">Velg de billigste timene (spotpris) i stedet for hele vinduet</span></label>
+    </div>
+    <div class="homey-form-group rad">
+      <label class="homey-form-checkbox"><input class="homey-form-checkbox-input" type="checkbox" id="v_borteSparing" /><span class="homey-form-checkbox-checkmark"></span><span class="homey-form-checkbox-text">La berederen hvile når huset står tomt</span></label>
+    </div>
+    <div class="rutenett">
+      <div><label for="v_vinduStart">Vinduet åpner</label><input class="homey-form-input" id="v_vinduStart" type="time" /></div>
+      <div><label for="v_klarInnen">Ferdig innen</label><input class="homey-form-input" id="v_klarInnen" type="time" /></div>
+      <div><label for="v_billigsteTimer">Antall billigste timer</label><input class="homey-form-input" id="v_billigsteTimer" type="number" min="1" max="12" step="1" /></div>
+      <div><label for="v_nominellKw">Effekt (kW)</label><input class="homey-form-input" id="v_nominellKw" type="number" min="0.5" max="6" step="0.1" /></div>
+      <div><label for="v_intervallDager">Varm minst hver (dager)</label><input class="homey-form-input" id="v_intervallDager" type="number" min="1" max="7" step="1" /></div>
+      <div><label for="v_maksDager">Tving etter (dager)</label><input class="homey-form-input" id="v_maksDager" type="number" min="2" max="14" step="1" /></div>
+    </div>
+  </fieldset>
+
+  <fieldset class="homey-form-fieldset">
+    <legend class="homey-form-legend">Håndklevarmer</legend>
+    <div class="homey-form-group rad">
+      <label class="homey-form-label" for="k_bryter">Bryter</label>
+      <select class="homey-form-select" id="k_bryter"></select>
+    </div>
+    <div class="rutenett">
+      <div><label for="k_morgenStart">Morgen fra</label><input class="homey-form-input" id="k_morgenStart" type="time" /></div>
+      <div><label for="k_morgenSlutt">Morgen til</label><input class="homey-form-input" id="k_morgenSlutt" type="time" /></div>
+      <div><label for="k_kveldStart">Kveld fra</label><input class="homey-form-input" id="k_kveldStart" type="time" /></div>
+      <div><label for="k_kveldSlutt">Kveld til</label><input class="homey-form-input" id="k_kveldSlutt" type="time" /></div>
+    </div>
+  </fieldset>
+
+  <button id="lagreHus" class="homey-button-primary-full">Lagre huset</button>
+  <div id="husstatus" class="hjelp" style="white-space: pre-line; margin: 12px 0;"></div>
+
   <script type="text/javascript">
     const FELT = ['maalerEnhet', 'effektKapabilitet', 'energiKapabilitet', 'nettselskap', 'sikringstrinn', 'boligtype',
       'harNorgespris', 'varselTerskelKw', 'energileddDagEksMva', 'energileddNattEksMva', 'egneTrinn'];
@@ -211,7 +294,7 @@
           <div class="rutenett">
             <div><label>Dag (°C)</label><input class="homey-form-input" data-f="dag" type="number" step="0.5" value="${r.dag ?? 21}" /></div>
             <div><label>Natt (°C)</label><input class="homey-form-input" data-f="natt" type="number" step="0.5" value="${r.natt ?? 19}" /></div>
-            <div><label>Program</label><select class="homey-form-select" data-f="profil">${valg(PROFILER, r.profil)}</select></div>
+            <div><label>Program</label><select class="homey-form-select" data-f="profil">${valg(profilvalg(), r.profil)}</select></div>
             <div><label>Varmekilde</label><select class="homey-form-select" data-f="type">${valg(TYPER, r.type)}</select></div>
             <div><label>Prioritet (1–5)</label><input class="homey-form-input" data-f="prio" type="number" min="1" max="5" step="1" value="${r.prio ?? 3}" /></div>
             <div><label>Effekt (kW)</label><input class="homey-form-input" data-f="nominell" type="number" min="0.1" step="0.1" value="${r.nominell ?? 1}" /></div>
@@ -276,7 +359,118 @@
       });
     }
 
+    // ---------------- Huset ----------------
+    const H_KRYSS = ['borteAuto', 'borteAutoTemp', 'forvarmHjemkomst', 'vanerStyrer'];
+    const H_TALL = ['borteAutoTimer', 'borteMinTemp', 'borteTempPanel', 'borteTempGulv', 'borteTempBad'];
+    const V_KRYSS = ['prisstyring', 'folgSpotpris', 'borteSparing'];
+    const V_TALL = ['billigsteTimer', 'nominellKw', 'intervallDager', 'maksDager'];
+    const V_TEKST = ['vinduStart', 'klarInnen'];
+    const K_TEKST = ['morgenStart', 'morgenSlutt', 'kveldStart', 'kveldSlutt'];
+    const PERSONTYPER = [['voksen', 'Voksen'], ['ungdom', 'Ungdom'], ['barn', 'Barn']];
+    const PERSONTIDER = {
+      barn: [['dag', 'Står opp', '05:30'], ['natt', 'Legger seg', '19:00'], ['borteFra', 'Borte fra', '08:00'], ['borteTil', 'Hjemme igjen', '15:00']],
+      ungdom: [['natt', 'Legger seg', '23:00'], ['vekking', 'Vekking hverdag', '07:00'], ['vekkingHelg', 'Vekking helg', '09:30']],
+      voksen: [],
+    };
+    let personer = [];
+    let kilder = [];
+    let brytere = [];
+
+    function profilvalg() {
+      return PROFILER.concat(personer.filter((p) => p.key).map((p) => [`person:${p.key}`, `Følger ${p.navn || p.key}`]));
+    }
+
+    function tegnPersoner() {
+      const kildevalg = [['', 'Ingen (bare klokka)']].concat(kilder.map((k) => [`${k.type}:${k.id}`, `${k.navn} — ${k.verdi ? 'hjemme' : 'borte'}`]));
+      el('personer').innerHTML = personer.map((p, n) => `
+        <div class="rom" data-n="${n}">
+          <div class="rutenett">
+            <div><label>Navn</label><input class="homey-form-input" data-f="navn" type="text" value="${tekst(p.navn)}" /></div>
+            <div><label>Type</label><select class="homey-form-select" data-f="type">${valg(PERSONTYPER, p.type || 'voksen')}</select></div>
+            <div style="grid-column: 1 / 3"><label>Hjemme når</label><select class="homey-form-select" data-f="kilde">${valg(kildevalg, p.kilde ? `${p.kilde.type}:${p.kilde.id}` : '')}</select></div>
+            ${(PERSONTIDER[p.type || 'voksen'] || []).map(([f, navn, std]) => `<div><label>${navn}</label><input class="homey-form-input" data-f="${f}" type="time" value="${p[f] || std}" /></div>`).join('')}
+            <div><label><input type="checkbox" data-f="slett" /> Fjern</label></div>
+          </div>
+        </div>`).join('') || '<p class="hjelp">Ingen personer ennå.</p>';
+      el('personer').querySelectorAll('[data-f="type"]').forEach((e) => e.addEventListener('change', () => { lesPersoner(); tegnPersoner(); }));
+    }
+
+    function lesPersoner() {
+      const nokkel = (navn) => String(navn).toLowerCase().replace(/æ/g, 'ae').replace(/ø/g, 'o').replace(/å/g, 'a').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+      document.querySelectorAll('#personer .rom').forEach((boks) => {
+        const p = personer[Number(boks.dataset.n)];
+        boks.querySelectorAll('[data-f]').forEach((e) => {
+          if (e.dataset.f === 'slett') p.slett = e.checked;
+          else if (e.dataset.f === 'kilde') { const [type, ...id] = e.value.split(':'); p.kilde = e.value ? { type, id: id.join(':') } : null; }
+          else p[e.dataset.f] = e.value;
+        });
+        if (!p.key) p.key = nokkel(p.navn);      // nøkkelen settes én gang; rom som følger personen peker på den
+      });
+      personer = personer.filter((p) => !p.slett && p.key);
+    }
+
+    function visHus(Homey) {
+      Homey.api('GET', '/hus', null, (feil, h) => {
+        if (feil || !h || !h.personer) return;
+        const linjer = [`Modus: ${h.modus}${h.hjemkomst_kl ? ` — varmt til kl. ${h.hjemkomst_kl}` : ''}`];
+        if (h.personer.length) linjer.push(h.personer.map((p) => `${p.navn}: ${p.hjemme === null ? 'ukjent' : p.hjemme ? 'hjemme' : 'borte'}`).join(' · '));
+        if (h.bereder) linjer.push(`Bereder: ${h.bereder.status}. ${h.bereder.forklaring} Sist varm for ${h.bereder.dager_siden_varm ?? '–'} dager siden.`);
+        if (h.hanklevarmer) linjer.push(`Håndklevarmer: ${h.hanklevarmer.paa ? 'på' : 'av'} (${h.hanklevarmer.grunn})`);
+        el('husstatus').textContent = linjer.join('\n');
+        el('forslag').textContent = (h.forslag || []).map((f) => `Forslag: ${f.tekst}`).join('\n');
+      });
+    }
+
+    function startHus(Homey) {
+      Homey.api('GET', '/husinnstillinger', null, (feil, h) => {
+        h = h || {};
+        for (const k of H_KRYSS) el(`h_${k}`).checked = Boolean(h[k]);
+        for (const k of H_TALL) el(`h_${k}`).value = h[k] ?? '';
+        el('h_hjemkomstUkedag').value = h.hjemkomstUkedag ?? '';
+        el('h_hjemkomstTid').value = h.hjemkomstTid || '13:00';
+        const v = h.vvb || {};
+        for (const k of V_KRYSS) el(`v_${k}`).checked = Boolean(v[k]);
+        for (const k of V_TALL.concat(V_TEKST)) el(`v_${k}`).value = v[k] ?? '';
+        const k2 = h.hanklevarmer || {};
+        for (const k of K_TEKST) el(`k_${k}`).value = k2[k] ?? '';
+        personer = h.personer || [];
+        Homey.api('GET', '/personkilder', null, (f2, liste) => { kilder = liste || []; tegnPersoner(); tegnRom(); });
+        Homey.api('GET', '/brytere', null, (f3, liste) => {
+          brytere = liste || [];
+          const somValg = brytere.map((b) => ({ id: b.id, navn: b.harEffekt ? `${b.navn} (måler effekt)` : b.navn }));
+          fyll(el('v_bryter'), somValg, v.bryter && v.bryter.enhet, 'Ingen bereder');
+          fyll(el('k_bryter'), somValg, k2.bryter && k2.bryter.enhet, 'Ingen håndklevarmer');
+        });
+        visHus(Homey);
+      });
+      el('nyPerson').addEventListener('click', () => { lesPersoner(); personer.push({ navn: '', type: 'voksen', kilde: null }); tegnPersoner(); });
+      el('lagreHus').addEventListener('click', () => {
+        document.querySelectorAll('#personer .rom').forEach((boks) => { const p = personer[Number(boks.dataset.n)]; if (!p.key) p.navn = boks.querySelector('[data-f="navn"]').value; });
+        lesPersoner();
+        const releet = (id) => {
+          const b = brytere.find((x) => x.id === id);
+          return b ? { bryter: { enhet: b.id, kap: 'onoff' }, effekt: b.harEffekt ? { enhet: b.id, kap: 'measure_power' } : null } : { bryter: null, effekt: null };
+        };
+        const ny = { personer, vvb: releet(el('v_bryter').value), hanklevarmer: { bryter: releet(el('k_bryter').value).bryter } };
+        for (const k of H_KRYSS) ny[k] = el(`h_${k}`).checked;
+        for (const k of H_TALL) if (el(`h_${k}`).value !== '') ny[k] = Number(el(`h_${k}`).value);
+        ny.hjemkomstUkedag = el('h_hjemkomstUkedag').value === '' ? null : Number(el('h_hjemkomstUkedag').value);
+        if (el('h_hjemkomstTid').value) ny.hjemkomstTid = el('h_hjemkomstTid').value;
+        for (const k of V_KRYSS) ny.vvb[k] = el(`v_${k}`).checked;
+        for (const k of V_TALL) if (el(`v_${k}`).value !== '') ny.vvb[k] = Number(el(`v_${k}`).value);
+        for (const k of V_TEKST) if (el(`v_${k}`).value) ny.vvb[k] = el(`v_${k}`).value;
+        for (const k of K_TEKST) if (el(`k_${k}`).value) ny.hanklevarmer[k] = el(`k_${k}`).value;
+        Homey.api('PUT', '/husinnstillinger', ny, (feil) => {
+          if (feil) return Homey.alert(feil.message || String(feil));
+          el('husstatus').textContent = 'Lagret.';
+          tegnPersoner(); tegnRom();
+          setTimeout(() => visHus(Homey), 65000);
+        });
+      });
+    }
+
     function onHomeyReady(Homey) {
+      startHus(Homey);
       startMotor(Homey);
       Homey.api('GET', '/innstillinger', null, (f1, innst) => {
         innst = innst || {};

@@ -52,12 +52,22 @@ function lagHomey(innstillinger) {
     gulv1: termostat('gulv1', 'Bad Gulvvarme', 'z3', 24.5, 24, 0),
     bil: { ...termostat('bil', 'Bil klima', 'z1', 3, 20, 0), class: 'car' },
     ute1: { id: 'ute1', name: 'Outdoor Meter', zone: 'z1', capabilities: ['measure_temperature'], capabilitiesObj: { measure_temperature: { value: -3.3 } } },
+    vvb: {
+      id: 'vvb', name: 'Varmtvannsbereder', zone: 'z3', class: 'socket', capabilities: ['onoff', 'measure_power'],
+      capabilitiesObj: { onoff: { value: true }, measure_power: { value: 0 } },
+      async setCapabilityValue({ capabilityId, value }) { skrevet.push(['vvb', capabilityId, value]); this.capabilitiesObj[capabilityId].value = value; },
+    },
   };
+  const variabler = { v1: { id: 'v1', name: 'Rune Posisjon', type: 'boolean', value: true }, v2: { id: 'v2', name: 'Teller', type: 'number', value: 3 } };
+  const varsler = [];
   const homey = {
     maaler,
     utlost,
     skrevet,
     enheterIHomey,
+    variabler,
+    varsler,
+    notifications: { createNotification: async (v) => { varsler.push(v.excerpt); } },
     geolocation: { getLatitude: () => 59.91, getLongitude: () => 10.75 },
     settings: {
       get: (k) => lager[k],
@@ -82,6 +92,8 @@ function lagHomey(innstillinger) {
     falskApi: {
       devices: { getDevices: async () => enheterIHomey, getDevice: async () => maaler },
       zones: { getZones: async () => ({ z1: { name: 'Gang' }, z2: { name: 'Stue' }, z3: { name: 'Bad' } }) },
+      users: { getUsers: async () => ({ u1: { id: 'u1', name: 'Sebastian', present: false } }) },
+      logic: { getVariables: async () => variabler },
     },
     __: (k) => k,
   };
@@ -177,6 +189,7 @@ test('appen starter, leser måleren, fyller enheten og svarer på API-et', async
   assert.equal(forslag.find((r) => r.key === 'bad').profil, 'konstant');
   assert.deepEqual((await api.temperatursensorer({ homey })).map((x) => x.id), ['ute1']);
   assert.equal((await api.termostater({ homey })).length, 4);
+  assert.ok(!(await api.enheter({ homey })).some((e) => e.id === 'bil' && false));
 
   // Skyggemodus er standard: motoren regner, men rører ingenting
   await api.settMotorinnstillinger({ homey, body: { soner: forslag, ute: { enhet: 'ute1', kap: 'measure_temperature' } } });
@@ -224,6 +237,71 @@ test('appen starter, leser måleren, fyller enheten og svarer på API-et', async
   await homey.handlinger.sett_skyggemodus({ modus: 'paa' });
   assert.equal(app.motor.innstillinger().skygge, true);
 
+  // --- Huset: personer, bortemodus og bereder ---
+  assert.deepEqual((await api.personkilder({ homey })).map((k) => `${k.type}:${k.id}`), ['variabel:v1', 'bruker:u1']);
+  assert.deepEqual((await api.brytere({ homey })).map((b) => b.id), ['vvb']);
+  await api.settHusinnstillinger({ homey, body: {
+    personer: [{ key: 'rune', navn: 'Rune', type: 'voksen', kilde: { type: 'variabel', id: 'v1' } },
+      { key: 'sebastian', navn: 'Sebastian', type: 'ungdom', kilde: { type: 'bruker', id: 'u1' } }],
+    borteAutoTimer: 1,
+    vvb: { bryter: { enhet: 'vvb', kap: 'onoff' }, effekt: { enhet: 'vvb', kap: 'measure_power' } },
+  } });
+  assert.equal(app.hus.innstillinger().vvb.vinduStart, '22:00', 'uendrede bereder-innstillinger beholdes');
+  await app.motor.settInnstillinger({ skygge: false });
+  homey.skrevet.length = 0;
+  await app._motorTick(Date.now());
+  let hus = await api.hus({ homey });
+  assert.equal(hus.modus, 'Hjemme');
+  assert.deepEqual(hus.personer.map((p) => p.hjemme), [true, false]);
+  // Kl. 13 er utenfor vinduet og berederen trekker ingenting: releet slås av
+  assert.deepEqual(homey.skrevet.filter(([id]) => id === 'vvb'), [['vvb', 'onoff', false]]);
+  assert.equal(hus.bereder.status, 'Venter på vinduet');
+  await vent();          // enheten oppdateres uten at ticket venter på den
+  assert.equal(mv.ki_modus, 'Hjemme');
+  assert.equal(mv.ki_bereder_status, 'Venter på vinduet');
+
+  // Rune drar: etter en time er huset i bortemodus, og stua får bortetemperatur
+  homey.variabler.v1.value = false;
+  await app._motorTick(Date.now());
+  t.mock.timers.setTime(Date.now() + 61 * 60000);
+  await app._motorTick(Date.now());
+  hus = await api.hus({ homey });
+  assert.equal(hus.borte, true);
+  await vent();
+  assert.equal(mv.ki_bortemodus, true);
+  assert.match(homey.varsler[0], /bortemodus/);
+  assert.ok(homey.utlost.some(([id, tok]) => id === 'bortemodus_endret' && tok.borte === true));
+  assert.equal((await api.motor({ homey })).soner.find((p) => p.key === 'stue').krav, 16);
+  assert.equal(await homey.betingelser.bortemodus_er_paa({}), true);
+  assert.equal(await homey.betingelser.alle_er_borte({}), true);
+
+  // Hjemkomst kl. 17 fra flow-kort, og så kommer Rune hjem
+  await homey.handlinger.sett_hjemkomst({ tid: '17:00' });
+  await app._motorTick(Date.now());
+  assert.equal((await api.hus({ homey })).hjemkomst_kl, '17:00');
+  homey.variabler.v1.value = true;
+  await app._motorTick(Date.now());
+  assert.equal((await api.hus({ homey })).borte, false);
+  assert.ok(homey.utlost.some(([id]) => id === 'noen_kom_hjem'));
+  assert.equal((await api.motor({ homey })).soner.find((p) => p.key === 'stue').krav, 22);
+
+  // Bryteren på enheten og API-et
+  await lyttere.ki_bortemodus(true);
+  assert.equal(app.hus.hus.t.borte, true);
+  await api.bortemodus({ homey, body: { paa: false } });
+  await api.bereder({ homey, body: { handling: 'boost', minutter: 30 } });
+  await app._motorTick(Date.now());
+  assert.equal((await api.hus({ homey })).bereder.status, 'Boost');
+  await assert.rejects(async () => api.bereder({ homey, body: { handling: 'tull' } }), /Ukjent handling/);
+
+  // Widgeten får ett samlet sammendrag
+  const oversikt = await require('../widgets/oversikt/api').oversikt({ homey });
+  assert.equal(oversikt.modus, 'Hjemme');
+  assert.equal(oversikt.bereder, 'Boost');
+  assert.deepEqual(oversikt.rom.map((r) => r.navn).sort(), ['Bad', 'Stue']);
+  assert.equal(typeof oversikt.time.grense, 'number');
+  assert.equal(oversikt.trinn, '2-5 kW');
+
   // Paring og lagring
   assert.equal((await new (require('../drivers/energimotor/driver'))().onPairListDevices.call({ homey })).length, 1);
   const driver = new Driver();
@@ -232,14 +310,17 @@ test('appen starter, leser måleren, fyller enheten og svarer på API-et', async
   await app.onUninit();
   assert.equal(homey.settings.get('tilstand').maaned, '2026-11');
   assert.ok(homey.settings.get('motor_tilstand').profil);
+  assert.equal(homey.settings.get('hus_tilstand').hus.borte, false);
 });
 
 test('app.json er bygget fra tabellene', () => {
   const { MOTOR_SENSORER } = require('../lib/sensorer');
   assert.deepEqual(manifest.drivers[0].capabilities, ['measure_power', ...SENSORER.map((s) => s.id)]);
-  assert.deepEqual(manifest.drivers[1].capabilities, ['onoff', 'ki_skyggemodus', 'measure_temperature', ...MOTOR_SENSORER.map((s) => s.id)]);
+  assert.deepEqual(manifest.drivers[1].capabilities, ['onoff', 'ki_skyggemodus', 'ki_bortemodus', 'measure_temperature', ...MOTOR_SENSORER.map((s) => s.id)]);
   for (const s of [...SENSORER, ...MOTOR_SENSORER]) assert.ok(manifest.capabilities[s.id], s.id);
   const api = require('../api');
   assert.deepEqual(Object.keys(manifest.api).sort(), Object.keys(api).sort());
   assert.equal(path.basename(manifest.images.small), 'small.png');
+  assert.deepEqual(Object.keys(manifest.widgets), ['oversikt']);
+  assert.deepEqual(Object.keys(manifest.widgets.oversikt.api), Object.keys(require('../widgets/oversikt/api')));
 });

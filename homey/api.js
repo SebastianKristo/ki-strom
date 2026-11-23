@@ -68,6 +68,48 @@ module.exports = {
     return { ok: true };
   },
 
+  async hus({ homey }) {
+    return homey.app.hus.bilde || { modus: 'starter', personer: [] };
+  },
+
+  async hentHusinnstillinger({ homey }) {
+    return homey.app.hus.innstillinger();
+  },
+
+  async settHusinnstillinger({ homey, body }) {
+    return homey.app.hus.settInnstillinger(body || {});
+  },
+
+  async personkilder({ homey }) {
+    return homey.app.hus.personkilder();
+  },
+
+  async brytere({ homey }) {
+    return homey.app.hus.brytere();
+  },
+
+  /** body: { paa } */
+  async bortemodus({ homey, body }) {
+    homey.app.hus.settBorte(Boolean(body && body.paa));
+    return { ok: true };
+  },
+
+  /** body: { tid } — «HH:MM» (neste gang det inntreffer) eller et tidspunkt i millisekunder. */
+  async hjemkomst({ homey, body }) {
+    return { hjemkomst: homey.app.hus.settHjemkomst(body.tid) };
+  },
+
+  async forleng({ homey }) {
+    homey.app.hus.forleng();
+    return { ok: true };
+  },
+
+  /** body: { handling: 'boost' | 'avbryt' | 'tving', minutter } */
+  async bereder({ homey, body }) {
+    homey.app.hus.berederHandling(body.handling, body.minutter);
+    return { ok: true };
+  },
+
   /** Bare kjente nøkler tas imot; resten av innstillingene står urørt. */
   async settInnstillinger({ homey, body }) {
     const ny = { ...homey.app.innstillinger() };

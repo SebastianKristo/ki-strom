@@ -3,8 +3,9 @@
 Homey-versjonen av KI Energi. Appen bygges trinnvis:
 
 1. **Strømkalkulator:** nettleie, kapasitetstrinn, strømstøtte, Norgespris og månedskostnad.
-2. **Energimotor** (denne versjonen): timebudsjett, rom med prioritet, værvarsel og prisoptimal varmeplan.
-3. Bereder, moduser, helg, lading, lys og selvlærende vaner.
+2. **Energimotor:** timebudsjett, rom med prioritet, værvarsel og prisoptimal varmeplan.
+3. **Huset** (denne versjonen, 3a): personer, bortemodus og hjemkomst, bereder, håndklevarmer, vaner og widget.
+   Elbillading og lysregler kommer i 3b.
 4. Kontrollversjon i Home Assistant, som styrer denne appen.
 
 Krever Homey Pro (2023 eller nyere).
@@ -66,7 +67,38 @@ forvarming i billige timer, og start i tide før dagen begynner — tidligere jo
 **Skyggemodus** er på som standard: motoren regner og forklarer, men rører ikke termostatene.
 Slå den av på enheten eller i innstillingene når forslagene ser fornuftige ut.
 
-Personprogram, helg/bortemodus, bereder, lading og lys kommer i trinn 3.
+## Huset
+
+Settes opp under «Huset» i appens innstillinger.
+
+**Personer.** Hver person følger en Homey-bruker eller en ja/nei-variabel (ja = hjemme). Et rom kan følge
+en person: barn har fast opp/legg og er borte på dagtid, ungdom har egen leggetid og vekking for hverdag og helg.
+
+**Bortemodus** slår seg på når alle har vært ute lenge nok (standard 3 timer), og av i det noen kommer hjem.
+Den kan også slås på for hånd, fra enheten eller et flow-kort; da står den til dere har dratt og kommet tilbake.
+
+**Bortetemperaturen** velges for hvert lærte rom: den laveste temperaturen rommet rekker å varme seg opp fra
+til dagtemperaturen innen forvarmingstiden, i det kaldeste været varselet viser — aldri under bunnen du setter
+(standard 12 °C). Rom som ikke er lært, bruker faste temperaturer (16 / 18 / 22 °C).
+
+**Hjemkomst** er når huset skal være varmt igjen: en fast ukedag og tid (standard søndag kl. 13), eller satt
+med flow-kortet «Vi kommer hjem kl. …». Fordi kravet stiger på et kjent tidspunkt, starter varmeplanen
+oppvarmingen i tide rom for rom. Etter tiden holdes dagtemperatur til noen kommer.
+«Vi blir borte lenger» hopper over den faste hjemkomsten.
+
+**Berederen** varmer i vinduet (standard 22–05) eller i de billigste timene, slår av når termostaten kobler ut,
+og hviler når huset står tomt. Legionellasikringen går foran alt: har det gått for lenge siden vannet var varmt,
+varmes det uansett pris og effekt. En påbegynt oppvarming avbrytes ikke.
+
+**Håndklevarmeren** står på i et morgen- og et kveldsvindu, og av når huset er tomt.
+
+**Vanene** lærer når dere pleier å komme hjem etter en tur og når huset våkner, og foreslår endringer i
+innstillingene. Lært hjemkomsttid kan brukes automatisk.
+
+**Widgeten** «KI Energi – oversikt» viser status, timen, prisen nå, måneden, modus og hvert rom.
+
+Homey-varsler kan ikke ha svarknapper, så spørsmålene fra Home Assistant-versjonen («Skal dere bort i helgen?»)
+er erstattet av automatisk bortemodus og flow-kort.
 
 ## Sensorer
 
@@ -76,9 +108,11 @@ spotpris, strømstøtte, totalpris, forbruk og kostnad for timen, dagen og måne
 ## Flow-kort
 
 - **Når:** kapasitetsvarsel, kapasitetstrinnet endret seg, en time er ferdig, tariffen skiftet, strømprisen endret seg,
-  energimotorens status endret seg, et rom ble senket.
-- **Og:** tariffen er dagtariff, Norgespris er aktiv, kapasitetsvarsel er på, totalprisen er over …, energimotorens status er …
-- **Så:** overstyr temperaturen i et rom, fjern overstyringen, slå skyggemodus av eller på.
+  energimotorens status endret seg, et rom ble senket, bortemodus ble slått av eller på, noen kom hjem, berederen er varm.
+- **Og:** tariffen er dagtariff, Norgespris er aktiv, kapasitetsvarsel er på, totalprisen er over …, energimotorens status er …,
+  bortemodus er på, alle er borte.
+- **Så:** overstyr temperaturen i et rom, fjern overstyringen, slå skyggemodus eller bortemodus av eller på,
+  «vi kommer hjem kl. …», «vi blir borte lenger», varm opp berederen nå, kjør en full oppvarming av berederen.
 
 ## Lokalt API
 
@@ -95,6 +129,10 @@ spotpris, strømstøtte, totalpris, forbruk og kostnad for timen, dagen og måne
 | GET / PUT | `/motorinnstillinger` | Motorens innstillinger og rom |
 | GET | `/termostater`, `/temperatursensorer`, `/romforslag` | Til oppsettet |
 | POST | `/overstyr`, `/fjernoverstyring` | `{rom, temp, minutter}` / `{rom}` |
+| GET | `/hus` | Modus, personer, hjemkomst, bereder, håndklevarmer og vaner |
+| GET / PUT | `/husinnstillinger` | Personer, bortemodus, bereder og håndklevarmer |
+| GET | `/personkilder`, `/brytere` | Til oppsettet |
+| POST | `/bortemodus`, `/hjemkomst`, `/forleng`, `/bereder` | `{paa}` / `{tid}` / – / `{handling, minutter}` |
 
 ## Utvikling
 
