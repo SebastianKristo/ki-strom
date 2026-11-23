@@ -126,6 +126,8 @@ async def test_entitetene_viser_det_homey_sender(hass, aioclient_mock):
     assert _tilstand(hass, "binary_sensor", "maleproblem").state == "off"
     assert _tilstand(hass, "switch", "bortemodus").state == "off"
     assert _tilstand(hass, "switch", "norgespris").state == "on"
+    assert _tilstand(hass, "switch", "lading_automatikk").state == "on"
+    assert _tilstand(hass, "sensor", "lading").state == "unknown"          # ingen lader er satt opp i fiksturen
     assert _tilstand(hass, "switch", "skyggemodus").state == ("on" if SVAR["motorinnstillinger"]["skygge"] else "off")
     assert _tilstand(hass, "time", "dag_start").state == "06:00:00"
     assert float(_tilstand(hass, "number", "temp_stue_dag").state) == 22
@@ -151,6 +153,7 @@ async def test_endringer_sendes_til_homey(hass, aioclient_mock):
     await kall("switch", "turn_on", "switch", "bortemodus")
     await kall("switch", "turn_off", "switch", "skyggemodus")
     await kall("switch", "turn_off", "switch", "bereder_styring")
+    await kall("switch", "turn_off", "switch", "lading_automatikk")
     await kall("climate", "set_temperature", "climate", "rom_stue", temperature=23.5)
     await kall("number", "set_value", "number", "temp_stue_natt", value=18.5)
     await kall("number", "set_value", "number", "maks_time", value=5.5)
@@ -163,6 +166,7 @@ async def test_endringer_sendes_til_homey(hass, aioclient_mock):
     assert ("POST", "/bortemodus", {"paa": True}) in e
     assert ("PUT", "/motorinnstillinger", {"skygge": False}) in e
     assert ("PUT", "/husinnstillinger", {"vvb": {"prisstyring": False}}) in e
+    assert ("PUT", "/husinnstillinger", {"lading": {"automatikk": False}}) in e
     assert ("POST", "/overstyr", {"rom": "stue", "temp": 23.5, "minutter": 120}) in e
     assert ("PUT", "/motorinnstillinger", {"maksTimeKwh": 5.5}) in e
     assert ("POST", "/hjemkomst", {"tid": "17:30"}) in e
@@ -183,11 +187,13 @@ async def test_ny_tilstand_hentes_etter_en_endring(hass, aioclient_mock):
     ny = copy.deepcopy(SVAR)
     ny["hus"]["borte"] = True
     ny["hus"]["modus"] = "Borte"
+    ny["hus"]["lading"] = {"handling": "hold", "trinn": 16, "kw": 3.6, "forklaring": "Lader på 16 A"}
     _homey(aioclient_mock, ny)
     await hass.services.async_call("switch", "turn_on", {"entity_id": _id(hass, "switch", "bortemodus")}, blocking=True)
     await hass.async_block_till_done()
     assert _tilstand(hass, "switch", "bortemodus").state == "on"
     assert _tilstand(hass, "sensor", "modus").state == "Borte"
+    assert _tilstand(hass, "sensor", "lading").state == "Lader på 16 A"
 
 
 async def test_homey_nede_gir_utilgjengelige_entiteter_og_de_kommer_tilbake(hass, aioclient_mock):

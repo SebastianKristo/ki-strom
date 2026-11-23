@@ -4,8 +4,7 @@ Homey-versjonen av KI Energi. Appen bygges trinnvis:
 
 1. **Strømkalkulator:** nettleie, kapasitetstrinn, strømstøtte, Norgespris og månedskostnad.
 2. **Energimotor:** timebudsjett, rom med prioritet, værvarsel og prisoptimal varmeplan.
-3. **Huset** (denne versjonen, 3a): personer, bortemodus og hjemkomst, bereder, håndklevarmer, vaner og widget.
-   Elbillading og lysregler kommer i 3b.
+3. **Huset:** personer, bortemodus og hjemkomst, bereder, håndklevarmer, vaner, widget, elbillading og lysregler.
 4. **Kontrollversjon i Home Assistant:** integrasjonen i dette repoet kan kobles til appen («På Homey» i oppsettet)
    og viser og betjener den derfra.
 
@@ -93,6 +92,15 @@ varmes det uansett pris og effekt. En påbegynt oppvarming avbrytes ikke.
 
 **Håndklevarmeren** står på i et morgen- og et kveldsvindu, og av når huset er tomt.
 
+**Elbilladingen** gir bilen effekten varmen ikke bruker. Laderen trenger en av/på-bryter og en ladestrøm som kan
+settes i ampere; appen velger det høyeste trinnet som får plass i timen. Den går ned med en gang huset trenger
+effekten, og opp igjen først når det monner. Batterinivå med hysterese (stopp ved 80 %, start igjen under 70 %),
+og «bare om natten» hvis du vil. Bilens forbruk holdes utenfor husets lærte lastprofil.
+
+**Lysreglene** er «glemt lys» (av etter noen minutter uten bevegelse, eller etter en maks på-tid uten sensor)
+og «nattdemping» (et nattnivå og et dagnivå; endrer du lysstyrken for hånd, får den stå til neste skifte).
+En sensor som har falt ut regnes ikke som «ingen i rommet».
+
 **Vanene** lærer når dere pleier å komme hjem etter en tur og når huset våkner, og foreslår endringer i
 innstillingene. Lært hjemkomsttid kan brukes automatisk.
 
@@ -113,7 +121,8 @@ spotpris, strømstøtte, totalpris, forbruk og kostnad for timen, dagen og måne
 - **Og:** tariffen er dagtariff, Norgespris er aktiv, kapasitetsvarsel er på, totalprisen er over …, energimotorens status er …,
   bortemodus er på, alle er borte.
 - **Så:** overstyr temperaturen i et rom, fjern overstyringen, slå skyggemodus eller bortemodus av eller på,
-  «vi kommer hjem kl. …», «vi blir borte lenger», varm opp berederen nå, kjør en full oppvarming av berederen.
+  «vi kommer hjem kl. …», «vi blir borte lenger», varm opp berederen nå, kjør en full oppvarming av berederen,
+  slå automatisk elbillading av eller på.
 
 ## Lokalt API
 
@@ -132,7 +141,7 @@ spotpris, strømstøtte, totalpris, forbruk og kostnad for timen, dagen og måne
 | POST | `/overstyr`, `/fjernoverstyring` | `{rom, temp, minutter}` / `{rom}` |
 | GET | `/hus` | Modus, personer, hjemkomst, bereder, håndklevarmer og vaner |
 | GET / PUT | `/husinnstillinger` | Personer, bortemodus, bereder og håndklevarmer |
-| GET | `/personkilder`, `/brytere` | Til oppsettet |
+| GET | `/personkilder`, `/brytere`, `/alleenheter` | Til oppsettet |
 | POST | `/bortemodus`, `/hjemkomst`, `/forleng`, `/bereder` | `{paa}` / `{tid}` / – / `{handling, minutter}` |
 
 ## Utvikling

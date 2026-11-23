@@ -9,9 +9,9 @@ Kontrollversjon for Homey. Eksisterende oppsett påvirkes ikke.
 - **Kontrollversjonen** kobler seg til KI Energi-appen på Homey over hjemmenettet og gjør den om til
   entiteter i Home Assistant. All beregning og styring skjer på Homey; Home Assistant viser og betjener.
   - **Sensorer:** tariff, kapasitetstrinn, priser, forbruk og kostnad, motorens status og forklaring,
-    timens grense, modus, hjemkomst og bereder.
+    timens grense, modus, hjemkomst, bereder og elbillading.
   - **Rom som klimaenheter:** temperatur nå og settpunkt. Setter du temperaturen, overstyres rommet i to timer.
-  - **Brytere:** energimotor, skyggemodus, varmeplan, bortemodus, Norgespris og berederstyring.
+  - **Brytere:** energimotor, skyggemodus, varmeplan, bortemodus, Norgespris, berederstyring og elbillading.
   - **Tall og klokkeslett:** dag- og nattemperatur per rom, timegrenser, bortetemperatur, dag-/nattstart,
     fast hjemkomst og «Vi kommer hjem kl.».
   - **Knapper:** varm opp berederen, full oppvarming, «vi blir borte lenger» og fjern overstyringer.

@@ -98,6 +98,8 @@ class MotorKobling {
       annetStyrtW: hus.annetStyrtW,
       vaner: hus.vaner,
     });
+    // Bilen får det varmen ikke bruker, og lysreglene går.
+    await this.app.hus.etterMotor(naa, enheter, this.bilde);
     this.bilde.hus = this.app.hus.bilde;
     await this._skriv(enheter, naa);
     return this.bilde;

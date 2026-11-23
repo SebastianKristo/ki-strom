@@ -227,6 +227,41 @@
     </div>
   </fieldset>
 
+  <fieldset class="homey-form-fieldset">
+    <legend class="homey-form-legend">Elbillading</legend>
+    <p class="hjelp">Bilen får effekten varmen ikke bruker, og lader på det høyeste trinnet som får plass i timen.</p>
+    <div class="homey-form-group rad">
+      <label class="homey-form-label" for="l_enhet">Lader</label>
+      <select class="homey-form-select" id="l_enhet"></select>
+    </div>
+    <div class="rutenett">
+      <div><label for="l_bryter">Lading av/på</label><select class="homey-form-select" id="l_bryter"></select></div>
+      <div><label for="l_strom">Ladestrøm (A)</label><select class="homey-form-select" id="l_strom"></select></div>
+      <div><label for="l_effekt">Ladeeffekt (W)</label><select class="homey-form-select" id="l_effekt"></select></div>
+      <div><label for="l_soc">Batterinivå (%)</label><select class="homey-form-select" id="l_soc"></select></div>
+      <div><label for="l_trinn">Trinn (ampere, kommadelt)</label><input class="homey-form-input" id="l_trinn" type="text" placeholder="6,8,10,13,16" /></div>
+      <div><label for="l_faser">Faser</label><select class="homey-form-select" id="l_faser"><option value="1">1</option><option value="3">3</option></select></div>
+      <div><label for="l_volt">Spenning (V)</label><input class="homey-form-input" id="l_volt" type="number" min="100" max="500" step="10" /></div>
+      <div><label for="l_stoppVed">Stopp ved (%)</label><input class="homey-form-input" id="l_stoppVed" type="number" min="20" max="100" step="5" /></div>
+      <div><label for="l_startUnder">Start igjen under (%)</label><input class="homey-form-input" id="l_startUnder" type="number" min="10" max="100" step="5" /></div>
+      <div><label for="l_nattFra">Natt fra</label><input class="homey-form-input" id="l_nattFra" type="time" /></div>
+      <div><label for="l_nattTil">Natt til</label><input class="homey-form-input" id="l_nattTil" type="time" /></div>
+    </div>
+    <div class="homey-form-group rad">
+      <label class="homey-form-checkbox"><input class="homey-form-checkbox-input" type="checkbox" id="l_automatikk" /><span class="homey-form-checkbox-checkmark"></span><span class="homey-form-checkbox-text">KI styrer ladingen</span></label>
+    </div>
+    <div class="homey-form-group rad">
+      <label class="homey-form-checkbox"><input class="homey-form-checkbox-input" type="checkbox" id="l_kunNatt" /><span class="homey-form-checkbox-checkmark"></span><span class="homey-form-checkbox-text">Lad bare om natten</span></label>
+    </div>
+  </fieldset>
+
+  <fieldset class="homey-form-fieldset">
+    <legend class="homey-form-legend">Lys</legend>
+    <p class="hjelp">«Glemt lys» slår av når ingen har vært i rommet på en stund. «Nattdemping» setter et nattnivå og et dagnivå.</p>
+    <div id="lysregler"></div>
+    <button id="nyLysregel" class="homey-button-secondary-full">Legg til lysregel</button>
+  </fieldset>
+
   <button id="lagreHus" class="homey-button-primary-full">Lagre huset</button>
   <div id="husstatus" class="hjelp" style="white-space: pre-line; margin: 12px 0;"></div>
 
@@ -409,6 +444,95 @@
       personer = personer.filter((p) => !p.slett && p.key);
     }
 
+    // ---------------- Lading og lys ----------------
+    const L_TALL = ['volt', 'stoppVed', 'startUnder'];
+    const L_TEKST = ['nattFra', 'nattTil'];
+    const L_KRYSS = ['automatikk', 'kunNatt'];
+    const L_KAP = ['bryter', 'strom', 'effekt', 'soc'];
+    const LYSTYPER = [['glemt', 'Glemt lys'], ['demp', 'Nattdemping']];
+    let alle = [];
+    let lysregler = [];
+
+    function visLaderkap(lading) {
+      const e = alle.find((x) => x.id === el('l_enhet').value);
+      const kap = e ? e.kap : [];
+      const som = (filter) => kap.filter(filter).map((k) => ({ id: k.id, navn: `${k.id} (${k.verdi ?? '–'})` }));
+      const valgt = (felt, gjett) => (lading[felt] && lading[felt].enhet === (e && e.id) ? lading[felt].kap : (kap.find(gjett) || {}).id);
+      fyll(el('l_bryter'), som((k) => k.type === 'boolean' && k.kanSettes), valgt('bryter', (k) => k.id === 'onoff' || /charg/i.test(k.id) && k.type === 'boolean' && k.kanSettes), 'Velg …');
+      fyll(el('l_strom'), som((k) => k.type === 'number' && k.kanSettes), valgt('strom', (k) => /current|amp|strom/i.test(k.id) && k.kanSettes), 'Velg …');
+      fyll(el('l_effekt'), som((k) => k.type === 'number' && !k.kanSettes), valgt('effekt', (k) => k.id.startsWith('measure_power')), 'Ingen');
+      fyll(el('l_soc'), som((k) => k.type === 'number' && !k.kanSettes), valgt('soc', (k) => k.id.startsWith('measure_battery')), 'Ingen');
+    }
+
+    function tegnLys() {
+      const lamper = [['', 'Velg lys …']].concat(alle.filter((e) => e.kap.some((k) => k.id === 'onoff')).map((e) => [e.id, e.navn]));
+      const sensorer = [['', 'Ingen sensor (bruk maks på-tid)']];
+      for (const e of alle) for (const k of e.kap) if (k.id.startsWith('alarm_') && k.type === 'boolean') sensorer.push([`${e.id}|${k.id}`, `${e.navn} — ${k.id}`]);
+      el('lysregler').innerHTML = lysregler.map((r, n) => `
+        <div class="rom" data-n="${n}">
+          <div class="rutenett">
+            <div><label>Navn</label><input class="homey-form-input" data-f="navn" type="text" value="${tekst(r.navn)}" /></div>
+            <div><label>Regel</label><select class="homey-form-select" data-f="type">${valg(LYSTYPER, r.type || 'glemt')}</select></div>
+            <div style="grid-column: 1 / 3"><label>Lys</label><select class="homey-form-select" data-f="lys">${valg(lamper, r.lys || '')}</select></div>
+            ${(r.type || 'glemt') === 'glemt' ? `
+            <div style="grid-column: 1 / 3"><label>Nærværssensor</label><select class="homey-form-select" data-f="naervaer">${valg(sensorer, r.naervaer ? `${r.naervaer.enhet}|${r.naervaer.kap}` : '')}</select></div>
+            <div><label>Av etter minutter uten bevegelse</label><input class="homey-form-input" data-f="fravaerMin" type="number" min="1" max="120" value="${r.fravaerMin ?? 5}" /></div>
+            <div><label>Uten sensor: av etter minutter</label><input class="homey-form-input" data-f="maksPaMin" type="number" min="1" max="600" value="${r.maksPaMin ?? 30}" /></div>` : `
+            <div><label>Nattnivå (%)</label><input class="homey-form-input" data-f="nattProsent" type="number" min="1" max="100" value="${r.nattProsent ?? 25}" /></div>
+            <div><label>Dagnivå (%)</label><input class="homey-form-input" data-f="dagProsent" type="number" min="1" max="100" value="${r.dagProsent ?? 80}" /></div>`}
+            <div><label>Fra (tomt = standard)</label><input class="homey-form-input" data-f="fra" type="time" value="${r.fra || ''}" /></div>
+            <div><label>Til</label><input class="homey-form-input" data-f="til" type="time" value="${r.til || ''}" /></div>
+            <div><label><input type="checkbox" data-f="aktiv"${r.aktiv !== false ? ' checked' : ''} /> Regelen er på</label></div>
+            <div><label><input type="checkbox" data-f="slett" /> Fjern</label></div>
+          </div>
+        </div>`).join('') || '<p class="hjelp">Ingen lysregler ennå.</p>';
+      el('lysregler').querySelectorAll('[data-f="type"]').forEach((e) => e.addEventListener('change', () => { lesLys(); tegnLys(); }));
+    }
+
+    function lesLys() {
+      document.querySelectorAll('#lysregler .rom').forEach((boks) => {
+        const r = lysregler[Number(boks.dataset.n)];
+        boks.querySelectorAll('[data-f]').forEach((e) => {
+          const f = e.dataset.f;
+          if (e.type === 'checkbox') r[f] = e.checked;
+          else if (f === 'naervaer') { const [enhet, kap] = e.value.split('|'); r.naervaer = e.value ? { enhet, kap } : null; }
+          else if (e.type === 'number') r[f] = Number(e.value);
+          else r[f] = e.value || null;
+        });
+        if (!r.key) r.key = `regel_${Date.now().toString(36)}_${boks.dataset.n}`;
+      });
+      lysregler = lysregler.filter((r) => !r.slett);
+    }
+
+    function startLadingOgLys(Homey, h) {
+      const l = h.lading || {};
+      lysregler = h.lys || [];
+      for (const k of L_KRYSS) el(`l_${k}`).checked = Boolean(l[k]);
+      for (const k of L_TALL.concat(L_TEKST)) el(`l_${k}`).value = l[k] ?? '';
+      el('l_trinn').value = (l.trinn || []).join(',');
+      el('l_faser').value = String(l.faser || 1);
+      Homey.api('GET', '/alleenheter', null, (feil, liste) => {
+        alle = liste || [];
+        fyll(el('l_enhet'), alle.filter((e) => e.kap.some((k) => k.type === 'number' && k.kanSettes)).map((e) => ({ id: e.id, navn: e.navn })), l.bryter && l.bryter.enhet, 'Ingen lader');
+        visLaderkap(l);
+        el('l_enhet').addEventListener('change', () => visLaderkap({}));
+        tegnLys();
+      });
+      el('nyLysregel').addEventListener('click', () => { lesLys(); lysregler.push({ navn: '', type: 'glemt', lys: '', aktiv: true, slett: false, key: `regel_${Date.now().toString(36)}` }); tegnLys(); });
+    }
+
+    function ladingFraSkjema() {
+      const enhet = el('l_enhet').value;
+      const kilde = (felt) => (enhet && el(`l_${felt}`).value ? { enhet, kap: el(`l_${felt}`).value } : null);
+      const ut = { trinn: el('l_trinn').value.split(',').map((x) => Number(x.trim())).filter((x) => x > 0), faser: Number(el('l_faser').value) };
+      for (const k of L_KAP) ut[k] = kilde(k);
+      for (const k of L_KRYSS) ut[k] = el(`l_${k}`).checked;
+      for (const k of L_TALL) if (el(`l_${k}`).value !== '') ut[k] = Number(el(`l_${k}`).value);
+      for (const k of L_TEKST) if (el(`l_${k}`).value) ut[k] = el(`l_${k}`).value;
+      if (!ut.trinn.length) delete ut.trinn;
+      return ut;
+    }
+
     function visHus(Homey) {
       Homey.api('GET', '/hus', null, (feil, h) => {
         if (feil || !h || !h.personer) return;
@@ -416,6 +540,8 @@
         if (h.personer.length) linjer.push(h.personer.map((p) => `${p.navn}: ${p.hjemme === null ? 'ukjent' : p.hjemme ? 'hjemme' : 'borte'}`).join(' · '));
         if (h.bereder) linjer.push(`Bereder: ${h.bereder.status}. ${h.bereder.forklaring} Sist varm for ${h.bereder.dager_siden_varm ?? '–'} dager siden.`);
         if (h.hanklevarmer) linjer.push(`Håndklevarmer: ${h.hanklevarmer.paa ? 'på' : 'av'} (${h.hanklevarmer.grunn})`);
+        if (h.lading) linjer.push(`Elbil: ${h.lading.forklaring}`);
+        for (const r of Object.values(h.lys || {})) linjer.push(`Lys ${r.navn}: ${r.tekst}`);
         el('husstatus').textContent = linjer.join('\n');
         el('forslag').textContent = (h.forslag || []).map((f) => `Forslag: ${f.tekst}`).join('\n');
       });
@@ -434,6 +560,7 @@
         const k2 = h.hanklevarmer || {};
         for (const k of K_TEKST) el(`k_${k}`).value = k2[k] ?? '';
         personer = h.personer || [];
+        startLadingOgLys(Homey, h);
         Homey.api('GET', '/personkilder', null, (f2, liste) => { kilder = liste || []; tegnPersoner(); tegnRom(); });
         Homey.api('GET', '/brytere', null, (f3, liste) => {
           brytere = liste || [];
@@ -451,7 +578,9 @@
           const b = brytere.find((x) => x.id === id);
           return b ? { bryter: { enhet: b.id, kap: 'onoff' }, effekt: b.harEffekt ? { enhet: b.id, kap: 'measure_power' } : null } : { bryter: null, effekt: null };
         };
-        const ny = { personer, vvb: releet(el('v_bryter').value), hanklevarmer: { bryter: releet(el('k_bryter').value).bryter } };
+        lesLys();
+        lysregler = lysregler.filter((r) => r.lys);      // regler uten valgt lys lagres ikke
+        const ny = { personer, vvb: releet(el('v_bryter').value), hanklevarmer: { bryter: releet(el('k_bryter').value).bryter }, lading: ladingFraSkjema(), lys: lysregler };
         for (const k of H_KRYSS) ny[k] = el(`h_${k}`).checked;
         for (const k of H_TALL) if (el(`h_${k}`).value !== '') ny[k] = Number(el(`h_${k}`).value);
         ny.hjemkomstUkedag = el('h_hjemkomstUkedag').value === '' ? null : Number(el('h_hjemkomstUkedag').value);
@@ -463,8 +592,8 @@
         Homey.api('PUT', '/husinnstillinger', ny, (feil) => {
           if (feil) return Homey.alert(feil.message || String(feil));
           el('husstatus').textContent = 'Lagret.';
-          tegnPersoner(); tegnRom();
-          setTimeout(() => visHus(Homey), 65000);
+          tegnPersoner(); tegnRom(); tegnLys();
+          setTimeout(() => visHus(Homey), 2000);
         });
       });
     }

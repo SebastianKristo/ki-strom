@@ -4,6 +4,8 @@ const { Hus, STANDARD: HUS_STANDARD } = require('../lib/hus');
 const { Bereder, STANDARD: VVB_STANDARD } = require('../lib/vvb');
 const { Vaner } = require('../lib/vaner');
 const hk = require('../lib/hanklevarmer');
+const { Lading, STANDARD: LADING_STANDARD } = require('../lib/lading');
+const { Lys } = require('../lib/lys');
 const { osloDeler } = require('../lib/kalender');
 
 const VARSLES = new Set(['borte_paa', 'kom_hjem', 'kom_ikke', 'legionella', 'feil']);
@@ -18,18 +20,26 @@ class HusKobling {
     this.app = app;
     this.homey = app.homey;
     this.tilstand = this.homey.settings.get('hus_tilstand') || {};
-    for (const k of ['hus', 'vvb', 'vaner']) this.tilstand[k] = this.tilstand[k] || {};
+    for (const k of ['hus', 'vvb', 'vaner', 'lading', 'lys']) this.tilstand[k] = this.tilstand[k] || {};
     const innst = this.innstillinger();
     this.hus = new Hus(this.tilstand.hus, innst);
     this.bereder = new Bereder(this.tilstand.vvb, innst.vvb);
     this.vaner = new Vaner(this.tilstand.vaner);
+    this.lading = new Lading(this.tilstand.lading, innst.lading);
+    this.lys = new Lys(this.tilstand.lys, innst.lys);
     this.bilde = null;
     this.sistSkrevet = {};
   }
 
   innstillinger() {
     const lagret = this.homey.settings.get('hus') || {};
-    return { ...HUS_STANDARD, ...lagret, vvb: { ...VVB_STANDARD, ...(lagret.vvb || {}) }, hanklevarmer: { ...hk.STANDARD, ...(lagret.hanklevarmer || {}) } };
+    return {
+      ...HUS_STANDARD, ...lagret,
+      vvb: { ...VVB_STANDARD, ...(lagret.vvb || {}) },
+      hanklevarmer: { ...hk.STANDARD, ...(lagret.hanklevarmer || {}) },
+      lading: { ...LADING_STANDARD, ...(lagret.lading || {}) },
+      lys: Array.isArray(lagret.lys) ? lagret.lys : [],
+    };
   }
 
   settInnstillinger(endringer) {
@@ -40,9 +50,13 @@ class HusKobling {
     }
     if (endringer && endringer.vvb) ny.vvb = { ...naa.vvb, ...endringer.vvb };
     if (endringer && endringer.hanklevarmer) ny.hanklevarmer = { ...naa.hanklevarmer, ...endringer.hanklevarmer };
+    if (endringer && endringer.lading) ny.lading = { ...naa.lading, ...endringer.lading };
+    if (endringer && Array.isArray(endringer.lys)) ny.lys = endringer.lys;
     this.homey.settings.set('hus', ny);
     this.hus.settInnstillinger(ny);
     this.bereder.settInnstillinger(ny.vvb);
+    this.lading.settInnstillinger(ny.lading);
+    this.lys.settRegler(ny.lys);
     return ny;
   }
 
@@ -121,6 +135,12 @@ class HusKobling {
       hanklebilde = { paa: onske.paa, grunn: onske.grunn };
     }
 
+    // --- Elbil: det bilen trekker er styrt last, ikke husets øvrige forbruk ---
+    if (this.lading.konfigurert()) {
+      const l = this._ladermaalinger(enheter, innst.lading);
+      annetStyrtW += this.lading.styrtW(l.pa, l.maaltKw);
+    }
+
     await this._hendelser(hendelser, kontekst);
     const hus = this.hus.bilde(naa, this.vaner);
     this.bilde = {
@@ -128,26 +148,86 @@ class HusKobling {
       hjemkomst_kl: hus.hjemkomst ? klokke(Date.parse(hus.hjemkomst)) : null,
       bereder: berederbilde,
       hanklevarmer: hanklebilde,
+      lading: this.bilde ? this.bilde.lading : null,
+      lys: this.bilde ? this.bilde.lys : {},
       vaner: this.vaner.bilde(),
       forslag: this.vaner.forslag({ dagStart: this.app.motor.innstillinger().dagStart, hjemkomstUkedag: innst.hjemkomstUkedag, hjemkomstTid: innst.hjemkomstTid }),
     };
     return { kontekst, reservertKw, annetStyrtW, vaner: this.vaner };
   }
 
-  async _bryter(enheter, kilde, paa, navn, naa) {
-    const e = enheter[kilde.enhet];
-    if (!e) return;
+  _ladermaalinger(enheter, l) {
+    const tall = (kilde) => { const v = HusKobling.verdi(enheter, kilde); return v === null || !Number.isFinite(Number(v)) ? null : Number(v); };
+    const jaNei = (kilde) => { const v = HusKobling.verdi(enheter, kilde); return v === null ? null : Boolean(v); };
+    const w = tall(l.effekt);
+    return { pa: jaNei(l.bryter), maaltKw: w === null ? null : w / 1000, soc: tall(l.soc), tilkoblet: l.tilkoblet && l.tilkoblet.enhet ? jaNei(l.tilkoblet) : null };
+  }
+
+  /**
+   * Kjøres etter motoren i hvert tick: bilen får effekten varmen ikke bruker, og lysreglene går.
+   * Endrer `motorbilde` så det viser hva ladingen tar.
+   */
+  async etterMotor(naa, enheter, motorbilde) {
+    const innst = this.innstillinger();
+    if (this.lading.konfigurert()) {
+      const l = this._ladermaalinger(enheter, innst.lading);
+      const v = this.lading.vurder({ ms: naa, ledigKw: Math.max(0, motorbilde.ledig_kw ?? 0), ...l });
+      let skrevet = true;
+      if (v.handling === 'start' || v.handling === 'endre') skrevet = await this._bryter(enheter, innst.lading.strom, v.trinn, 'lading_strom', naa, true);
+      if (v.handling === 'start') skrevet = (await this._bryter(enheter, innst.lading.bryter, true, 'lading', naa, true)) && skrevet;
+      if (v.handling === 'stopp') skrevet = await this._bryter(enheter, innst.lading.bryter, false, 'lading', naa, true);
+      if (skrevet) this.lading.utfort(v, naa);
+      this.bilde.lading = { ...v, satt_trinn: this.lading.m.satt_trinn, soc: l.soc, maalt_kw: l.maaltKw };
+      motorbilde.lading_kw = v.kw;
+      motorbilde.ledig_kw = Math.max(0, Math.round(((motorbilde.ledig_kw ?? 0) - v.kw) * 100) / 100);
+    }
+
+    const regler = this.lys.regler;
+    if (regler.length) {
+      const lys = {};
+      for (const r of regler) {
+        const e = enheter[r.lys];
+        const k = e && e.capabilitiesObj;
+        const n = r.naervaer && r.naervaer.enhet ? enheter[r.naervaer.enhet] : null;
+        const nk = n && n.capabilitiesObj && n.capabilitiesObj[r.naervaer.kap];
+        lys[r.key] = {
+          pa: k && k.onoff && k.onoff.value !== undefined && k.onoff.value !== null ? Boolean(k.onoff.value) : null,
+          dim: k && k.dim ? Number(k.dim.value) : null,
+          dimbar: Boolean(k && k.dim),
+          naervaer: nk && nk.value !== null && nk.value !== undefined ? Boolean(nk.value) : null,
+          naervaerEndretMs: nk && nk.lastUpdated ? Date.parse(nk.lastUpdated) || null : null,
+        };
+      }
+      const motor = this.app.motor.innstillinger();
+      const r = this.lys.tick({ ms: naa, lys, innst: motor });
+      for (const h of r.handlinger) {
+        const regel = regler.find((x) => x.key === h.key);
+        if (h.type === 'av') await this._bryter(enheter, { enhet: regel.lys, kap: 'onoff' }, false, `lys_${h.key}`, naa, true);
+        else await this._bryter(enheter, { enhet: regel.lys, kap: 'dim' }, h.verdi, `lys_${h.key}`, naa, true);
+      }
+      this.bilde.lys = r.status;
+    }
+  }
+
+  async _bryter(enheter, kilde, paa, navn, naa, alltid = false) {
+    const e = kilde && enheter[kilde.enhet];
+    if (!e) return false;
     // Skyggemodus gjelder alt appen styrer, ikke bare termostatene.
     const motor = this.app.motor.innstillinger();
-    if (motor.skygge || !motor.aktiv) return;
+    if (motor.skygge || !motor.aktiv) return false;
     const sist = this.sistSkrevet[navn];
-    if (sist && sist.verdi === paa && naa - sist.ms < 3 * 60000) return;     // releet rekker ikke alltid å melde tilbake på ett minutt
+    // Releet rekker ikke alltid å melde tilbake på ett minutt. `alltid`: handlingen er alt
+    // vurdert mot forrige tilstand (lading, lys), så samme verdi kan trygt sendes igjen.
+    if (!alltid && sist && sist.verdi === paa && naa - sist.ms < 3 * 60000) return false;
     this.sistSkrevet[navn] = { verdi: paa, ms: naa };
+    const tekst = typeof paa === 'boolean' ? (paa ? 'på' : 'av') : String(paa);
     try {
       await e.setCapabilityValue({ capabilityId: kilde.kap || 'onoff', value: paa });
-      this.app.log(`${e.name}: ${paa ? 'på' : 'av'}`);
+      this.app.log(`${e.name}: ${tekst}`);
+      return true;
     } catch (feil) {
-      this.app.log(`Kunne ikke slå ${e.name} ${paa ? 'på' : 'av'}: ${feil.message}`);
+      this.app.log(`Kunne ikke sette ${e.name} til ${tekst}: ${feil.message}`);
+      return false;
     }
   }
 
@@ -202,6 +282,19 @@ class HusKobling {
       ...Object.values(brukere).map((b) => ({ type: 'bruker', id: b.id, navn: `${b.name} (Homey-bruker)`, verdi: b.present })),
       ...Object.values(variabler).filter((v) => v.type === 'boolean').map((v) => ({ type: 'variabel', id: v.id, navn: `${v.name} (variabel)`, verdi: v.value })),
     ].sort((a, b) => a.navn.localeCompare(b.navn, 'no'));
+  }
+
+  /** Alle enheter med det de kan måle og styre — til oppsettet av lader og lys. */
+  async alleEnheter() {
+    const api = await this.app.api();
+    const enheter = await api.devices.getDevices();
+    return Object.values(enheter)
+      .filter((e) => !(e.driverId || '').includes(this.app.manifest.id))
+      .map((e) => ({
+        id: e.id, navn: e.name, klasse: e.class,
+        kap: Object.entries(e.capabilitiesObj || {}).map(([id, k]) => ({ id, type: k.type, kanSettes: Boolean(k.setable), verdi: k.value ?? null })),
+      }))
+      .sort((a, b) => a.navn.localeCompare(b.navn, 'no'));
   }
 
   /** Enheter som kan slås av og på, med effektmåling hvis de har det. */
