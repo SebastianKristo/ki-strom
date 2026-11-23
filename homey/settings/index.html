@@ -7,6 +7,11 @@
     .hjelp { font-size: 12px; opacity: .7; margin-top: 4px; }
     #status { margin: 12px 0; font-size: 13px; white-space: pre-line; }
     .skjult { display: none; }
+    .rom { border: 1px solid rgba(128,128,128,.35); border-radius: 8px; padding: 10px; margin-bottom: 10px; }
+    .rom h3 { margin: 0 0 4px; font-size: 15px; }
+    .rutenett { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .rutenett label { font-size: 12px; opacity: .8; display: block; }
+    .rutenett input, .rutenett select { width: 100%; box-sizing: border-box; }
   </style>
 </head>
 <body>
@@ -83,6 +88,65 @@
   <button id="lagre" class="homey-button-primary-full">Lagre</button>
   <div id="status"></div>
 
+  <header class="homey-header">
+    <h1 class="homey-title">Energimotor</h1>
+    <p class="homey-subtitle">Holder timeforbruket under kapasitetstrinnet og varmer rommene så billig som komforten tillater</p>
+  </header>
+
+  <fieldset class="homey-form-fieldset">
+    <legend class="homey-form-legend">Styring</legend>
+    <div class="homey-form-group rad">
+      <label class="homey-form-checkbox">
+        <input class="homey-form-checkbox-input" type="checkbox" id="m_aktiv" />
+        <span class="homey-form-checkbox-checkmark"></span>
+        <span class="homey-form-checkbox-text">Motoren er på</span>
+      </label>
+    </div>
+    <div class="homey-form-group rad">
+      <label class="homey-form-checkbox">
+        <input class="homey-form-checkbox-input" type="checkbox" id="m_skygge" />
+        <span class="homey-form-checkbox-checkmark"></span>
+        <span class="homey-form-checkbox-text">Skyggemodus</span>
+      </label>
+      <p class="hjelp">I skyggemodus regner motoren og forklarer hva den ville gjort, men rører ikke termostatene. La den stå på til du har sett at forslagene er fornuftige.</p>
+    </div>
+    <div class="homey-form-group rad">
+      <label class="homey-form-checkbox">
+        <input class="homey-form-checkbox-input" type="checkbox" id="m_planAktiv" />
+        <span class="homey-form-checkbox-checkmark"></span>
+        <span class="homey-form-checkbox-text">Prisoptimal varmeplan</span>
+      </label>
+      <p class="hjelp">For rom motoren har lært: planlegger varmen 36 timer fram etter pris, værvarsel og rommets egen kurve.</p>
+    </div>
+    <div class="homey-form-group rad">
+      <label class="homey-form-label" for="m_ute">Utetemperatur</label>
+      <select class="homey-form-select" id="m_ute"></select>
+      <p class="hjelp">Uten sensor brukes værvarselet fra Yr.</p>
+    </div>
+  </fieldset>
+
+  <fieldset class="homey-form-fieldset">
+    <legend class="homey-form-legend">Grenser og døgnrytme</legend>
+    <div class="rutenett">
+      <div><label for="m_maksTimeKwh">Absolutt grense per time (kWh)</label><input class="homey-form-input" id="m_maksTimeKwh" type="number" step="0.1" min="1" /></div>
+      <div><label for="m_minTimeKwh">Laveste grense (kWh)</label><input class="homey-form-input" id="m_minTimeKwh" type="number" step="0.1" min="0.5" /></div>
+      <div><label for="m_maalTrinnKw">Hold snittet under (kW, tomt = dagens trinn)</label><input class="homey-form-input" id="m_maalTrinnKw" type="number" step="0.5" min="1" /></div>
+      <div><label for="m_planOppGrader">Planen får forvarme (°C over kravet)</label><input class="homey-form-input" id="m_planOppGrader" type="number" step="0.5" min="0" max="3" /></div>
+      <div><label for="m_dagStart">Dagen starter</label><input class="homey-form-input" id="m_dagStart" type="time" /></div>
+      <div><label for="m_nattStart">Natten starter</label><input class="homey-form-input" id="m_nattStart" type="time" /></div>
+    </div>
+  </fieldset>
+
+  <fieldset class="homey-form-fieldset">
+    <legend class="homey-form-legend">Rom</legend>
+    <p class="hjelp">Ett rom per Homey-sone med termostater. Prioritet 1 senkes aldri; 5 senkes først.</p>
+    <div id="rom"></div>
+    <button id="foresla" class="homey-button-secondary-full">Hent rom fra Homey-sonene</button>
+  </fieldset>
+
+  <button id="lagreMotor" class="homey-button-primary-full">Lagre energimotor</button>
+  <div id="motorstatus" class="hjelp" style="white-space: pre-line; margin: 12px 0;"></div>
+
   <script type="text/javascript">
     const FELT = ['maalerEnhet', 'effektKapabilitet', 'energiKapabilitet', 'nettselskap', 'sikringstrinn', 'boligtype',
       'harNorgespris', 'varselTerskelKw', 'energileddDagEksMva', 'energileddNattEksMva', 'egneTrinn'];
@@ -128,7 +192,92 @@
       });
     }
 
+    // ---------------- Energimotor ----------------
+    const M_TALL = ['maksTimeKwh', 'minTimeKwh', 'maalTrinnKw', 'planOppGrader'];
+    const M_KRYSS = ['aktiv', 'skygge', 'planAktiv'];
+    const M_TEKST = ['dagStart', 'nattStart'];
+    const TYPER = [['panel', 'Panelovn'], ['gulv', 'Gulvvarme'], ['vannbaaren', 'Vannbåren / oljefyr'], ['varmepumpe', 'Varmepumpe']];
+    const PROFILER = [['fellesrom', 'Dag og natt'], ['konstant', 'Samme hele døgnet'], ['sjelden', 'Sjelden brukt']];
+    let rom = [];
+
+    const valg = (liste, valgt) => liste.map(([id, navn]) => `<option value="${id}"${id === valgt ? ' selected' : ''}>${navn}</option>`).join('');
+    const tekst = (t) => String(t ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+    function tegnRom() {
+      el('rom').innerHTML = rom.map((r, n) => `
+        <div class="rom" data-n="${n}">
+          <h3>${tekst(r.navn)}</h3>
+          <p class="hjelp">${tekst((r.termostatnavn || []).join(', ') || `${(r.termostater || []).length} termostat(er)`)}</p>
+          <div class="rutenett">
+            <div><label>Dag (°C)</label><input class="homey-form-input" data-f="dag" type="number" step="0.5" value="${r.dag ?? 21}" /></div>
+            <div><label>Natt (°C)</label><input class="homey-form-input" data-f="natt" type="number" step="0.5" value="${r.natt ?? 19}" /></div>
+            <div><label>Program</label><select class="homey-form-select" data-f="profil">${valg(PROFILER, r.profil)}</select></div>
+            <div><label>Varmekilde</label><select class="homey-form-select" data-f="type">${valg(TYPER, r.type)}</select></div>
+            <div><label>Prioritet (1–5)</label><input class="homey-form-input" data-f="prio" type="number" min="1" max="5" step="1" value="${r.prio ?? 3}" /></div>
+            <div><label>Effekt (kW)</label><input class="homey-form-input" data-f="nominell" type="number" min="0.1" step="0.1" value="${r.nominell ?? 1}" /></div>
+            <div><label><input type="checkbox" data-f="aktiv"${r.aktiv !== false ? ' checked' : ''} /> Med i motoren</label></div>
+            <div><label><input type="checkbox" data-f="styrt"${r.styrt !== false ? ' checked' : ''} /> KI styrer termostaten</label></div>
+          </div>
+        </div>`).join('') || '<p class="hjelp">Ingen rom ennå. Trykk «Hent rom fra Homey-sonene».</p>';
+    }
+
+    function lesRom() {
+      document.querySelectorAll('#rom .rom').forEach((boks) => {
+        const r = rom[Number(boks.dataset.n)];
+        boks.querySelectorAll('[data-f]').forEach((e) => {
+          if (e.type === 'checkbox') r[e.dataset.f] = e.checked;
+          else if (e.type === 'number') r[e.dataset.f] = Number(e.value);
+          else r[e.dataset.f] = e.value;
+        });
+      });
+    }
+
+    function visMotor(Homey) {
+      Homey.api('GET', '/motor', null, (feil, m) => {
+        if (feil || !m || !m.budsjett) return;
+        const linjer = [m.forklaring, `Timens grense ${m.budsjett.grense} kWh (${m.budsjett.grense_grunn}). Ute ${m.ute ?? '–'} °C.`];
+        for (const p of m.soner) linjer.push(`${p.navn}: ${p.temp ?? '–'} °C → ${p.settpunkt ?? '–'} °C. ${p.forklaring}${p.laert ? '' : ' (lærer rommet)'}`);
+        el('motorstatus').textContent = linjer.join('\n');
+      });
+    }
+
+    function startMotor(Homey) {
+      Homey.api('GET', '/motorinnstillinger', null, (feil, m) => {
+        m = m || {};
+        for (const k of M_KRYSS) el(`m_${k}`).checked = Boolean(m[k]);
+        for (const k of M_TALL.concat(M_TEKST)) el(`m_${k}`).value = m[k] ?? '';
+        rom = m.soner || [];
+        tegnRom();
+        Homey.api('GET', '/temperatursensorer', null, (f2, liste) => {
+          fyll(el('m_ute'), (liste || []).map((x) => ({ id: x.id, navn: `${x.navn} (${x.verdi ?? '–'} °C)` })), m.ute && m.ute.enhet, 'Værvarsel fra Yr');
+        });
+        visMotor(Homey);
+      });
+      el('foresla').addEventListener('click', () => {
+        lesRom();
+        Homey.api('GET', '/romforslag', null, (feil, forslag) => {
+          if (feil) return Homey.alert(feil.message || String(feil));
+          rom = forslag || [];
+          tegnRom();
+        });
+      });
+      el('lagreMotor').addEventListener('click', () => {
+        lesRom();
+        const ny = { soner: rom, ute: el('m_ute').value ? { enhet: el('m_ute').value, kap: 'measure_temperature' } : null };
+        for (const k of M_KRYSS) ny[k] = el(`m_${k}`).checked;
+        for (const k of M_TALL) ny[k] = el(`m_${k}`).value === '' ? null : Number(el(`m_${k}`).value);
+        for (const k of M_TEKST) ny[k] = el(`m_${k}`).value || undefined;
+        for (const k of ['maksTimeKwh', 'minTimeKwh', 'planOppGrader', 'dagStart', 'nattStart']) if (ny[k] === null || ny[k] === undefined) delete ny[k];
+        Homey.api('PUT', '/motorinnstillinger', ny, (feil) => {
+          if (feil) return Homey.alert(feil.message || String(feil));
+          el('motorstatus').textContent = 'Lagret. Motoren regner på nytt innen ett minutt.';
+          setTimeout(() => visMotor(Homey), 65000);
+        });
+      });
+    }
+
     function onHomeyReady(Homey) {
+      startMotor(Homey);
       Homey.api('GET', '/innstillinger', null, (f1, innst) => {
         innst = innst || {};
         Homey.api('GET', '/nettselskap', null, (f2, liste) => {

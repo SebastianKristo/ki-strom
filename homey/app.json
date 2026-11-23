@@ -1,7 +1,7 @@
 {
   "_comment": "Bygget av scripts/lag-app-json.js — ikke rediger for hånd.",
   "id": "no.kristo.kienergi",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "compatibility": ">=12.0.0",
   "sdk": 3,
   "platforms": [
@@ -20,7 +20,8 @@
   ],
   "brandColor": "#1565C0",
   "permissions": [
-    "homey:manager:api"
+    "homey:manager:api",
+    "homey:manager:geolocation"
   ],
   "images": {
     "small": "/assets/images/small.png",
@@ -54,6 +55,38 @@
     "settInnstillinger": {
       "method": "PUT",
       "path": "/innstillinger"
+    },
+    "motor": {
+      "method": "GET",
+      "path": "/motor"
+    },
+    "hentMotorinnstillinger": {
+      "method": "GET",
+      "path": "/motorinnstillinger"
+    },
+    "settMotorinnstillinger": {
+      "method": "PUT",
+      "path": "/motorinnstillinger"
+    },
+    "termostater": {
+      "method": "GET",
+      "path": "/termostater"
+    },
+    "temperatursensorer": {
+      "method": "GET",
+      "path": "/temperatursensorer"
+    },
+    "romforslag": {
+      "method": "GET",
+      "path": "/romforslag"
+    },
+    "overstyr": {
+      "method": "POST",
+      "path": "/overstyr"
+    },
+    "fjernOverstyring": {
+      "method": "POST",
+      "path": "/fjernoverstyring"
     }
   },
   "capabilities": {
@@ -614,6 +647,176 @@
         "no": "Måledata-problem: nei",
         "en": "Measurement problem: no"
       }
+    },
+    "ki_motor_status": {
+      "type": "string",
+      "title": {
+        "no": "Status",
+        "en": "Status"
+      },
+      "getable": true,
+      "setable": false,
+      "uiComponent": "sensor",
+      "icon": "/assets/sensor.svg"
+    },
+    "ki_motor_forklaring": {
+      "type": "string",
+      "title": {
+        "no": "Forklaring",
+        "en": "Explanation"
+      },
+      "getable": true,
+      "setable": false,
+      "uiComponent": "sensor",
+      "icon": "/assets/sensor.svg"
+    },
+    "ki_time_grense": {
+      "type": "number",
+      "title": {
+        "no": "Timens grense",
+        "en": "Hour limit"
+      },
+      "getable": true,
+      "setable": false,
+      "uiComponent": "sensor",
+      "icon": "/assets/sensor.svg",
+      "units": {
+        "no": "kWh",
+        "en": "kWh"
+      },
+      "decimals": 2,
+      "insights": true
+    },
+    "ki_time_forventet": {
+      "type": "number",
+      "title": {
+        "no": "Timen ligger an til",
+        "en": "Hour forecast"
+      },
+      "getable": true,
+      "setable": false,
+      "uiComponent": "sensor",
+      "icon": "/assets/sensor.svg",
+      "units": {
+        "no": "kWh",
+        "en": "kWh"
+      },
+      "decimals": 2,
+      "insights": true
+    },
+    "ki_time_brukt": {
+      "type": "number",
+      "title": {
+        "no": "Brukt denne timen",
+        "en": "Used this hour"
+      },
+      "getable": true,
+      "setable": false,
+      "uiComponent": "sensor",
+      "icon": "/assets/sensor.svg",
+      "units": {
+        "no": "kWh",
+        "en": "kWh"
+      },
+      "decimals": 2,
+      "insights": true
+    },
+    "ki_ledig_effekt": {
+      "type": "number",
+      "title": {
+        "no": "Ledig effekt",
+        "en": "Available power"
+      },
+      "getable": true,
+      "setable": false,
+      "uiComponent": "sensor",
+      "icon": "/assets/sensor.svg",
+      "units": {
+        "no": "kW",
+        "en": "kW"
+      },
+      "decimals": 2,
+      "insights": true
+    },
+    "ki_uregulert_effekt": {
+      "type": "number",
+      "title": {
+        "no": "Annet forbruk",
+        "en": "Other consumption"
+      },
+      "getable": true,
+      "setable": false,
+      "uiComponent": "sensor",
+      "icon": "/assets/sensor.svg",
+      "units": {
+        "no": "kW",
+        "en": "kW"
+      },
+      "decimals": 2,
+      "insights": true
+    },
+    "ki_styrt_effekt": {
+      "type": "number",
+      "title": {
+        "no": "Styrt varme",
+        "en": "Controlled heating"
+      },
+      "getable": true,
+      "setable": false,
+      "uiComponent": "sensor",
+      "icon": "/assets/sensor.svg",
+      "units": {
+        "no": "W",
+        "en": "W"
+      },
+      "decimals": 0,
+      "insights": true
+    },
+    "ki_senkede_rom": {
+      "type": "number",
+      "title": {
+        "no": "Senkede rom",
+        "en": "Lowered rooms"
+      },
+      "getable": true,
+      "setable": false,
+      "uiComponent": "sensor",
+      "icon": "/assets/sensor.svg",
+      "units": {
+        "no": "",
+        "en": ""
+      },
+      "decimals": 0,
+      "insights": true
+    },
+    "ki_plan_spart": {
+      "type": "number",
+      "title": {
+        "no": "Varmeplanen sparer (36 t)",
+        "en": "Heat plan saves (36 h)"
+      },
+      "getable": true,
+      "setable": false,
+      "uiComponent": "sensor",
+      "icon": "/assets/sensor.svg",
+      "units": {
+        "no": "kr",
+        "en": "kr"
+      },
+      "decimals": 2,
+      "insights": true
+    },
+    "ki_skyggemodus": {
+      "type": "boolean",
+      "title": {
+        "no": "Skyggemodus",
+        "en": "Shadow mode"
+      },
+      "getable": true,
+      "setable": true,
+      "uiComponent": "toggle",
+      "icon": "/assets/sensor.svg",
+      "insights": false
     }
   },
   "drivers": [
@@ -663,6 +866,60 @@
       "images": {
         "small": "/drivers/stromkalkulator/assets/images/small.png",
         "large": "/drivers/stromkalkulator/assets/images/large.png"
+      },
+      "pair": [
+        {
+          "id": "list_devices",
+          "template": "list_devices",
+          "navigation": {
+            "next": "add_devices"
+          }
+        },
+        {
+          "id": "add_devices",
+          "template": "add_devices"
+        }
+      ]
+    },
+    {
+      "id": "energimotor",
+      "name": {
+        "no": "Energimotor",
+        "en": "Energy engine"
+      },
+      "class": "other",
+      "capabilities": [
+        "onoff",
+        "ki_skyggemodus",
+        "measure_temperature",
+        "ki_motor_status",
+        "ki_motor_forklaring",
+        "ki_time_grense",
+        "ki_time_forventet",
+        "ki_time_brukt",
+        "ki_ledig_effekt",
+        "ki_uregulert_effekt",
+        "ki_styrt_effekt",
+        "ki_senkede_rom",
+        "ki_plan_spart"
+      ],
+      "capabilitiesOptions": {
+        "onoff": {
+          "title": {
+            "no": "Motoren er på",
+            "en": "Engine on"
+          }
+        },
+        "measure_temperature": {
+          "title": {
+            "no": "Utetemperatur",
+            "en": "Outdoor temperature"
+          }
+        }
+      },
+      "images": {
+        "small": "/drivers/energimotor/assets/images/small.png",
+        "large": "/drivers/energimotor/assets/images/large.png"
       },
       "pair": [
         {
@@ -805,6 +1062,60 @@
             "example": 1.1
           }
         ]
+      },
+      {
+        "id": "motor_status_endret",
+        "title": {
+          "no": "Energimotorens status endret seg",
+          "en": "Energy engine status changed"
+        },
+        "tokens": [
+          {
+            "name": "status",
+            "type": "string",
+            "title": {
+              "no": "Status",
+              "en": "Status"
+            },
+            "example": "oransje"
+          },
+          {
+            "name": "forklaring",
+            "type": "string",
+            "title": {
+              "no": "Forklaring",
+              "en": "Explanation"
+            },
+            "example": "Gang er senket"
+          }
+        ]
+      },
+      {
+        "id": "rom_senket",
+        "title": {
+          "no": "Et rom ble senket for å holde timen",
+          "en": "A room was lowered to hold the hour"
+        },
+        "tokens": [
+          {
+            "name": "rom",
+            "type": "string",
+            "title": {
+              "no": "Rom",
+              "en": "Room"
+            },
+            "example": "Gang"
+          },
+          {
+            "name": "grader",
+            "type": "number",
+            "title": {
+              "no": "Grader",
+              "en": "Degrees"
+            },
+            "example": 1.5
+          }
+        ]
       }
     ],
     "conditions": [
@@ -850,6 +1161,166 @@
               "no": "1.50",
               "en": "1.50"
             }
+          }
+        ]
+      },
+      {
+        "id": "motor_status_er",
+        "title": {
+          "no": "Energimotorens status !{{er|er ikke}} …",
+          "en": "Energy engine status !{{is|is not}} …"
+        },
+        "titleFormatted": {
+          "no": "Energimotorens status !{{er|er ikke}} [[status]]",
+          "en": "Energy engine status !{{is|is not}} [[status]]"
+        },
+        "args": [
+          {
+            "name": "status",
+            "type": "dropdown",
+            "values": [
+              {
+                "id": "gronn",
+                "label": {
+                  "no": "God margin",
+                  "en": "Good margin"
+                }
+              },
+              {
+                "id": "gul",
+                "label": {
+                  "no": "Følger med",
+                  "en": "Watching"
+                }
+              },
+              {
+                "id": "oransje",
+                "label": {
+                  "no": "Nær grensen",
+                  "en": "Near the limit"
+                }
+              },
+              {
+                "id": "rod",
+                "label": {
+                  "no": "På grensen",
+                  "en": "At the limit"
+                }
+              },
+              {
+                "id": "kritisk",
+                "label": {
+                  "no": "Over grensen",
+                  "en": "Over the limit"
+                }
+              },
+              {
+                "id": "av",
+                "label": {
+                  "no": "Av",
+                  "en": "Off"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "actions": [
+      {
+        "id": "overstyr_rom",
+        "title": {
+          "no": "Overstyr temperaturen i et rom",
+          "en": "Override the temperature in a room"
+        },
+        "titleFormatted": {
+          "no": "Sett [[rom]] til [[temp]] °C i [[minutter]] minutter",
+          "en": "Set [[rom]] to [[temp]] °C for [[minutter]] minutes"
+        },
+        "args": [
+          {
+            "name": "rom",
+            "type": "autocomplete",
+            "placeholder": {
+              "no": "Rom",
+              "en": "Room"
+            }
+          },
+          {
+            "name": "temp",
+            "type": "number",
+            "min": 5,
+            "max": 30,
+            "step": 0.5,
+            "placeholder": {
+              "no": "22",
+              "en": "22"
+            }
+          },
+          {
+            "name": "minutter",
+            "type": "number",
+            "min": 5,
+            "max": 1440,
+            "step": 5,
+            "placeholder": {
+              "no": "120",
+              "en": "120"
+            }
+          }
+        ]
+      },
+      {
+        "id": "fjern_overstyring",
+        "title": {
+          "no": "Fjern overstyringen i et rom",
+          "en": "Remove the override in a room"
+        },
+        "titleFormatted": {
+          "no": "Fjern overstyringen i [[rom]]",
+          "en": "Remove the override in [[rom]]"
+        },
+        "args": [
+          {
+            "name": "rom",
+            "type": "autocomplete",
+            "placeholder": {
+              "no": "Rom",
+              "en": "Room"
+            }
+          }
+        ]
+      },
+      {
+        "id": "sett_skyggemodus",
+        "title": {
+          "no": "Slå skyggemodus av eller på",
+          "en": "Turn shadow mode on or off"
+        },
+        "titleFormatted": {
+          "no": "Slå skyggemodus [[modus]]",
+          "en": "Turn shadow mode [[modus]]"
+        },
+        "args": [
+          {
+            "name": "modus",
+            "type": "dropdown",
+            "values": [
+              {
+                "id": "paa",
+                "label": {
+                  "no": "på",
+                  "en": "on"
+                }
+              },
+              {
+                "id": "av",
+                "label": {
+                  "no": "av",
+                  "en": "off"
+                }
+              }
+            ]
           }
         ]
       }

@@ -52,3 +52,22 @@ const SENSORER = [
 ];
 
 module.exports = { SENSORER };
+
+const STATUSTEKST = { gronn: 'God margin', gul: 'Følger med', oransje: 'Nær grensen', rod: 'På grensen', kritisk: 'Over grensen', av: 'Av' };
+
+/** Sensorene på Energimotor-enheten. hent(b) får bildet fra Motor.tick(). */
+const MOTOR_SENSORER = [
+  { id: 'ki_motor_status', type: 'string', no: 'Status', en: 'Status', hent: (b) => STATUSTEKST[b.status] || b.status },
+  { id: 'ki_motor_forklaring', type: 'string', no: 'Forklaring', en: 'Explanation', hent: (b) => b.forklaring },
+  { id: 'ki_time_grense', type: 'number', no: 'Timens grense', en: 'Hour limit', enhet: 'kWh', desimaler: 2, hent: (b) => b.budsjett.grense },
+  { id: 'ki_time_forventet', type: 'number', no: 'Timen ligger an til', en: 'Hour forecast', enhet: 'kWh', desimaler: 2, hent: (b) => b.forventet_time_kwh },
+  { id: 'ki_time_brukt', type: 'number', no: 'Brukt denne timen', en: 'Used this hour', enhet: 'kWh', desimaler: 2, hent: (b) => b.budsjett.forbrukt },
+  { id: 'ki_ledig_effekt', type: 'number', no: 'Ledig effekt', en: 'Available power', enhet: 'kW', desimaler: 2, hent: (b) => b.ledig_kw },
+  { id: 'ki_uregulert_effekt', type: 'number', no: 'Annet forbruk', en: 'Other consumption', enhet: 'kW', desimaler: 2, hent: (b) => b.uregulert_kw },
+  { id: 'ki_styrt_effekt', type: 'number', no: 'Styrt varme', en: 'Controlled heating', enhet: 'W', desimaler: 0, hent: (b) => b.styrt_w },
+  { id: 'ki_senkede_rom', type: 'number', no: 'Senkede rom', en: 'Lowered rooms', enhet: '', desimaler: 0, hent: (b) => b.soner.filter((p) => p.handling === 'senket').length },
+  { id: 'ki_plan_spart', type: 'number', no: 'Varmeplanen sparer (36 t)', en: 'Heat plan saves (36 h)', enhet: 'kr', desimaler: 2, hent: (b) => b.plan_spart_kr },
+];
+
+module.exports.MOTOR_SENSORER = MOTOR_SENSORER;
+module.exports.STATUSTEKST = STATUSTEKST;

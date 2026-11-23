@@ -38,9 +38,27 @@ function lagHomey(innstillinger) {
       return { value: this.capabilitiesObj[kap].value, destroy() {} };
     },
   };
+  const skrevet = [];
+  const termostat = (id, navn, sone, temp, settpunkt, effekt) => ({
+    id, name: navn, zone: sone, class: 'thermostat', available: true, driverId: 'homey:app:no.annen:ovn',
+    capabilities: ['target_temperature', 'measure_temperature', 'measure_power'],
+    capabilitiesObj: { target_temperature: { value: settpunkt, min: 5, max: 30 }, measure_temperature: { value: temp }, measure_power: { value: effekt } },
+    async setCapabilityValue({ capabilityId, value }) { skrevet.push([id, capabilityId, value]); this.capabilitiesObj[capabilityId].value = value; },
+  });
+  const enheterIHomey = {
+    maaler1: maaler,
+    ovn1: termostat('ovn1', 'Stue Panelovn', 'z2', 20.5, 19, 900),
+    ovn2: termostat('ovn2', 'Stue Oljefyr', 'z2', 20.5, 19, 600),
+    gulv1: termostat('gulv1', 'Bad Gulvvarme', 'z3', 24.5, 24, 0),
+    bil: { ...termostat('bil', 'Bil klima', 'z1', 3, 20, 0), class: 'car' },
+    ute1: { id: 'ute1', name: 'Outdoor Meter', zone: 'z1', capabilities: ['measure_temperature'], capabilitiesObj: { measure_temperature: { value: -3.3 } } },
+  };
   const homey = {
     maaler,
     utlost,
+    skrevet,
+    enheterIHomey,
+    geolocation: { getLatitude: () => 59.91, getLongitude: () => 10.75 },
     settings: {
       get: (k) => lager[k],
       set: (k, v) => { lager[k] = JSON.parse(JSON.stringify(v)); lyttere.forEach((f) => f(k)); },
@@ -50,13 +68,20 @@ function lagHomey(innstillinger) {
     flow: {
       getTriggerCard: (id) => ({ trigger: async (tokens) => { utlost.push([id, tokens]); } }),
       getConditionCard: (id) => ({ registerRunListener: (f) => { homey.betingelser[id] = f; } }),
+      getActionCard: (id) => ({
+        registerRunListener: (f) => { homey.handlinger[id] = f; },
+        registerArgumentAutocompleteListener: (navn, f) => { homey.autofullfor[id] = f; },
+      }),
     },
     betingelser: {},
+    handlinger: {},
+    autofullfor: {},
     enheter: [],
-    drivers: { getDriver: () => ({ getDevices: () => homey.enheter }) },
+    motorenheter: [],
+    drivers: { getDriver: (id) => ({ getDevices: () => (id === 'energimotor' ? homey.motorenheter : homey.enheter) }) },
     falskApi: {
-      devices: { getDevices: async () => ({ maaler1: maaler }), getDevice: async () => maaler },
-      zones: { getZones: async () => ({ z1: { name: 'Gang' } }) },
+      devices: { getDevices: async () => enheterIHomey, getDevice: async () => maaler },
+      zones: { getZones: async () => ({ z1: { name: 'Gang' }, z2: { name: 'Stue' }, z3: { name: 'Bad' } }) },
     },
     __: (k) => k,
   };
@@ -67,13 +92,21 @@ test('appen starter, leser måleren, fyller enheten og svarer på API-et', async
   const naa = kal.osloTilUtc(2026, 11, 23, 12, 0);
   t.mock.timers.enable({ apis: ['Date'], now: naa });
   const dato = (ms) => new Date(ms).toISOString();
-  t.mock.method(globalThis, 'fetch', async () => ({
-    ok: true,
-    json: async () => Array.from({ length: 24 }, (_, n) => {
-      const a = kal.osloTilUtc(2026, 11, 23) + n * 3600000;
-      return { NOK_per_kWh: 1.0, time_start: dato(a), time_end: dato(a + 3600000) };
-    }),
-  }));
+  const hentet = [];
+  t.mock.method(globalThis, 'fetch', async (url, valg) => {
+    hentet.push([url, valg]);
+    if (url.includes('api.met.no')) {
+      return { ok: true, json: async () => ({ properties: { timeseries: Array.from({ length: 48 }, (_, n) => ({
+        time: dato(naa + n * 3600000), data: { instant: { details: { air_temperature: -4 } } } })) } }) };
+    }
+    return {
+      ok: true,
+      json: async () => Array.from({ length: 24 }, (_, n) => {
+        const a = kal.osloTilUtc(2026, 11, 23) + n * 3600000;
+        return { NOK_per_kWh: 1.0, time_start: dato(a), time_end: dato(a + 3600000) };
+      }),
+    };
+  });
 
   const KiEnergiApp = require('../app');
   const Device = require('../drivers/stromkalkulator/device');
@@ -117,7 +150,7 @@ test('appen starter, leser måleren, fyller enheten og svarer på API-et', async
   assert.equal((await api.status({ homey })).nettselskap, 'Elvia');
   assert.equal((await api.priser({ homey })).prisomraade, 'NO1');
   assert.ok((await api.nettselskap({ homey })).some((n) => n.id === 'elvia'));
-  assert.deepEqual((await api.enheter({ homey }))[0].sone, 'Gang');
+  assert.deepEqual((await api.enheter({ homey })).find((e) => e.id === 'maaler1').sone, 'Gang');
   const ny = await api.settInnstillinger({ homey, body: { harNorgespris: true, ukjent: 'x' } });
   assert.equal(ny.harNorgespris, true);
   assert.equal(ny.ukjent, undefined);
@@ -128,17 +161,84 @@ test('appen starter, leser måleren, fyller enheten og svarer på API-et', async
   assert.equal(await homey.betingelser.norgespris_aktiv({}), true);
   assert.equal(await homey.betingelser.totalpris_over({ grense: 5 }), false);
 
+  // --- Energimotoren ---
+  const vent = () => new Promise((r) => setImmediate(r));
+  await vent();
+  const met = hentet.find(([url]) => url.includes('api.met.no'));
+  assert.match(met[1].headers['User-Agent'], /KI-Energi-Homey/);
+  assert.equal(app.motor.vaer.punkter.length, 48);
+
+  // Forslag: ett rom per Homey-sone med termostater; bilen er ikke et rom
+  const forslag = await api.romforslag({ homey });
+  assert.deepEqual(forslag.map((r) => r.key), ['bad', 'stue']);
+  const stue = forslag.find((r) => r.key === 'stue');
+  assert.deepEqual(stue.termostater, ['ovn2', 'ovn1']);     // sortert på navn: Oljefyr, Panelovn
+  assert.equal(stue.effekt.length, 2);
+  assert.equal(forslag.find((r) => r.key === 'bad').profil, 'konstant');
+  assert.deepEqual((await api.temperatursensorer({ homey })).map((x) => x.id), ['ute1']);
+  assert.equal((await api.termostater({ homey })).length, 4);
+
+  // Skyggemodus er standard: motoren regner, men rører ingenting
+  await api.settMotorinnstillinger({ homey, body: { soner: forslag, ute: { enhet: 'ute1', kap: 'measure_temperature' } } });
+  await app._motorTick(Date.now());
+  let m = await api.motor({ homey });
+  assert.equal(m.skygge, true);
+  assert.equal(m.ute, -3.3);
+  assert.equal(m.styrt_w, 1500);
+  assert.equal(m.soner.find((p) => p.key === 'stue').mal, 22);
+  assert.deepEqual(homey.skrevet, []);
+
+  // Enheten «Energimotor» viser bildet, og bryteren for skyggemodus slår den av
+  const Motorenhet = require('../drivers/energimotor/device');
+  const mv = {};
+  const lyttere = {};
+  const me = new Motorenhet();
+  me.homey = homey;
+  me.hasCapability = () => true;
+  me.addCapability = async () => {};
+  me.getCapabilityValue = (id) => mv[id];
+  me.setCapabilityValue = async (id, v) => { mv[id] = v; };
+  me.registerCapabilityListener = (id, f) => { lyttere[id] = f; };
+  homey.motorenheter.push(me);
+  await me.onInit();
+  assert.equal(mv.ki_skyggemodus, true);
+  assert.equal(mv.measure_temperature, -3.3);
+  assert.equal(typeof mv.ki_motor_forklaring, 'string');
+  await lyttere.ki_skyggemodus(false);
+  await app._motorTick(Date.now());
+  // Stua (begge ovnene) settes til 22; badet står alt på 24
+  assert.deepEqual(homey.skrevet, [['ovn2', 'target_temperature', 22], ['ovn1', 'target_temperature', 22]]);
+  await app._motorTick(Date.now());
+  assert.equal(homey.skrevet.length, 2, 'samme settpunkt skrives ikke på nytt');
+
+  // Overstyring fra flow-kort og API
+  assert.deepEqual(await homey.autofullfor.overstyr_rom('st'), [{ name: 'Stue', id: 'stue' }]);
+  await homey.handlinger.overstyr_rom({ rom: { id: 'stue' }, temp: 24, minutter: 30 });
+  await app._motorTick(Date.now());
+  assert.deepEqual(homey.skrevet.slice(2), [['ovn2', 'target_temperature', 24], ['ovn1', 'target_temperature', 24]]);
+  await api.fjernOverstyring({ homey, body: { rom: 'stue' } });
+  await assert.rejects(async () => api.overstyr({ homey, body: { rom: 'finnes_ikke', temp: 20 } }), /Ukjent rom/);
+  m = (await app.motor.tick(Date.now()));
+  assert.equal(m.soner.find((p) => p.key === 'stue').mal, 22);
+  assert.equal(await homey.betingelser.motor_status_er({ status: m.status }), true);
+  await homey.handlinger.sett_skyggemodus({ modus: 'paa' });
+  assert.equal(app.motor.innstillinger().skygge, true);
+
   // Paring og lagring
+  assert.equal((await new (require('../drivers/energimotor/driver'))().onPairListDevices.call({ homey })).length, 1);
   const driver = new Driver();
   driver.homey = homey;
   assert.equal((await driver.onPairListDevices()).length, 1);
   await app.onUninit();
   assert.equal(homey.settings.get('tilstand').maaned, '2026-11');
+  assert.ok(homey.settings.get('motor_tilstand').profil);
 });
 
 test('app.json er bygget fra tabellene', () => {
+  const { MOTOR_SENSORER } = require('../lib/sensorer');
   assert.deepEqual(manifest.drivers[0].capabilities, ['measure_power', ...SENSORER.map((s) => s.id)]);
-  for (const s of SENSORER) assert.ok(manifest.capabilities[s.id], s.id);
+  assert.deepEqual(manifest.drivers[1].capabilities, ['onoff', 'ki_skyggemodus', 'measure_temperature', ...MOTOR_SENSORER.map((s) => s.id)]);
+  for (const s of [...SENSORER, ...MOTOR_SENSORER]) assert.ok(manifest.capabilities[s.id], s.id);
   const api = require('../api');
   assert.deepEqual(Object.keys(manifest.api).sort(), Object.keys(api).sort());
   assert.equal(path.basename(manifest.images.small), 'small.png');

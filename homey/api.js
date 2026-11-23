@@ -32,6 +32,42 @@ module.exports = {
     return homey.app.innstillinger();
   },
 
+  async motor({ homey }) {
+    return homey.app.motor.bilde || { status: 'starter', soner: [] };
+  },
+
+  async hentMotorinnstillinger({ homey }) {
+    return homey.app.motor.innstillinger();
+  },
+
+  async settMotorinnstillinger({ homey, body }) {
+    return homey.app.motor.settInnstillinger(body || {});
+  },
+
+  async termostater({ homey }) {
+    return homey.app.motor.termostater();
+  },
+
+  async temperatursensorer({ homey }) {
+    return homey.app.motor.temperatursensorer();
+  },
+
+  async romforslag({ homey }) {
+    return homey.app.motor.forslag();
+  },
+
+  /** body: { rom, temp, minutter } */
+  async overstyr({ homey, body }) {
+    homey.app.motor.overstyr(body.rom, Number(body.temp), Number(body.minutter) || 120);
+    return { ok: true };
+  },
+
+  /** body: { rom } — uten rom fjernes alle overstyringer. */
+  async fjernOverstyring({ homey, body }) {
+    homey.app.motor.fjernOverstyring(body && body.rom);
+    return { ok: true };
+  },
+
   /** Bare kjente nøkler tas imot; resten av innstillingene står urørt. */
   async settInnstillinger({ homey, body }) {
     const ny = { ...homey.app.innstillinger() };
