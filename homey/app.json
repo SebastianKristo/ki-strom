@@ -1,7 +1,7 @@
 {
   "_comment": "Bygget av scripts/lag-app-json.js — ikke rediger for hånd.",
   "id": "no.kristo.kienergi",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "compatibility": ">=12.3.0",
   "sdk": 3,
   "platforms": [
@@ -123,6 +123,10 @@
     "bereder": {
       "method": "POST",
       "path": "/bereder"
+    },
+    "alleEnheter": {
+      "method": "GET",
+      "path": "/alleenheter"
     }
   },
   "capabilities": {
@@ -875,6 +879,17 @@
       "uiComponent": "sensor",
       "icon": "/assets/sensor.svg"
     },
+    "ki_lading_status": {
+      "type": "string",
+      "title": {
+        "no": "Elbillading",
+        "en": "EV charging"
+      },
+      "getable": true,
+      "setable": false,
+      "uiComponent": "sensor",
+      "icon": "/assets/sensor.svg"
+    },
     "ki_bereder_dager": {
       "type": "number",
       "title": {
@@ -1029,6 +1044,7 @@
         "ki_modus",
         "ki_hjemkomst",
         "ki_bereder_status",
+        "ki_lading_status",
         "ki_bereder_dager"
       ],
       "capabilitiesOptions": {
@@ -1579,6 +1595,39 @@
               "no": "60",
               "en": "60"
             }
+          }
+        ]
+      },
+      {
+        "id": "sett_ladeautomatikk",
+        "title": {
+          "no": "Slå automatisk elbillading av eller på",
+          "en": "Turn automatic EV charging on or off"
+        },
+        "titleFormatted": {
+          "no": "Slå automatisk elbillading [[modus]]",
+          "en": "Turn automatic EV charging [[modus]]"
+        },
+        "args": [
+          {
+            "name": "modus",
+            "type": "dropdown",
+            "values": [
+              {
+                "id": "paa",
+                "label": {
+                  "no": "på",
+                  "en": "on"
+                }
+              },
+              {
+                "id": "av",
+                "label": {
+                  "no": "av",
+                  "en": "off"
+                }
+              }
+            ]
           }
         ]
       },

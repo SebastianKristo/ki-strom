@@ -249,6 +249,7 @@ module.exports = class KiEnergiApp extends Homey.App {
     handling('forleng_borte', () => this.hus.forleng());
     handling('bereder_boost', (args) => this.hus.berederHandling('boost', args.minutter));
     handling('bereder_tving', () => this.hus.berederHandling('tving'));
+    handling('sett_ladeautomatikk', (args) => { this.hus.settInnstillinger({ lading: { automatikk: args.modus === 'paa' } }); });
     this.homey.flow.getConditionCard('bortemodus_er_paa').registerRunListener(async () => Boolean(this.hus.hus.t.borte));
     this.homey.flow.getConditionCard('alle_er_borte').registerRunListener(async () => this.hus.hus.alleBorte() === true);
     const rom = async (sok) => this.motor.motor.soner()

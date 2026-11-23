@@ -102,6 +102,7 @@ SENSORER = [
     ("modus", "Modus", ("hus", "modus"), None, None, None, "mdi:home-account"),
     ("hjemkomst", "Huset er varmt til", ("hus", "hjemkomst_kl"), None, None, None, "mdi:home-clock"),
     ("bereder_status", "Bereder", ("hus", "bereder", "status"), None, None, None, "mdi:water-boiler"),
+    ("lading", "Elbillading", ("hus", "lading", "forklaring"), None, None, None, "mdi:ev-station"),
     ("bereder_dager", "Dager siden berederen var varm", ("hus", "bereder", "dager_siden_varm"), "d", None, MAAL, "mdi:water-boiler-alert"),
 ]
 
@@ -197,6 +198,8 @@ BRYTERE = [
      ("POST", "/bortemodus", lambda v: {"paa": v}), "mdi:bag-suitcase"),
     ("norgespris", "Jeg har Norgespris", lambda d: grav(d, "innstillinger", "harNorgespris"),
      ("PUT", "/innstillinger", lambda v: {"harNorgespris": v}), "mdi:cash-lock"),
+    ("lading_automatikk", "KI styrer elbilladingen", lambda d: grav(d, "husinnstillinger", "lading", "automatikk"),
+     ("PUT", "/husinnstillinger", lambda v: {"lading": {"automatikk": v}}), "mdi:ev-station"),
     ("bereder_styring", "KI styrer berederen", lambda d: grav(d, "husinnstillinger", "vvb", "prisstyring"),
      ("PUT", "/husinnstillinger", lambda v: {"vvb": {"prisstyring": v}}), "mdi:water-boiler-auto"),
 ]

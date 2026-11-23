@@ -58,6 +58,15 @@ function lagHomey(innstillinger) {
       async setCapabilityValue({ capabilityId, value }) { skrevet.push(['vvb', capabilityId, value]); this.capabilitiesObj[capabilityId].value = value; },
     },
   };
+  const enkel = (id, navn, klasse, kap) => ({
+    id, name: navn, zone: 'z1', class: klasse, capabilities: Object.keys(kap), capabilitiesObj: kap, driverId: 'homey:app:no.annen:x',
+    async setCapabilityValue({ capabilityId, value }) { skrevet.push([id, capabilityId, value]); this.capabilitiesObj[capabilityId].value = value; },
+  });
+  enheterIHomey.lader = enkel('lader', 'Billader', 'evcharger', {
+    onoff: { value: false, type: 'boolean', setable: true }, target_current: { value: 6, type: 'number', setable: true },
+    measure_power: { value: 0, type: 'number' }, measure_battery: { value: 55, type: 'number' } });
+  enheterIHomey.lampe = enkel('lampe', 'Ganglampe', 'light', { onoff: { value: true, setable: true }, dim: { value: 0.9, setable: true } });
+  enheterIHomey.bevegelse = enkel('bevegelse', 'Gang bevegelse', 'sensor', { alarm_motion: { value: false, lastUpdated: '2026-11-23T10:00:00.000Z' } });
   const variabler = { v1: { id: 'v1', name: 'Rune Posisjon', type: 'boolean', value: true }, v2: { id: 'v2', name: 'Teller', type: 'number', value: 3 } };
   const varsler = [];
   const homey = {
@@ -239,7 +248,7 @@ test('appen starter, leser måleren, fyller enheten og svarer på API-et', async
 
   // --- Huset: personer, bortemodus og bereder ---
   assert.deepEqual((await api.personkilder({ homey })).map((k) => `${k.type}:${k.id}`), ['variabel:v1', 'bruker:u1']);
-  assert.deepEqual((await api.brytere({ homey })).map((b) => b.id), ['vvb']);
+  assert.deepEqual((await api.brytere({ homey })).map((b) => b.id), ['lader', 'vvb']);     // lamper er ikke med
   homey.skrevet.length = 0;
   await api.settHusinnstillinger({ homey, body: {
     personer: [{ key: 'rune', navn: 'Rune', type: 'voksen', kilde: { type: 'variabel', id: 'v1' } },
@@ -311,10 +320,59 @@ test('appen starter, leser måleren, fyller enheten og svarer på API-et', async
     fs.writeFileSync(path.join(__dirname, '..', '..', 'tests', 'fixtures', 'homey_svar.json'), `${JSON.stringify(fixtur, null, 1)}\n`);
   }
 
+  // --- Elbillading og lys ---
+  // Berederen står i boost og holder av 2 kW; da er det ikke plass til bilen. Avbryt boosten først.
+  await api.bereder({ homey, body: { handling: 'avbryt' } });
+  homey.skrevet.length = 0;
+  assert.ok((await api.alleEnheter({ homey })).find((e) => e.id === 'lader').kap.some((k) => k.id === 'target_current' && k.kanSettes));
+  await api.settHusinnstillinger({ homey, body: {
+    lading: { bryter: { enhet: 'lader', kap: 'onoff' }, strom: { enhet: 'lader', kap: 'target_current' },
+      effekt: { enhet: 'lader', kap: 'measure_power' }, soc: { enhet: 'lader', kap: 'measure_battery' }, trinn: [6, 10, 16] },
+    lys: [{ key: 'gang', navn: 'Gang', type: 'glemt', lys: 'lampe', naervaer: { enhet: 'bevegelse', kap: 'alarm_motion' }, fravaerMin: 5 }],
+  } });
+  // God plass i timen: bilen starter på høyeste trinn som får plass, strøm først og så bryter
+  const lader = homey.skrevet.filter(([id]) => id === 'lader');
+  assert.deepEqual(lader.map(([, kap]) => kap), ['target_current', 'onoff']);
+  assert.equal(lader[1][2], true);
+  const trinn = lader[0][2];
+  assert.ok([6, 10, 16].includes(trinn));
+  hus = await api.hus({ homey });
+  assert.equal(hus.lading.handling, 'start');
+  assert.equal(hus.lading.soc, 55);
+  assert.equal(app.hus.lading.m.satt_trinn, trinn);
+  // Lampa i gangen: fraværet regnes fra appen først så den på, så ingenting skjer med en gang …
+  assert.equal(hus.lys.gang.status, 'venter');
+  assert.deepEqual(homey.skrevet.filter(([id]) => id === 'lampe'), []);
+  // … men etter seks minutter uten bevegelse slås den av
+  t.mock.timers.setTime(Date.now() + 6 * 60000);
+  await app._motorTick(Date.now());
+  assert.deepEqual(homey.skrevet.filter(([id]) => id === 'lampe'), [['lampe', 'onoff', false]]);
+  assert.equal((await api.hus({ homey })).lys.gang.status, 'slatt_av');
+  // Bilens forbruk regnes ikke som husets øvrige last
+  homey.enheterIHomey.lader.capabilitiesObj.measure_power.value = 2300;
+  await app._motorTick(Date.now());
+  const medBil = await api.motor({ homey });
+  assert.ok(medBil.lading_kw > 0);
+  assert.equal((await api.hus({ homey })).lading.handling, 'hold');
+  // Fullt batteri: stopper
+  homey.enheterIHomey.lader.capabilitiesObj.measure_battery.value = 85;
+  await app._motorTick(Date.now());
+  assert.deepEqual(homey.skrevet[homey.skrevet.length - 1], ['lader', 'onoff', false]);
+  // Flow-kortet slår automatikken av: da røres ikke laderen
+  await homey.handlinger.sett_ladeautomatikk({ modus: 'av' });
+  assert.equal(app.hus.innstillinger().lading.automatikk, false);
+  assert.equal(app.hus.innstillinger().lading.trinn.length, 3, 'resten av ladeoppsettet beholdes');
+  await app._motorTick(Date.now());
+  assert.equal((await api.hus({ homey })).lading.handling, 'manuell');
+  await homey.handlinger.sett_ladeautomatikk({ modus: 'paa' });
+  homey.enheterIHomey.lader.capabilitiesObj.measure_battery.value = 55;
+  homey.enheterIHomey.lader.capabilitiesObj.measure_power.value = 0;
+  await app._motorTick(Date.now());
+
   // Widgeten får ett samlet sammendrag
   const oversikt = await require('../widgets/oversikt/api').oversikt({ homey });
   assert.equal(oversikt.modus, 'Hjemme');
-  assert.equal(oversikt.bereder, 'Boost');
+  assert.equal(oversikt.bereder, 'Venter på vinduet');
   assert.deepEqual(oversikt.rom.map((r) => r.navn).sort(), ['Bad', 'Stue']);
   assert.equal(typeof oversikt.time.grense, 'number');
   assert.equal(oversikt.trinn, '2-5 kW');

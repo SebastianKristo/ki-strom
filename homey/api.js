@@ -96,6 +96,10 @@ module.exports = {
     return homey.app.hus.brytere();
   },
 
+  async alleEnheter({ homey }) {
+    return homey.app.hus.alleEnheter();
+  },
+
   /** body: { paa } */
   async bortemodus({ homey, body }) {
     homey.app.hus.settBorte(Boolean(body && body.paa));
