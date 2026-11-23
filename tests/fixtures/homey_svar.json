@@ -1,0 +1,434 @@
+{
+ "status": {
+  "tid": "2026-11-23T13:01:10.000Z",
+  "nettselskap": "Elvia",
+  "prisomraade": "NO1",
+  "avgiftssone": "standard",
+  "boligtype": "bolig",
+  "nettleie": {
+   "tariff": "dag",
+   "energiledd": 0.464,
+   "energiledd_dag": 0.464,
+   "energiledd_natt": 0.314,
+   "sesongperiode": null,
+   "offentlige_avgifter": 0.1016,
+   "fastledd_metode": "TRE_DØGNMAX_MND",
+   "kapasitetsledd": 250,
+   "kapasitetstrinn_nr": 2,
+   "kapasitetstrinn": "2-5 kW",
+   "grunnlag_kw": 3,
+   "snitt_topp_kw": 3,
+   "topper": [
+    {
+     "dato": "2026-11-23",
+     "time": 12,
+     "kw": 3
+    }
+   ],
+   "margin_kw": 2,
+   "neste_trinn_pris": 420,
+   "kapasitetsvarsel": false,
+   "tak_idag_kwh": 5,
+   "fastledd_per_kwh": 0.3472
+  },
+  "pris": {
+   "spot_eks_mva": 1,
+   "spot": 1.25,
+   "stromstotte": 0,
+   "spot_etter_stotte": 1.25,
+   "stromstotte_gjenstaaende_kwh": 4997,
+   "norgespris": 0.5,
+   "har_norgespris": true,
+   "norgespris_aktiv": true,
+   "kraft": 0.5,
+   "strompris": 0.964,
+   "total": 1.3112,
+   "total_uten_stotte": 1.3112,
+   "prisforskjell_norgespris": 0.4913
+  },
+  "maaned": {
+   "maaned": "2026-11",
+   "kwh": 3,
+   "kwh_dag": 3,
+   "kwh_natt": 0,
+   "strom_kr": 2.97,
+   "stromstotte_kr": 0.78,
+   "energiledd_kr": 1.39,
+   "avgifter_kr": 0.3,
+   "fastledd_kr": 188.2,
+   "nettleie_kr": 189.59,
+   "nettleie_total_kr": 188.82,
+   "kostnad_kr": 192.57,
+   "estimert_kr": 255.8,
+   "norgespris_besparelse_kr": -1.47,
+   "norgespris_kompensasjon_kr": -2.25,
+   "kwh_uten_pris": 0
+  },
+  "idag": {
+   "kwh": 3,
+   "kostnad_kr": 9.23
+  },
+  "time": {
+   "kwh": null,
+   "kvalitet": "mangler"
+  },
+  "forrige_maaned": null,
+  "problemer": [],
+  "effekt_w": 2400
+ },
+ "motor": {
+  "tid": "2026-11-23T13:01:10.000Z",
+  "aktiv": true,
+  "skygge": false,
+  "status": "gronn",
+  "forklaring": "Stue er senket — timen ligger an til 2.84 kWh av 4.7.",
+  "budsjett": {
+   "grense": 4.7,
+   "grense_grunn": "holder kapasitetstrinnet: 5 kWh minus 0.3 i reserve",
+   "forbrukt": 0.04,
+   "igjen": 4.66,
+   "minutter_igjen": 58,
+   "tillatt_kw": 4.7,
+   "usikker": true
+  },
+  "forventet_time_kwh": 2.84,
+  "forventet_kw": 2.9,
+  "ledig_kw": 1,
+  "uregulert_kw": 0.9,
+  "prognose_uregulert_kw": 0.9,
+  "styrt_w": 1500,
+  "ute": -3.3,
+  "vaervarsel": true,
+  "plan_spart_kr": 0,
+  "reservert_kw": 2,
+  "soner": [
+   {
+    "key": "bad",
+    "navn": "Bad",
+    "type": "gulv",
+    "prio": 2,
+    "levende": true,
+    "styrt": true,
+    "temp": 24.5,
+    "settpunkt_naa": 24,
+    "effekt_w": 0,
+    "krav": 24,
+    "mal": 24,
+    "grunn": "Holdes varmt hele døgnet",
+    "laert": false,
+    "avvik": -0.5,
+    "trenger": false,
+    "effekt": 0,
+    "plan": null,
+    "handling": "normal",
+    "settpunkt": 24,
+    "forklaring": "Holdes varmt hele døgnet. Rommet er på måltemperatur"
+   },
+   {
+    "key": "stue",
+    "navn": "Stue",
+    "type": "panel",
+    "prio": 3,
+    "levende": true,
+    "styrt": true,
+    "temp": 20.5,
+    "settpunkt_naa": 22,
+    "effekt_w": 1500,
+    "krav": 22,
+    "mal": 22,
+    "grunn": "Dag",
+    "laert": false,
+    "avvik": 1.5,
+    "trenger": true,
+    "effekt": 1.5,
+    "plan": null,
+    "handling": "senket",
+    "settpunkt": 21.5,
+    "senket": 0.5,
+    "forklaring": "Senket 0.5 °C — timen har 4.66 kWh igjen av 4.70"
+   }
+  ],
+  "hus": {
+   "modus": "Hjemme",
+   "borte": false,
+   "alle_borte": false,
+   "borte_siden": null,
+   "hjemkomst": null,
+   "personer": [
+    {
+     "key": "rune",
+     "navn": "Rune",
+     "type": "voksen",
+     "hjemme": true
+    },
+    {
+     "key": "sebastian",
+     "navn": "Sebastian",
+     "type": "ungdom",
+     "hjemme": false
+    }
+   ],
+   "hjemkomst_kl": null,
+   "bereder": {
+    "status": "Boost",
+    "forklaring": "Boost — varmer nå.",
+    "bryter": true,
+    "effekt_w": 0,
+    "varmer": false,
+    "mettet": false,
+    "dager_siden_varm": 1,
+    "legionella_ok": true,
+    "forfalt": false,
+    "tvungen": false,
+    "boost_til": "2026-11-23T13:31:10.000Z",
+    "billige_timer": [
+     14,
+     15,
+     16,
+     17,
+     18,
+     19
+    ]
+   },
+   "hanklevarmer": null,
+   "vaner": {
+    "ankomst": [],
+    "avreise": [
+     {
+      "nokkel": "0",
+      "tid": "13:00",
+      "n": 1
+     }
+    ],
+    "morgen": []
+   },
+   "forslag": []
+  }
+ },
+ "hus": {
+  "modus": "Hjemme",
+  "borte": false,
+  "alle_borte": false,
+  "borte_siden": null,
+  "hjemkomst": null,
+  "personer": [
+   {
+    "key": "rune",
+    "navn": "Rune",
+    "type": "voksen",
+    "hjemme": true
+   },
+   {
+    "key": "sebastian",
+    "navn": "Sebastian",
+    "type": "ungdom",
+    "hjemme": false
+   }
+  ],
+  "hjemkomst_kl": null,
+  "bereder": {
+   "status": "Boost",
+   "forklaring": "Boost — varmer nå.",
+   "bryter": true,
+   "effekt_w": 0,
+   "varmer": false,
+   "mettet": false,
+   "dager_siden_varm": 1,
+   "legionella_ok": true,
+   "forfalt": false,
+   "tvungen": false,
+   "boost_til": "2026-11-23T13:31:10.000Z",
+   "billige_timer": [
+    14,
+    15,
+    16,
+    17,
+    18,
+    19
+   ]
+  },
+  "hanklevarmer": null,
+  "vaner": {
+   "ankomst": [],
+   "avreise": [
+    {
+     "nokkel": "0",
+     "tid": "13:00",
+     "n": 1
+    }
+   ],
+   "morgen": []
+  },
+  "forslag": []
+ },
+ "innstillinger": {
+  "nettselskap": "elvia",
+  "boligtype": "bolig",
+  "harNorgespris": true,
+  "avgiftssone": null,
+  "sikringstrinn": null,
+  "varselTerskelKw": 2,
+  "energileddDagEksMva": null,
+  "energileddNattEksMva": null,
+  "egneTrinn": "",
+  "prisomraade": null,
+  "maalerEnhet": "maaler1",
+  "effektKapabilitet": "measure_power",
+  "energiKapabilitet": "meter_power"
+ },
+ "motorinnstillinger": {
+  "aktiv": true,
+  "skygge": false,
+  "maksTimeKwh": 6,
+  "minTimeKwh": 3,
+  "reserveToppKwh": 0.3,
+  "reserveUregulertKw": 0.35,
+  "maalTrinnKw": null,
+  "dagStart": "06:00",
+  "nattStart": "23:00",
+  "planAktiv": true,
+  "planOppGrader": 1,
+  "planTimer": 36,
+  "forvarmingMaksTimer": 10,
+  "shedGulvMaks": 3,
+  "shedPanelMaks": 2,
+  "gradvisIntervallMin": 3,
+  "soner": [
+   {
+    "key": "bad",
+    "navn": "Bad",
+    "type": "gulv",
+    "prio": 2,
+    "nominell": 0.6,
+    "profil": "konstant",
+    "dag": 24,
+    "natt": 24,
+    "aktiv": true,
+    "styrt": true,
+    "termostater": [
+     "gulv1"
+    ],
+    "termostatnavn": [
+     "Bad Gulvvarme"
+    ],
+    "effekt": [
+     {
+      "enhet": "gulv1",
+      "kap": "measure_power"
+     }
+    ],
+    "temp": {
+     "enhet": "gulv1",
+     "kap": "measure_temperature"
+    }
+   },
+   {
+    "key": "stue",
+    "navn": "Stue",
+    "type": "panel",
+    "prio": 3,
+    "nominell": 2,
+    "profil": "fellesrom",
+    "dag": 22,
+    "natt": 19,
+    "aktiv": true,
+    "styrt": true,
+    "termostater": [
+     "ovn2",
+     "ovn1"
+    ],
+    "termostatnavn": [
+     "Stue Oljefyr",
+     "Stue Panelovn"
+    ],
+    "effekt": [
+     {
+      "enhet": "ovn2",
+      "kap": "measure_power"
+     },
+     {
+      "enhet": "ovn1",
+      "kap": "measure_power"
+     }
+    ],
+    "temp": {
+     "enhet": "ovn2",
+     "kap": "measure_temperature"
+    }
+   }
+  ],
+  "ute": {
+   "enhet": "ute1",
+   "kap": "measure_temperature"
+  }
+ },
+ "husinnstillinger": {
+  "personer": [
+   {
+    "key": "rune",
+    "navn": "Rune",
+    "type": "voksen",
+    "kilde": {
+     "type": "variabel",
+     "id": "v1"
+    }
+   },
+   {
+    "key": "sebastian",
+    "navn": "Sebastian",
+    "type": "ungdom",
+    "kilde": {
+     "type": "bruker",
+     "id": "u1"
+    }
+   }
+  ],
+  "borteAuto": true,
+  "borteAutoTimer": 1,
+  "borteAutoDager": "alle",
+  "borteAutoTemp": true,
+  "borteMinTemp": 12,
+  "borteTempPanel": 16,
+  "borteTempGulv": 18,
+  "borteTempBad": 22,
+  "forvarmHjemkomst": true,
+  "hjemkomstUkedag": 6,
+  "hjemkomstTid": "13:00",
+  "vanerStyrer": false,
+  "vvb": {
+   "bryter": {
+    "enhet": "vvb",
+    "kap": "onoff"
+   },
+   "effekt": {
+    "enhet": "vvb",
+    "kap": "measure_power"
+   },
+   "prisstyring": true,
+   "alltidPa": false,
+   "vinduStart": "22:00",
+   "klarInnen": "05:00",
+   "folgSpotpris": false,
+   "billigsteTimer": 6,
+   "legionellaAktiv": true,
+   "intervallDager": 3,
+   "maksDager": 7,
+   "terskelW": 150,
+   "metningMinutter": 8,
+   "maksMinUtenEffekt": 10,
+   "maksOppvarmingMin": 300,
+   "nominellKw": 2,
+   "borteSparing": true,
+   "klarForAnkomstTimer": 3
+  },
+  "hanklevarmer": {
+   "bryter": null,
+   "styr": true,
+   "morgenStart": "06:00",
+   "morgenSlutt": "08:00",
+   "kveldStart": "19:00",
+   "kveldSlutt": "22:00",
+   "nominellKw": 0.1
+  }
+ }
+}

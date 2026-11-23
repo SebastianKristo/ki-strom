@@ -6,7 +6,8 @@ Homey-versjonen av KI Energi. Appen bygges trinnvis:
 2. **Energimotor:** timebudsjett, rom med prioritet, værvarsel og prisoptimal varmeplan.
 3. **Huset** (denne versjonen, 3a): personer, bortemodus og hjemkomst, bereder, håndklevarmer, vaner og widget.
    Elbillading og lysregler kommer i 3b.
-4. Kontrollversjon i Home Assistant, som styrer denne appen.
+4. **Kontrollversjon i Home Assistant:** integrasjonen i dette repoet kan kobles til appen («På Homey» i oppsettet)
+   og viser og betjener den derfra.
 
 Krever Homey Pro (2023 eller nyere).
 
@@ -64,7 +65,7 @@ forvarming i billige timer, og start i tide før dagen begynner — tidligere jo
 
 **Læringen** trenger effektmåling på ovnene (W) og noen døgn med data. Til et rom er lært, følger det programmet.
 
-**Skyggemodus** er på som standard: motoren regner og forklarer, men rører ikke termostatene.
+**Skyggemodus** er på som standard: appen regner og forklarer, men rører verken termostater, bereder eller håndklevarmer.
 Slå den av på enheten eller i innstillingene når forslagene ser fornuftige ut.
 
 ## Huset

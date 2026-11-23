@@ -15,7 +15,7 @@ from homeassistant.util import dt as dt_util
 from .const import (
     CONF_IMPORTERT_ENERGI,
     CONF_HANKLEVARMER_EFFEKT, CONF_HVITEVARER, CONF_TOTAL_EFFEKT, CONF_VVB_EFFEKT, DOMAIN, EFFEKTSENSOR_SEK,
-    LAERING_MIN, PLATFORMS, TICK_SEK, TJENESTER,
+    CONF_MODUS, LAERING_MIN, MODUS_HOMEY, PLATFORMS, TICK_SEK, TJENESTER,
 )
 from .engine import KiEngine
 from .hub import KiHub
@@ -93,6 +93,11 @@ def _migrer_soner_til_rom(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    if entry.data.get(CONF_MODUS) == MODUS_HOMEY:
+        # Kontrollversjonen: Homey regner og styrer, Home Assistant viser og betjener.
+        from . import fjern  # noqa: PLC0415
+        entry.async_on_unload(entry.add_update_listener(_options_oppdatert))
+        return await fjern.sett_opp(hass, entry)
     _migrer_soner_til_rom(hass, entry)
     hub = KiHub(hass, entry)
     await hub.last_minne()
@@ -196,6 +201,9 @@ async def _options_oppdatert(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    if entry.data.get(CONF_MODUS) == MODUS_HOMEY:
+        from . import fjern  # noqa: PLC0415
+        return await fjern.last_av(hass, entry)
     hub: KiHub = hass.data[DOMAIN][entry.entry_id]
     await hub.stopp()
     ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)

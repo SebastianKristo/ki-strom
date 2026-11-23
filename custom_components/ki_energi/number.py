@@ -15,6 +15,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN, NUMBERS, Z_TEMP_BORTE, Z_TEMP_DAG, Z_TEMP_NATT
+from .const import CONF_MODUS, MODUS_HOMEY  # noqa: E402
 from .entity import KiHelper
 
 
@@ -131,6 +132,10 @@ class KiRomTemp(KiHelper, NumberEntity):
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
+    if entry.data.get(CONF_MODUS) == MODUS_HOMEY:
+        from .fjern import entiteter  # noqa: PLC0415
+        async_add_entities(entiteter.lag("number", hass.data[DOMAIN][entry.entry_id]))
+        return
     hub = hass.data[DOMAIN][entry.entry_id]
     kjente = {n[0] for n in NUMBERS}
     entiteter = [KiNumber(hub, *n) for n in NUMBERS]

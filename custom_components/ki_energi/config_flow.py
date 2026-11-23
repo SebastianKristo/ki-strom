@@ -14,7 +14,8 @@ from . import oppdag
 from .const import (
     CONF_AREAL, CONF_BYGGEAR, CONF_ENERGILEDD_DAG, CONF_ENERGILEDD_NATT, CONF_GARDINER,
     CONF_GLASS_M2, CONF_HANKLEVARMER, CONF_HANKLEVARMER_EFFEKT, CONF_HVITEVARER,
-    CONF_HAR_ELBIL, CONF_HUSTYPE, CONF_LYSREGLER, CONF_PERSONER, CONF_PRESET, CONF_PRESET_MERKE, LEGACY_PERSONER, PERSONTYPER, PRESETS, PROFIL_LEGACY,
+    CONF_HAR_ELBIL, CONF_HOMEY_HOST, CONF_HOMEY_INTERVALL, CONF_HOMEY_TOKEN, CONF_HUSTYPE, CONF_LYSREGLER, CONF_MODUS, CONF_PERSONER,
+    CONF_PRESET, CONF_PRESET_MERKE, MODUS_HOMEY, LEGACY_PERSONER, PERSONTYPER, PRESETS, PROFIL_LEGACY,
     CONF_STED_NAVN, CONF_NETTLEIE_MODELL, CONF_HOYLAST_FRA, CONF_HOYLAST_TIL, CONF_HOYLAST_HVERDAG, CONF_HOYLAST_MANEDER,
     CONF_LADER_FASER, CONF_LADER_VOLT, NETTLEIE_MODELLER,
     CONF_IMPORTERT_ENERGI, CONF_KAPASITETSTRINN, CONF_NORDPOOL, CONF_NORGESPRIS_AKTIV, CONF_SONER,
@@ -260,6 +261,28 @@ def _rens(data: dict, skjema: dict | None = None) -> dict:
     return ut
 
 
+SKJEMA_HOMEY = vol.Schema({
+    vol.Required(CONF_HOMEY_HOST): selector.TextSelector(),
+    vol.Required(CONF_HOMEY_TOKEN): selector.TextSelector(selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)),
+})
+
+
+async def _prov_homey(hass, host: str, token: str) -> str | None:
+    """Prøv tilkoblingen. Returnerer None når den virker, ellers en feilkode til skjemaet."""
+    from homeassistant.helpers.aiohttp_client import async_get_clientsession  # noqa: PLC0415
+
+    from .fjern.klient import HomeyAvvist, HomeyFeil, HomeyKlient, HomeyManglerApp  # noqa: PLC0415
+    try:
+        svar = await HomeyKlient(async_get_clientsession(hass), host, token).hent("/status")
+    except HomeyAvvist:
+        return "homey_avvist"
+    except HomeyManglerApp:
+        return "homey_mangler_app"
+    except HomeyFeil:
+        return "homey_ingen_kontakt"
+    return None if isinstance(svar, dict) and "nettleie" in svar else "homey_mangler_app"
+
+
 class KiEnergiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
@@ -286,14 +309,31 @@ class KiEnergiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return ut
 
     async def async_step_user(self, user_input=None):
-        """Første steg: velg hus (preset). Alt etterpå fylles med forslag fra valget."""
+        """Første steg: hvor skal motoren kjøre? I Home Assistant (som alltid), eller på Homey
+        med Home Assistant som kontrollpanel."""
         if self._async_current_entries():
             return self.async_abort(reason="single_instance_allowed")
+        return self.async_show_menu(step_id="user", menu_options=["lokal", "homey"])
+
+    async def async_step_homey(self, user_input=None):
+        """Kontrollversjonen: adressen til Homey og en API-nøkkel derfra."""
+        feil: dict[str, str] = {}
+        if user_input is not None:
+            feilkode = await _prov_homey(self.hass, user_input[CONF_HOMEY_HOST], user_input[CONF_HOMEY_TOKEN])
+            if feilkode is None:
+                return self.async_create_entry(title="KI Energi (Homey)", data={
+                    CONF_MODUS: MODUS_HOMEY, CONF_HOMEY_HOST: user_input[CONF_HOMEY_HOST].strip(),
+                    CONF_HOMEY_TOKEN: user_input[CONF_HOMEY_TOKEN].strip()})
+            feil["base"] = feilkode
+        return self.async_show_form(step_id="homey", data_schema=self.add_suggested_values_to_schema(SKJEMA_HOMEY, user_input or {}), errors=feil)
+
+    async def async_step_lokal(self, user_input=None):
+        """Velg hus (preset). Alt etterpå fylles med forslag fra valget."""
         if user_input is not None:
             self._data[CONF_PRESET] = user_input[CONF_PRESET]
             self._data[CONF_HUSTYPE] = PRESETS[user_input[CONF_PRESET]]["hustype"]
             return await self.async_step_maling()
-        return self.async_show_form(step_id="user", data_schema=vol.Schema({
+        return self.async_show_form(step_id="lokal", data_schema=vol.Schema({
             vol.Required(CONF_PRESET, default="bolig"): selector.SelectSelector(selector.SelectSelectorConfig(
                 options=[selector.SelectOptionDict(value=k, label=p["navn"] + (" — " + p["beskrivelse"] if p["beskrivelse"] else ""))
                          for k, p in PRESETS.items() if k in ("bolig", "hytte", "tom")], mode="list"))}))
@@ -389,7 +429,31 @@ class KiEnergiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(config_entry):
+        if config_entry.data.get(CONF_MODUS) == MODUS_HOMEY:
+            return KiHomeyOptionsFlow(config_entry)
         return KiEnergiOptionsFlow(config_entry)
+
+
+class KiHomeyOptionsFlow(config_entries.OptionsFlow):
+    """Kontrollversjonen har bare tilkoblingen å stille på; resten settes i appen på Homey."""
+
+    def __init__(self, entry: config_entries.ConfigEntry) -> None:
+        self._entry = entry
+
+    async def async_step_init(self, user_input=None):
+        feil: dict[str, str] = {}
+        gjeldende = {**self._entry.data, **self._entry.options}
+        if user_input is not None:
+            feilkode = await _prov_homey(self.hass, user_input[CONF_HOMEY_HOST], user_input[CONF_HOMEY_TOKEN])
+            if feilkode is None:
+                return self.async_create_entry(title="", data={
+                    CONF_HOMEY_HOST: user_input[CONF_HOMEY_HOST].strip(), CONF_HOMEY_TOKEN: user_input[CONF_HOMEY_TOKEN].strip(),
+                    CONF_HOMEY_INTERVALL: int(user_input.get(CONF_HOMEY_INTERVALL, 30))})
+            feil["base"] = feilkode
+        skjema = SKJEMA_HOMEY.extend({vol.Optional(CONF_HOMEY_INTERVALL, default=30): vol.All(vol.Coerce(int), vol.Range(min=10, max=300))})
+        return self.async_show_form(step_id="init", data_schema=self.add_suggested_values_to_schema(
+            skjema, user_input or {k: gjeldende.get(k) for k in (CONF_HOMEY_HOST, CONF_HOMEY_TOKEN, CONF_HOMEY_INTERVALL) if gjeldende.get(k) is not None}),
+            errors=feil, description_placeholders={"status": "Tilkoblingen til Homey. Rom, personer, bereder og grenser stilles inn i KI Energi-appen på Homey."})
 
 
 class KiEnergiOptionsFlow(config_entries.OptionsFlow):

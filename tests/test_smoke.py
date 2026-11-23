@@ -136,7 +136,10 @@ async def test_options_flow(hass):
 
 async def test_config_flow(hass):
     r = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
-    assert r["type"] == "form" and r["step_id"] == "user"
+    # Første steg er valget mellom lokal versjon og kontrollversjon for Homey
+    assert r["type"] == "menu" and r["step_id"] == "user" and r["menu_options"] == ["lokal", "homey"]
+    r = await hass.config_entries.flow.async_configure(r["flow_id"], {"next_step_id": "lokal"})
+    assert r["type"] == "form" and r["step_id"] == "lokal"
     r = await hass.config_entries.flow.async_configure(r["flow_id"], {"preset": "bolig"})
     assert r["step_id"] == "maling"
     # feil sensor-type gir feilmelding, riktige går videre

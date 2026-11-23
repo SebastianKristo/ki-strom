@@ -137,6 +137,9 @@ class HusKobling {
   async _bryter(enheter, kilde, paa, navn, naa) {
     const e = enheter[kilde.enhet];
     if (!e) return;
+    // Skyggemodus gjelder alt appen styrer, ikke bare termostatene.
+    const motor = this.app.motor.innstillinger();
+    if (motor.skygge || !motor.aktiv) return;
     const sist = this.sistSkrevet[navn];
     if (sist && sist.verdi === paa && naa - sist.ms < 3 * 60000) return;     // releet rekker ikke alltid å melde tilbake på ett minutt
     this.sistSkrevet[navn] = { verdi: paa, ms: naa };

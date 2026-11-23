@@ -1,47 +1,37 @@
-# KI Energi 2.33.2
+# KI Energi 2.34.0
 
-Ferdig oppsett for huset, bortetemperatur som velges av algoritmen, forvarming søndag og en
-rekke mindre rettelser. Ingen oppsett må endres; de nye funksjonene er av til de slås på eller
-et oppsett som bruker dem tas i bruk.
+Kontrollversjon for Homey. Eksisterende oppsett påvirkes ikke.
 
 ## Nytt
 
-- **«Bruk ferdig oppsett»** under *Konfigurer*: legger et preset inn på en installasjon som alt
-  kjører — måling, utstyr, soner, personer og (valgfritt) temperaturer og tider. Det KI har lært
-  (oppvarmingskurver, lastprofil, prognoser) beholdes. Soner som ikke finnes i oppsettet, fjernes.
-- **Preset «Kristo (Homey-oppsettet)»**: stue og kjøkken med to varmekilder hver, trappegang,
-  Cybeles og Sebastians rom, bad og do; bereder og håndklevarmer; Elvia, Norgespris og Nord Pool;
-  personer via Homey-posisjon. Fellesrom 22/19 °C fra 06 til 23, bortehelg med spørsmål bare fredag
-  og hjemkomst søndag kl. 13.
-- **Automatisk bortetemperatur** (`switch.ki_borte_auto_temp`, `number.ki_borte_min_temp`): for
-  hvert rom velges den laveste temperaturen rommet rekker å varme seg opp fra før dere kommer, ut
-  fra lært oppvarmingsevne, varmetap og utetemperaturen. Kaldere vær gir høyere bortetemperatur.
-  Aldri under bunnen (standard 12 °C). Til rommet er lært, gjelder de faste bortetemperaturene.
-- **Forvarming søndag** (`switch.ki_helg_forvarm_sondag`): i helgemodus regnes hjemkomsten som
-  planlagt til `ki_hjemkomst_tid`, så hvert rom starter forvarmingen når modellen sier det må — ikke
-  først når søndagsspørsmålet er besvart. Etter tiden holdes dagtemperatur til noen kommer.
-  «Forleng helgen» stopper det for dagen.
+- **Valg i starten av oppsettet:** «I Home Assistant» (som før — motoren regner og styrer her) eller
+  «På Homey» (kontrollversjon).
+- **Kontrollversjonen** kobler seg til KI Energi-appen på Homey over hjemmenettet og gjør den om til
+  entiteter i Home Assistant. All beregning og styring skjer på Homey; Home Assistant viser og betjener.
+  - **Sensorer:** tariff, kapasitetstrinn, priser, forbruk og kostnad, motorens status og forklaring,
+    timens grense, modus, hjemkomst og bereder.
+  - **Rom som klimaenheter:** temperatur nå og settpunkt. Setter du temperaturen, overstyres rommet i to timer.
+  - **Brytere:** energimotor, skyggemodus, varmeplan, bortemodus, Norgespris og berederstyring.
+  - **Tall og klokkeslett:** dag- og nattemperatur per rom, timegrenser, bortetemperatur, dag-/nattstart,
+    fast hjemkomst og «Vi kommer hjem kl.».
+  - **Knapper:** varm opp berederen, full oppvarming, «vi blir borte lenger» og fjern overstyringer.
+  - Én binær sensor per person (hjemme/borte).
+- Svarer ikke Homey, blir entitetene utilgjengelige og kommer tilbake av seg selv.
 
-## Rettet
+## Slik setter du den opp
 
-- Elbilladingen trappes ned med en gang når det blir mindre ledig effekt (dødbånd og minsteavstand
-  gjelder bare oppover), og en posisjonssensor uten stedsnavn sperrer ikke lenger ladingen.
-- Berederen velger billige timer etter snittet av kvartersprisene, ikke bare første kvarter.
-- Glemt lys slås ikke av når nærværssensoren har falt ut.
-- Prognoselæringen og varselet om passert effektgrense kjører nå begge, uansett om timeslutt eller
-  ticket lukker timen.
-- Varmetap og oppvarmingsrate læres over vinduer på minst 30 min, så termostater som melder i halve
-  grader ikke gir for høye verdier (forvarmingen startet for sent).
-- Tjenestekall venter på et tick som pågår, og statistikken telles ikke dobbelt.
-- Registerprøver fra HAN/Pulse tynnes til én i minuttet midt i timen, og store lister skrives ikke
-  til recorder hvert minutt.
+1. Installer KI Energi-appen på Homey (mappen `homey/` i dette repoet) og sett den opp der.
+2. Lag en API-nøkkel i Homey: *Innstillinger → API-nøkler*.
+3. I Home Assistant: legg til KI Energi, velg «På Homey», og oppgi Homeys IP-adresse og nøkkelen.
+
+Bare ett oppsett av KI Energi kan finnes om gangen. For å bytte fra lokal versjon til kontrollversjonen
+må den lokale fjernes først — læringen der blir da borte.
 
 ### Kontrollert
 
-Python 3.13, Home Assistant 2026.2.3, pytest-homeassistant-custom-component 0.13.316: hele
-testsamlingen, 223 tester, 23 av dem nye (`tests/test_mindre_funn.py`, `tests/test_preset_kristo.py`).
-`test_smoke.py::test_lysregler` avhenger av klokkeslettet (setter tiden til kl. 14 mens sensorens
-`last_changed` er ekte tid) og feiler når den kjøres etter ca. kl. 14.
+Python 3.13, Home Assistant 2026.2.3, pytest-homeassistant-custom-component 0.13.316: 232 tester, ni av dem
+nye (`tests/test_kontrollversjon.py`). De prøves mot svar skrevet av Homey-appens egen test, så formatet
+er det appen faktisk sender. Homey-appen: 89 tester.
 
-Ikke verifisert mot ditt utstyr: at Homey-bryterne for posisjon står på når personen er hjemme, og
-hvor raskt hvert rom faktisk varmes opp — det lærer KI de første ukene.
+Ikke verifisert mot en ekte Homey: at Homeys API-nøkkel godtas som Bearer-token mot appens lokale API,
+og adressen `http://<homey>/api/app/no.kristo.kienergi/…`.

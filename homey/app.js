@@ -134,6 +134,16 @@ module.exports = class KiEnergiApp extends Homey.App {
   // ------------------------------------------------------------------
   _tick() {
     try {
+      const naa = this._tickKalkulator();
+      this._motorTick(naa).catch((e) => this.error('Motoren feilet:', e));
+    } catch (e) {
+      this.error('Tick feilet:', e);
+    }
+  }
+
+  /** Strømkalkulatorens del av ticket. Returnerer tidspunktet. */
+  _tickKalkulator() {
+    {
       const naa = Date.now();
       const innst = this.innstillinger();
       if (innst.energiKapabilitet) {
@@ -149,9 +159,7 @@ module.exports = class KiEnergiApp extends Homey.App {
       for (const enhet of this.homey.drivers.getDriver('stromkalkulator').getDevices()) {
         enhet.oppdater(this.bilde).catch((e) => this.error('Enhet:', e.message));
       }
-      this._motorTick(naa).catch((e) => this.error('Motoren feilet:', e));
-    } catch (e) {
-      this.error('Tick feilet:', e);
+      return naa;
     }
   }
 
@@ -167,6 +175,19 @@ module.exports = class KiEnergiApp extends Homey.App {
       }
     } finally {
       this._motorKjorer = false;
+    }
+  }
+
+  /**
+   * Regn på nytt med en gang, etter en endring fra innstillingene eller API-et. Uten dette
+   * ville svaret vise forrige minutts bilde, og en bryter i Home Assistant ville hoppet tilbake.
+   */
+  async regnNaa() {
+    try {
+      this._tickKalkulator();
+      await this._motorTick(Date.now());
+    } catch (e) {
+      this.error('Kunne ikke regne på nytt:', e);
     }
   }
 

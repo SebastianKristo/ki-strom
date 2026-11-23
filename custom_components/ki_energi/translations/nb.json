@@ -2,10 +2,11 @@
   "config": {
     "step": {
       "user": {
-        "title": "Velg hus",
-        "description": "Velg et ferdig oppsett. Alle entiteter og verdier kan endres i stegene som følger og senere under Konfigurer.",
-        "data": {
-          "preset": "Oppsett"
+        "title": "KI Energi",
+        "description": "Hvor skal KI Energi kjøre?",
+        "menu_options": {
+          "lokal": "I Home Assistant — motoren regner og styrer her",
+          "homey": "På Homey — Home Assistant er kontrollpanel for appen"
         }
       },
       "utstyr": {
@@ -95,6 +96,22 @@
           "kilde": "Hvor skal sonene komme fra?",
           "soner": "Områder som skal bli soner"
         }
+      },
+      "lokal": {
+        "title": "Velg hus",
+        "description": "Velg et ferdig oppsett. Alle entiteter og verdier kan endres i stegene som følger og senere under Konfigurer.",
+        "data": {
+          "preset": "Oppsett"
+        }
+      },
+      "homey": {
+        "title": "Koble til Homey",
+        "description": "KI Energi-appen må være installert på Homey. Lag en API-nøkkel i Homey (Innstillinger → API-nøkler) og lim den inn her. Adressen er Homeys IP-adresse på hjemmenettet, for eksempel 192.168.1.20.",
+        "data": {
+          "homey_host": "Adressen til Homey",
+          "homey_token": "API-nøkkel",
+          "homey_intervall": "Sekunder mellom oppdateringer"
+        }
       }
     },
     "abort": {
@@ -105,7 +122,10 @@
       "ikke_effekt": "Dette er ikke en effektsensor i W/kW. Velg hovedmålerens øyeblikkseffekt.",
       "ikke_register": "Dette er ikke et akkumulert energiregister (kWh, total_increasing). Dagsforbruk-sensorer kan ikke brukes.",
       "ugyldig_tid": "Ugyldig klokkeslett. Bruk HH:MM.",
-      "ugyldig_maneder": "Bruk to måneder skilt med bindestrek, f.eks. 11-3."
+      "ugyldig_maneder": "Bruk to måneder skilt med bindestrek, f.eks. 11-3.",
+      "homey_avvist": "Homey godtok ikke API-nøkkelen.",
+      "homey_mangler_app": "Homey svarer, men KI Energi-appen ble ikke funnet. Er den installert og startet?",
+      "homey_ingen_kontakt": "Får ikke kontakt med Homey på den adressen."
     }
   },
   "options": {
@@ -123,7 +143,12 @@
           "soner_auto": "Lag soner fra områdene mine",
           "lys": "Lys — glemte lys og nattdemping"
         },
-        "description": "{status}"
+        "description": "{status}",
+        "data": {
+          "homey_host": "Adressen til Homey",
+          "homey_token": "API-nøkkel",
+          "homey_intervall": "Sekunder mellom oppdateringer"
+        }
       },
       "maling": {
         "title": "Måling",
@@ -311,7 +336,10 @@
       "navn_mangler": "Regelen må ha et navn.",
       "lys_mangler": "Velg lyset eller bryteren regelen gjelder.",
       "kan_ikke_dempes": "Nattdemping krever et lys som kan dimmes. Velg et light.-objekt, eller bytt til «glemt lys».",
-      "ugyldig_maneder": "Bruk to måneder skilt med bindestrek, f.eks. 11-3."
+      "ugyldig_maneder": "Bruk to måneder skilt med bindestrek, f.eks. 11-3.",
+      "homey_avvist": "Homey godtok ikke API-nøkkelen.",
+      "homey_mangler_app": "Homey svarer, men KI Energi-appen ble ikke funnet. Er den installert og startet?",
+      "homey_ingen_kontakt": "Får ikke kontakt med Homey på den adressen."
     },
     "abort": {
       "ingen_omrader": "Ingen områder med termostater. Sett område på termostatene under Innstillinger → Enheter."

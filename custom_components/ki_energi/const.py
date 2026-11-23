@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 DOMAIN = "ki_energi"
-VERSION = "2.33.2"   # holdes lik manifest.json — testen test_versjon passer på det
+VERSION = "2.34.0"   # holdes lik manifest.json — testen test_versjon passer på det
 DEVICE_NAME = "KI Energi"
 
 PLATFORMS = ["sensor", "binary_sensor", "switch", "number", "time", "datetime", "text"]
@@ -125,6 +125,14 @@ PERSON_TIDER = {
     "voksen": [],
 }
 PERSON_BRYTERE = {"barn": [], "ungdom": [("ferie", "Ferie", False, "mdi:school-outline")], "voksen": []}
+# Hvor motoren kjører. «lokal»: i Home Assistant, som alltid. «homey»: KI Energi-appen på
+# Homey regner og styrer, og Home Assistant er kontrollpanel (se fjern/).
+CONF_MODUS = "modus"
+MODUS_LOKAL = "lokal"
+MODUS_HOMEY = "homey"
+CONF_HOMEY_HOST = "homey_host"
+CONF_HOMEY_TOKEN = "homey_token"
+CONF_HOMEY_INTERVALL = "homey_intervall"
 CONF_PRESET = "preset"        # bolig | hytte | kristo | tom
 # Settes når et preset tas i bruk fra alternativene. Motoren legger inn presetets verdier
 # (temperaturer, tider) én gang per merke, så det ikke skjer på nytt ved hver omstart.

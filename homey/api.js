@@ -41,7 +41,9 @@ module.exports = {
   },
 
   async settMotorinnstillinger({ homey, body }) {
-    return homey.app.motor.settInnstillinger(body || {});
+    const svar = homey.app.motor.settInnstillinger(body || {});
+    await homey.app.regnNaa();
+    return svar;
   },
 
   async termostater({ homey }) {
@@ -59,13 +61,17 @@ module.exports = {
   /** body: { rom, temp, minutter } */
   async overstyr({ homey, body }) {
     homey.app.motor.overstyr(body.rom, Number(body.temp), Number(body.minutter) || 120);
-    return { ok: true };
+    const svar = { ok: true };
+    await homey.app.regnNaa();
+    return svar;
   },
 
   /** body: { rom } — uten rom fjernes alle overstyringer. */
   async fjernOverstyring({ homey, body }) {
     homey.app.motor.fjernOverstyring(body && body.rom);
-    return { ok: true };
+    const svar = { ok: true };
+    await homey.app.regnNaa();
+    return svar;
   },
 
   async hus({ homey }) {
@@ -77,7 +83,9 @@ module.exports = {
   },
 
   async settHusinnstillinger({ homey, body }) {
-    return homey.app.hus.settInnstillinger(body || {});
+    const svar = homey.app.hus.settInnstillinger(body || {});
+    await homey.app.regnNaa();
+    return svar;
   },
 
   async personkilder({ homey }) {
@@ -91,23 +99,31 @@ module.exports = {
   /** body: { paa } */
   async bortemodus({ homey, body }) {
     homey.app.hus.settBorte(Boolean(body && body.paa));
-    return { ok: true };
+    const svar = { ok: true };
+    await homey.app.regnNaa();
+    return svar;
   },
 
   /** body: { tid } — «HH:MM» (neste gang det inntreffer) eller et tidspunkt i millisekunder. */
   async hjemkomst({ homey, body }) {
-    return { hjemkomst: homey.app.hus.settHjemkomst(body.tid) };
+    const svar = { hjemkomst: homey.app.hus.settHjemkomst(body.tid) };
+    await homey.app.regnNaa();
+    return svar;
   },
 
   async forleng({ homey }) {
     homey.app.hus.forleng();
-    return { ok: true };
+    const svar = { ok: true };
+    await homey.app.regnNaa();
+    return svar;
   },
 
   /** body: { handling: 'boost' | 'avbryt' | 'tving', minutter } */
   async bereder({ homey, body }) {
     homey.app.hus.berederHandling(body.handling, body.minutter);
-    return { ok: true };
+    const svar = { ok: true };
+    await homey.app.regnNaa();
+    return svar;
   },
 
   /** Bare kjente nøkler tas imot; resten av innstillingene står urørt. */
@@ -117,6 +133,8 @@ module.exports = {
       if (body && Object.prototype.hasOwnProperty.call(body, k)) ny[k] = body[k];
     }
     homey.settings.set('innstillinger', ny);
-    return ny;
+    const svar = ny;
+    await homey.app.regnNaa();
+    return svar;
   },
 };
