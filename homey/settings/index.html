@@ -1,25 +1,84 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <meta charset="utf-8" />
   <script type="text/javascript" src="/homey.js" data-origin="settings"></script>
   <style>
     .rad { margin-bottom: 14px; }
     .hjelp { font-size: 12px; opacity: .7; margin-top: 4px; }
-    #status { margin: 12px 0; font-size: 13px; white-space: pre-line; }
-    .skjult { display: none; }
-    .rom { border: 1px solid rgba(128,128,128,.35); border-radius: 8px; padding: 10px; margin-bottom: 10px; }
+    .skjult { display: none !important; }
+    .rom { border: 1px solid rgba(128,128,128,.35); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
     .rom h3 { margin: 0 0 4px; font-size: 15px; }
+    details.rom > summary { cursor: pointer; list-style: none; display: flex; align-items: baseline; gap: 8px; }
+    details.rom > summary::-webkit-details-marker { display: none; }
+    details.rom > summary::after { content: '▾'; margin-left: auto; opacity: .5; }
+    details.rom[open] > summary::after { content: '▴'; }
+    details.rom > summary b { font-size: 15px; }
+    details.rom > summary span { font-size: 12px; opacity: .7; }
+    details.rom[open] > summary { margin-bottom: 8px; }
     .rutenett { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .rutenett label { font-size: 12px; opacity: .8; display: block; }
     .rutenett input, .rutenett select { width: 100%; box-sizing: border-box; }
+    .rutenett input[type=checkbox] { width: auto; margin-right: 6px; }
+    .rutenett label:has(input[type=checkbox]) { font-size: 13px; opacity: 1; display: flex; align-items: center; padding-top: 14px; }
+    .avansert { margin: 6px 0 16px; border-top: 1px solid rgba(128,128,128,.25); padding-top: 10px; }
+    .avansert > summary { cursor: pointer; font-size: 13px; opacity: .8; margin-bottom: 10px; }
+
+    .topp { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+    .topp svg { width: 44px; height: 44px; flex: none; border-radius: 11px; }
+    .topp h1 { margin: 0; font-size: 20px; }
+    .topp p { margin: 2px 0 0; font-size: 12px; opacity: .7; }
+    .faner { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 14px; -webkit-overflow-scrolling: touch; }
+    .faner button { flex: none; border: 1px solid rgba(128,128,128,.4); background: transparent; color: inherit; font: inherit; font-size: 13px;
+      padding: 7px 13px; border-radius: 999px; cursor: pointer; }
+    .faner button.valgt { background: #1565C0; border-color: #1565C0; color: #fff; font-weight: 600; }
+    .fane > .intro { font-size: 13px; opacity: .75; margin: 0 0 14px; }
+    .kort { border: 1px solid rgba(128,128,128,.35); border-radius: 10px; padding: 12px; margin-bottom: 12px; }
+    .kort h2 { margin: 0 0 6px; font-size: 14px; }
+    .kort .tekst { font-size: 13px; white-space: pre-line; opacity: .85; }
+    .varsel { background: rgba(255,193,7,.16); border-color: rgba(255,193,7,.7); }
+    .sjekk { list-style: none; margin: 0; padding: 0; }
+    .sjekk li { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-top: 1px solid rgba(128,128,128,.2); cursor: pointer; }
+    .sjekk li:first-child { border-top: 0; }
+    .sjekk .merke { flex: none; width: 22px; height: 22px; border-radius: 50%; border: 2px solid rgba(128,128,128,.5); box-sizing: border-box;
+      display: flex; align-items: center; justify-content: center; font-size: 13px; color: #fff; }
+    .sjekk li.ferdig .merke { background: #2E7D32; border-color: #2E7D32; }
+    .sjekk b { display: block; font-size: 14px; }
+    .sjekk span.under { font-size: 12px; opacity: .7; }
+    .sjekk .pil { margin-left: auto; opacity: .4; }
+    #melding { min-height: 18px; margin: 10px 0; font-size: 13px; text-align: center; }
   </style>
 </head>
 <body>
-  <header class="homey-header">
-    <h1 class="homey-title">KI Energi</h1>
-    <p class="homey-subtitle">Strømmåler, nettselskap og strømstøtte</p>
-  </header>
+  <div class="topp">
+    <svg viewBox="0 0 512 512" aria-hidden="true"><rect width="512" height="512" rx="112" fill="#1565C0"/><g transform="translate(96 88) scale(5)"><path fill="#fff" fill-rule="evenodd" d="M32 5.5a3 3 0 0 1 1.95.72l25 21.5A3 3 0 0 1 57 33h-3v22a4 4 0 0 1-4 4H14a4 4 0 0 1-4-4V33H7a3 3 0 0 1-1.95-5.28l25-21.5A3 3 0 0 1 32 5.5ZM34.9 23L21.85 40.4L30.55 40.4L29.1 52L42.15 34.6L33.45 34.6Z"/><path fill="#FFC107" d="M34.9 23L21.85 40.4L30.55 40.4L29.1 52L42.15 34.6L33.45 34.6Z"/></g></svg>
+    <div><h1>KI Energi</h1><p id="undertittel">Strømkalkulator og smart energistyring</p></div>
+  </div>
 
+  <nav class="faner" id="faner">
+    <button data-fane="oversikt">Oversikt</button>
+    <button data-fane="strom">Strøm</button>
+    <button data-fane="varme">Varme</button>
+    <button data-fane="hjemme">Hjemme og borte</button>
+    <button data-fane="enheter">Bereder, bil og lys</button>
+  </nav>
+
+  <section class="fane" id="fane-oversikt">
+    <div class="kort varsel skjult" id="skyggevarsel">
+      <h2>Skyggemodus er på</h2>
+      <div class="tekst">Appen regner og forklarer, men styrer ingenting. Slå den av under «Varme» når forslagene ser fornuftige ut.</div>
+    </div>
+    <div class="kort">
+      <h2>Oppsett</h2>
+      <ul class="sjekk" id="sjekkliste"></ul>
+    </div>
+    <div class="kort"><h2>Strøm</h2><div class="tekst" id="status">Henter …</div></div>
+    <div class="kort"><h2>Varme</h2><div class="tekst" id="motorstatus">Ingen data ennå. Legg til enheten Energimotor og sett opp rommene.</div></div>
+    <div class="kort"><h2>Huset</h2><div class="tekst" id="husstatus">Ingen data ennå.</div></div>
+  </section>
+
+  <section class="fane skjult" id="fane-strom">
+    <p class="intro">Hvor forbruket måles, og hvilket nettselskap og hvilke ordninger prisen skal regnes etter.</p>
   <fieldset class="homey-form-fieldset">
     <legend class="homey-form-legend">Strømmåler</legend>
     <div class="homey-form-group rad">
@@ -68,8 +127,8 @@
     </div>
   </fieldset>
 
-  <fieldset class="homey-form-fieldset">
-    <legend class="homey-form-legend">Egne satser (valgfritt)</legend>
+  <details class="avansert">
+    <summary>Egne satser (valgfritt)</summary>
     <p class="hjelp">Fyll ut bare hvis nettselskapet mangler, eller satsene i appen er utdaterte. Tomme felt følger katalogen.</p>
     <div class="homey-form-group rad">
       <label class="homey-form-label" for="energileddDagEksMva">Energiledd dag (kr/kWh, uten mva og avgifter)</label>
@@ -83,16 +142,13 @@
       <label class="homey-form-label" for="egneTrinn">Kapasitetstrinn (øvre kW-grense : kr/mnd inkl. mva)</label>
       <input class="homey-form-input" id="egneTrinn" type="text" placeholder="2:155,5:250,10:415" />
     </div>
-  </fieldset>
+  </details>
 
-  <button id="lagre" class="homey-button-primary-full">Lagre</button>
-  <div id="status"></div>
+    <button id="lagre" class="homey-button-primary-full">Lagre strøm</button>
+  </section>
 
-  <header class="homey-header">
-    <h1 class="homey-title">Energimotor</h1>
-    <p class="homey-subtitle">Holder timeforbruket under kapasitetstrinnet og varmer rommene så billig som komforten tillater</p>
-  </header>
-
+  <section class="fane skjult" id="fane-varme">
+    <p class="intro">Holder timeforbruket under kapasitetstrinnet og varmer rommene så billig som komforten tillater.</p>
   <fieldset class="homey-form-fieldset">
     <legend class="homey-form-legend">Styring</legend>
     <div class="homey-form-group rad">
@@ -126,6 +182,13 @@
   </fieldset>
 
   <fieldset class="homey-form-fieldset">
+    <legend class="homey-form-legend">Rom</legend>
+    <p class="hjelp">Ett rom per Homey-sone med termostater. Prioritet 1 senkes aldri; 5 senkes først.</p>
+    <div id="rom"></div>
+    <button id="foresla" class="homey-button-secondary-full">Hent rom fra Homey-sonene</button>
+  </fieldset>
+
+  <fieldset class="homey-form-fieldset">
     <legend class="homey-form-legend">Grenser og døgnrytme</legend>
     <div class="rutenett">
       <div><label for="m_maksTimeKwh">Absolutt grense per time (kWh)</label><input class="homey-form-input" id="m_maksTimeKwh" type="number" step="0.1" min="1" /></div>
@@ -137,21 +200,11 @@
     </div>
   </fieldset>
 
-  <fieldset class="homey-form-fieldset">
-    <legend class="homey-form-legend">Rom</legend>
-    <p class="hjelp">Ett rom per Homey-sone med termostater. Prioritet 1 senkes aldri; 5 senkes først.</p>
-    <div id="rom"></div>
-    <button id="foresla" class="homey-button-secondary-full">Hent rom fra Homey-sonene</button>
-  </fieldset>
+    <button id="lagreMotor" class="homey-button-primary-full">Lagre varme</button>
+  </section>
 
-  <button id="lagreMotor" class="homey-button-primary-full">Lagre energimotor</button>
-  <div id="motorstatus" class="hjelp" style="white-space: pre-line; margin: 12px 0;"></div>
-
-  <header class="homey-header">
-    <h1 class="homey-title">Huset</h1>
-    <p class="homey-subtitle">Hvem som bor her, bortemodus, bereder og håndklevarmer</p>
-  </header>
-
+  <section class="fane skjult" id="fane-hjemme">
+    <p class="intro">Hvem som bor her, når huset regnes som tomt, og når det skal være varmt igjen.</p>
   <fieldset class="homey-form-fieldset">
     <legend class="homey-form-legend">Personer</legend>
     <p class="hjelp">Hver person følger en Homey-bruker eller en ja/nei-variabel der «ja» betyr hjemme. Et rom kan følge en person (velg det under Program for rommet).</p>
@@ -180,13 +233,23 @@
       <div><label for="h_hjemkomstUkedag">Fast hjemkomst</label><select class="homey-form-select" id="h_hjemkomstUkedag">
         <option value="">Ingen</option><option value="0">Mandag</option><option value="1">Tirsdag</option><option value="2">Onsdag</option><option value="3">Torsdag</option><option value="4">Fredag</option><option value="5">Lørdag</option><option value="6">Søndag</option></select></div>
       <div><label for="h_hjemkomstTid">Klokka</label><input class="homey-form-input" id="h_hjemkomstTid" type="time" /></div>
+    </div>
+    <details class="avansert">
+      <summary>Faste bortetemperaturer (for rom som ikke er lært)</summary>
+      <div class="rutenett">
       <div><label for="h_borteTempPanel">Fast bortetemp. panelovn</label><input class="homey-form-input" id="h_borteTempPanel" type="number" min="5" max="22" step="0.5" /></div>
       <div><label for="h_borteTempGulv">Fast bortetemp. gulv</label><input class="homey-form-input" id="h_borteTempGulv" type="number" min="5" max="24" step="0.5" /></div>
       <div><label for="h_borteTempBad">Fast bortetemp. bad</label><input class="homey-form-input" id="h_borteTempBad" type="number" min="5" max="26" step="0.5" /></div>
-    </div>
+      </div>
+    </details>
     <div id="forslag" class="hjelp" style="white-space: pre-line; margin-top: 10px;"></div>
   </fieldset>
 
+    <button id="lagreHus" class="homey-button-primary-full">Lagre</button>
+  </section>
+
+  <section class="fane skjult" id="fane-enheter">
+    <p class="intro">Alt her er valgfritt. Velg bare enhetene du vil at KI Energi skal styre.</p>
   <fieldset class="homey-form-fieldset">
     <legend class="homey-form-legend">Varmtvannsbereder</legend>
     <div class="homey-form-group rad">
@@ -239,13 +302,6 @@
       <div><label for="l_strom">Ladestrøm (A)</label><select class="homey-form-select" id="l_strom"></select></div>
       <div><label for="l_effekt">Ladeeffekt (W)</label><select class="homey-form-select" id="l_effekt"></select></div>
       <div><label for="l_soc">Batterinivå (%)</label><select class="homey-form-select" id="l_soc"></select></div>
-      <div><label for="l_trinn">Trinn (ampere, kommadelt)</label><input class="homey-form-input" id="l_trinn" type="text" placeholder="6,8,10,13,16" /></div>
-      <div><label for="l_faser">Faser</label><select class="homey-form-select" id="l_faser"><option value="1">1</option><option value="3">3</option></select></div>
-      <div><label for="l_volt">Spenning (V)</label><input class="homey-form-input" id="l_volt" type="number" min="100" max="500" step="10" /></div>
-      <div><label for="l_stoppVed">Stopp ved (%)</label><input class="homey-form-input" id="l_stoppVed" type="number" min="20" max="100" step="5" /></div>
-      <div><label for="l_startUnder">Start igjen under (%)</label><input class="homey-form-input" id="l_startUnder" type="number" min="10" max="100" step="5" /></div>
-      <div><label for="l_nattFra">Natt fra</label><input class="homey-form-input" id="l_nattFra" type="time" /></div>
-      <div><label for="l_nattTil">Natt til</label><input class="homey-form-input" id="l_nattTil" type="time" /></div>
     </div>
     <div class="homey-form-group rad">
       <label class="homey-form-checkbox"><input class="homey-form-checkbox-input" type="checkbox" id="l_automatikk" /><span class="homey-form-checkbox-checkmark"></span><span class="homey-form-checkbox-text">KI styrer ladingen</span></label>
@@ -253,6 +309,18 @@
     <div class="homey-form-group rad">
       <label class="homey-form-checkbox"><input class="homey-form-checkbox-input" type="checkbox" id="l_kunNatt" /><span class="homey-form-checkbox-checkmark"></span><span class="homey-form-checkbox-text">Lad bare om natten</span></label>
     </div>
+    <details class="avansert">
+      <summary>Trinn, faser, batterigrenser og nattvindu</summary>
+      <div class="rutenett">
+      <div><label for="l_trinn">Trinn (ampere, kommadelt)</label><input class="homey-form-input" id="l_trinn" type="text" placeholder="6,8,10,13,16" /></div>
+      <div><label for="l_faser">Faser</label><select class="homey-form-select" id="l_faser"><option value="1">1</option><option value="3">3</option></select></div>
+      <div><label for="l_volt">Spenning (V)</label><input class="homey-form-input" id="l_volt" type="number" min="100" max="500" step="10" /></div>
+      <div><label for="l_stoppVed">Stopp ved (%)</label><input class="homey-form-input" id="l_stoppVed" type="number" min="20" max="100" step="5" /></div>
+      <div><label for="l_startUnder">Start igjen under (%)</label><input class="homey-form-input" id="l_startUnder" type="number" min="10" max="100" step="5" /></div>
+      <div><label for="l_nattFra">Natt fra</label><input class="homey-form-input" id="l_nattFra" type="time" /></div>
+      <div><label for="l_nattTil">Natt til</label><input class="homey-form-input" id="l_nattTil" type="time" /></div>
+      </div>
+    </details>
   </fieldset>
 
   <fieldset class="homey-form-fieldset">
@@ -262,13 +330,48 @@
     <button id="nyLysregel" class="homey-button-secondary-full">Legg til lysregel</button>
   </fieldset>
 
-  <button id="lagreHus" class="homey-button-primary-full">Lagre huset</button>
-  <div id="husstatus" class="hjelp" style="white-space: pre-line; margin: 12px 0;"></div>
+    <button id="lagreHus2" class="homey-button-primary-full">Lagre</button>
+  </section>
+
+  <div id="melding"></div>
 
   <script type="text/javascript">
     const FELT = ['maalerEnhet', 'effektKapabilitet', 'energiKapabilitet', 'nettselskap', 'sikringstrinn', 'boligtype',
       'harNorgespris', 'varselTerskelKw', 'energileddDagEksMva', 'energileddNattEksMva', 'egneTrinn'];
     const el = (id) => document.getElementById(id);
+
+    // ---------------- Faner, melding og sjekkliste ----------------
+    const tilstand = { maaler: false, nett: false, rom: 0, personer: 0, skygge: null };
+    let meldingTid = null;
+
+    function meld(t) {
+      el('melding').textContent = t;
+      clearTimeout(meldingTid);
+      meldingTid = setTimeout(() => { el('melding').textContent = ''; }, 5000);
+    }
+
+    function visFane(navn) {
+      if (!el(`fane-${navn}`)) navn = 'oversikt';
+      document.querySelectorAll('.fane').forEach((f) => f.classList.toggle('skjult', f.id !== `fane-${navn}`));
+      document.querySelectorAll('#faner button').forEach((b) => b.classList.toggle('valgt', b.dataset.fane === navn));
+      el('melding').textContent = '';
+      try { localStorage.setItem('ki_fane', navn); } catch (e) { /* uten lagring åpnes Oversikt neste gang */ }
+      window.scrollTo(0, 0);
+    }
+
+    function visSjekkliste() {
+      const punkter = [
+        [tilstand.maaler, 'Velg strømmåler', 'Enheten som måler husets forbruk.', 'strom'],
+        [tilstand.nett, 'Velg nettselskap', 'Gir riktig nettleie og prisområde.', 'strom'],
+        [tilstand.rom > 0, 'Sett opp rommene', tilstand.rom ? `${tilstand.rom} rom er satt opp.` : 'Hent rom fra Homey-sonene og sett temperaturer.', 'varme'],
+        [tilstand.personer > 0, 'Legg til personer', tilstand.personer ? `${tilstand.personer} person(er).` : 'Valgfritt – trengs for bortemodus.', 'hjemme'],
+        [tilstand.skygge === false, 'Slå av skyggemodus', tilstand.skygge === false ? 'Appen styrer.' : 'Når forslagene ser fornuftige ut.', 'varme'],
+      ];
+      el('sjekkliste').innerHTML = punkter.map(([ferdig, tittel, under, fane]) => `
+        <li class="${ferdig ? 'ferdig' : ''}" data-fane="${fane}"><span class="merke">${ferdig ? '✓' : ''}</span>
+          <div><b>${tittel}</b><span class="under">${under}</span></div><span class="pil">›</span></li>`).join('');
+      el('skyggevarsel').classList.toggle('skjult', tilstand.skygge !== true);
+    }
     let enheter = [];
     let selskap = [];
 
@@ -322,9 +425,10 @@
     const tekst = (t) => String(t ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
     function tegnRom() {
+      tilstand.rom = rom.length; visSjekkliste();
       el('rom').innerHTML = rom.map((r, n) => `
-        <div class="rom" data-n="${n}">
-          <h3>${tekst(r.navn)}</h3>
+        <details class="rom" data-n="${n}">
+          <summary><b>${tekst(r.navn)}</b><span>${r.dag ?? 21} / ${r.natt ?? 19} °C · prioritet ${r.prio ?? 3}${r.aktiv === false ? ' · ikke med' : ''}</span></summary>
           <p class="hjelp">${tekst((r.termostatnavn || []).join(', ') || `${(r.termostater || []).length} termostat(er)`)}</p>
           <div class="rutenett">
             <div><label>Dag (°C)</label><input class="homey-form-input" data-f="dag" type="number" step="0.5" value="${r.dag ?? 21}" /></div>
@@ -336,7 +440,7 @@
             <div><label><input type="checkbox" data-f="aktiv"${r.aktiv !== false ? ' checked' : ''} /> Med i motoren</label></div>
             <div><label><input type="checkbox" data-f="styrt"${r.styrt !== false ? ' checked' : ''} /> KI styrer termostaten</label></div>
           </div>
-        </div>`).join('') || '<p class="hjelp">Ingen rom ennå. Trykk «Hent rom fra Homey-sonene».</p>';
+        </details>`).join('') || '<p class="hjelp">Ingen rom ennå. Trykk «Hent rom fra Homey-sonene».</p>';
     }
 
     function lesRom() {
@@ -365,6 +469,7 @@
         for (const k of M_KRYSS) el(`m_${k}`).checked = Boolean(m[k]);
         for (const k of M_TALL.concat(M_TEKST)) el(`m_${k}`).value = m[k] ?? '';
         rom = m.soner || [];
+        tilstand.skygge = Boolean(m.skygge);
         tegnRom();
         Homey.api('GET', '/temperatursensorer', null, (f2, liste) => {
           fyll(el('m_ute'), (liste || []).map((x) => ({ id: x.id, navn: `${x.navn} (${x.verdi ?? '–'} °C)` })), m.ute && m.ute.enhet, 'Værvarsel fra Yr');
@@ -388,8 +493,9 @@
         for (const k of ['maksTimeKwh', 'minTimeKwh', 'planOppGrader', 'dagStart', 'nattStart']) if (ny[k] === null || ny[k] === undefined) delete ny[k];
         Homey.api('PUT', '/motorinnstillinger', ny, (feil) => {
           if (feil) return Homey.alert(feil.message || String(feil));
-          el('motorstatus').textContent = 'Lagret. Motoren regner på nytt innen ett minutt.';
-          setTimeout(() => visMotor(Homey), 65000);
+          meld('Lagret ✓');
+          tilstand.skygge = ny.skygge; tegnRom();
+          setTimeout(() => visMotor(Homey), 2000);
         });
       });
     }
@@ -560,6 +666,7 @@
         const k2 = h.hanklevarmer || {};
         for (const k of K_TEKST) el(`k_${k}`).value = k2[k] ?? '';
         personer = h.personer || [];
+        tilstand.personer = personer.length; visSjekkliste();
         startLadingOgLys(Homey, h);
         Homey.api('GET', '/personkilder', null, (f2, liste) => { kilder = liste || []; tegnPersoner(); tegnRom(); });
         Homey.api('GET', '/brytere', null, (f3, liste) => {
@@ -571,6 +678,7 @@
         visHus(Homey);
       });
       el('nyPerson').addEventListener('click', () => { lesPersoner(); personer.push({ navn: '', type: 'voksen', kilde: null }); tegnPersoner(); });
+      el('lagreHus2').addEventListener('click', () => el('lagreHus').click());
       el('lagreHus').addEventListener('click', () => {
         document.querySelectorAll('#personer .rom').forEach((boks) => { const p = personer[Number(boks.dataset.n)]; if (!p.key) p.navn = boks.querySelector('[data-f="navn"]').value; });
         lesPersoner();
@@ -591,7 +699,8 @@
         for (const k of K_TEKST) if (el(`k_${k}`).value) ny.hanklevarmer[k] = el(`k_${k}`).value;
         Homey.api('PUT', '/husinnstillinger', ny, (feil) => {
           if (feil) return Homey.alert(feil.message || String(feil));
-          el('husstatus').textContent = 'Lagret.';
+          meld('Lagret ✓');
+          tilstand.personer = personer.length;
           tegnPersoner(); tegnRom(); tegnLys();
           setTimeout(() => visHus(Homey), 2000);
         });
@@ -599,10 +708,17 @@
     }
 
     function onHomeyReady(Homey) {
+      el('faner').addEventListener('click', (h) => { const b = h.target.closest('button'); if (b) visFane(b.dataset.fane); });
+      el('sjekkliste').addEventListener('click', (h) => { const li = h.target.closest('li'); if (li) visFane(li.dataset.fane); });
+      let sist = 'oversikt';
+      try { sist = localStorage.getItem('ki_fane') || 'oversikt'; } catch (e) { /* åpner Oversikt */ }
+      visFane(sist);
+      visSjekkliste();
       startHus(Homey);
       startMotor(Homey);
       Homey.api('GET', '/innstillinger', null, (f1, innst) => {
         innst = innst || {};
+        tilstand.maaler = Boolean(innst.maalerEnhet); tilstand.nett = Boolean(innst.nettselskap); visSjekkliste();
         Homey.api('GET', '/nettselskap', null, (f2, liste) => {
           selskap = liste || [];
           fyll(el('nettselskap'), selskap, innst.nettselskap);
@@ -634,7 +750,8 @@
         if (ny.varselTerskelKw === null) ny.varselTerskelKw = 2;
         Homey.api('PUT', '/innstillinger', ny, (feil) => {
           if (feil) return Homey.alert(feil.message || String(feil));
-          el('status').textContent = 'Lagret.';
+          meld('Lagret ✓');
+          tilstand.maaler = Boolean(ny.maalerEnhet); tilstand.nett = Boolean(ny.nettselskap); visSjekkliste();
           setTimeout(() => visStatus(Homey), 1500);
         });
       });

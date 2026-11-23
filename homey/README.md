@@ -49,13 +49,17 @@ homey app install         # eller: homey app run  (viser loggen direkte)
 ## Kom i gang
 
 1. **Legg til enhetene.** *Enheter → + → KI Energi*: først **Strømkalkulator**, så **Energimotor**.
-2. **Åpne innstillingene.** *Mer → Apper → KI Energi → Konfigurer*. Siden har tre deler:
+2. **Åpne innstillingene.** *Mer → Apper → KI Energi → Konfigurer*. Siden har fem faner:
 
-   | Del | Hva du setter opp |
+   | Fane | Hva du setter opp |
    | --- | --- |
-   | **KI Energi** | Strømmåler (effekt, og helst kWh-register), nettselskap, boligtype, Norgespris og eventuelle egne satser. |
-   | **Energimotor** | Styring og skyggemodus, grenser og døgnrytme, og rommene. «Hent rom fra Homey-sonene» lager ett rom per sone med termostater. |
-   | **Huset** | Personer, bortemodus og hjemkomst, bereder, håndklevarmer, elbillading og lys. |
+   | **Oversikt** | Sjekkliste for oppsettet, og status for strøm, varme og huset. Trykk på et punkt for å gå til riktig fane. |
+   | **Strøm** | Strømmåler (effekt, og helst kWh-register), nettselskap, boligtype, Norgespris og eventuelle egne satser. |
+   | **Varme** | Motor av/på, skyggemodus, varmeplan, rommene, og grenser og døgnrytme. «Hent rom fra Homey-sonene» lager ett rom per sone med termostater. |
+   | **Hjemme og borte** | Personer, bortemodus og hjemkomst. |
+   | **Bereder, bil og lys** | Varmtvannsbereder, håndklevarmer, elbillading og lysregler. Alt her er valgfritt. |
+
+   Hver fane har sin egen lagreknapp.
 
 3. **La den gå i skyggemodus noen døgn.** Se på forklaringene på Energimotor-enheten og i widgeten.
 4. **Slå av skyggemodus** når forslagene ser fornuftige ut.
