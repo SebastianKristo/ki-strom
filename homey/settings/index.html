@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <script type="text/javascript" src="/homey.js" data-origin="settings"></script>
+  <style>
+    .rad { margin-bottom: 14px; }
+    .hjelp { font-size: 12px; opacity: .7; margin-top: 4px; }
+    #status { margin: 12px 0; font-size: 13px; white-space: pre-line; }
+    .skjult { display: none; }
+  </style>
+</head>
+<body>
+  <header class="homey-header">
+    <h1 class="homey-title">KI Energi</h1>
+    <p class="homey-subtitle">Strømmåler, nettselskap og strømstøtte</p>
+  </header>
+
+  <fieldset class="homey-form-fieldset">
+    <legend class="homey-form-legend">Strømmåler</legend>
+    <div class="homey-form-group rad">
+      <label class="homey-form-label" for="maalerEnhet">Enhet</label>
+      <select class="homey-form-select" id="maalerEnhet"></select>
+    </div>
+    <div class="homey-form-group rad">
+      <label class="homey-form-label" for="effektKapabilitet">Effekt (W)</label>
+      <select class="homey-form-select" id="effektKapabilitet"></select>
+    </div>
+    <div class="homey-form-group rad">
+      <label class="homey-form-label" for="energiKapabilitet">Energiregister (kWh)</label>
+      <select class="homey-form-select" id="energiKapabilitet"></select>
+      <p class="hjelp">Målerens totale kWh-teller. Med den blir forbruket det samme som på fakturaen. Uten regnes det fra effekten, med 1–5 % avvik.</p>
+    </div>
+  </fieldset>
+
+  <fieldset class="homey-form-fieldset">
+    <legend class="homey-form-legend">Nettleie</legend>
+    <div class="homey-form-group rad">
+      <label class="homey-form-label" for="nettselskap">Nettselskap</label>
+      <select class="homey-form-select" id="nettselskap"></select>
+    </div>
+    <div class="homey-form-group rad skjult" id="sikringRad">
+      <label class="homey-form-label" for="sikringstrinn">Hovedsikring (fra nettselskapets prisliste)</label>
+      <select class="homey-form-select" id="sikringstrinn"></select>
+    </div>
+    <div class="homey-form-group rad">
+      <label class="homey-form-label" for="boligtype">Boligtype</label>
+      <select class="homey-form-select" id="boligtype">
+        <option value="bolig">Bolig</option>
+        <option value="fritidsbolig">Fritidsbolig</option>
+        <option value="fritidsbolig_fast">Fritidsbolig (fast bosted)</option>
+      </select>
+    </div>
+    <div class="homey-form-group rad">
+      <label class="homey-form-checkbox">
+        <input class="homey-form-checkbox-input" type="checkbox" id="harNorgespris" />
+        <span class="homey-form-checkbox-checkmark"></span>
+        <span class="homey-form-checkbox-text">Jeg har Norgespris</span>
+      </label>
+    </div>
+    <div class="homey-form-group rad">
+      <label class="homey-form-label" for="varselTerskelKw">Varsle når margin til neste trinn er under (kW)</label>
+      <input class="homey-form-input" id="varselTerskelKw" type="number" step="0.1" min="0" />
+    </div>
+  </fieldset>
+
+  <fieldset class="homey-form-fieldset">
+    <legend class="homey-form-legend">Egne satser (valgfritt)</legend>
+    <p class="hjelp">Fyll ut bare hvis nettselskapet mangler, eller satsene i appen er utdaterte. Tomme felt følger katalogen.</p>
+    <div class="homey-form-group rad">
+      <label class="homey-form-label" for="energileddDagEksMva">Energiledd dag (kr/kWh, uten mva og avgifter)</label>
+      <input class="homey-form-input" id="energileddDagEksMva" type="number" step="0.0001" min="0" />
+    </div>
+    <div class="homey-form-group rad">
+      <label class="homey-form-label" for="energileddNattEksMva">Energiledd natt/helg (kr/kWh, uten mva og avgifter)</label>
+      <input class="homey-form-input" id="energileddNattEksMva" type="number" step="0.0001" min="0" />
+    </div>
+    <div class="homey-form-group rad">
+      <label class="homey-form-label" for="egneTrinn">Kapasitetstrinn (øvre kW-grense : kr/mnd inkl. mva)</label>
+      <input class="homey-form-input" id="egneTrinn" type="text" placeholder="2:155,5:250,10:415" />
+    </div>
+  </fieldset>
+
+  <button id="lagre" class="homey-button-primary-full">Lagre</button>
+  <div id="status"></div>
+
+  <script type="text/javascript">
+    const FELT = ['maalerEnhet', 'effektKapabilitet', 'energiKapabilitet', 'nettselskap', 'sikringstrinn', 'boligtype',
+      'harNorgespris', 'varselTerskelKw', 'energileddDagEksMva', 'energileddNattEksMva', 'egneTrinn'];
+    const el = (id) => document.getElementById(id);
+    let enheter = [];
+    let selskap = [];
+
+    function fyll(select, valg, valgt, tomt) {
+      select.innerHTML = '';
+      if (tomt !== undefined) select.add(new Option(tomt, ''));
+      for (const v of valg) select.add(new Option(v.navn, v.id));
+      select.value = valgt || '';
+    }
+
+    function visKapabiliteter(innst) {
+      const enhet = enheter.find((e) => e.id === el('maalerEnhet').value);
+      const kap = enhet ? enhet.kapabiliteter : [];
+      const med = (prefiks) => kap.filter((k) => k.id.startsWith(prefiks)).map((k) => ({ id: k.id, navn: `${k.id} (${k.verdi === null ? '–' : k.verdi})` }));
+      const effekt = med('measure_power');
+      const energi = med('meter_power');
+      fyll(el('effektKapabilitet'), effekt, innst.effektKapabilitet || (effekt[0] && effekt[0].id), 'Ingen');
+      fyll(el('energiKapabilitet'), energi, innst.energiKapabilitet || (energi[0] && energi[0].id), 'Ingen');
+    }
+
+    function visSikring(valgt) {
+      const s = selskap.find((x) => x.id === el('nettselskap').value);
+      const rader = s ? s.sikringstrinn : [];
+      el('sikringRad').classList.toggle('skjult', !rader.length);
+      fyll(el('sikringstrinn'), rader, valgt, 'Velg …');
+    }
+
+    function visStatus(Homey) {
+      Homey.api('GET', '/status', null, (feil, s) => {
+        if (feil || !s) return;
+        const linjer = [
+          `${s.nettselskap} · ${s.prisomraade} · tariff ${s.nettleie.tariff}`,
+          `Kapasitetstrinn: ${s.nettleie.kapasitetstrinn} (${s.nettleie.kapasitetsledd ?? '?'} kr/mnd), snitt ${s.nettleie.snitt_topp_kw} kW`,
+          `Total strømpris nå: ${s.pris.total ?? '–'} kr/kWh`,
+          `Denne måneden: ${s.maaned.kwh} kWh, ${s.maaned.kostnad_kr} kr`,
+        ];
+        if (s.problemer.length) linjer.push(`⚠ ${s.problemer.join(' · ')}`);
+        el('status').textContent = linjer.join('\n');
+      });
+    }
+
+    function onHomeyReady(Homey) {
+      Homey.api('GET', '/innstillinger', null, (f1, innst) => {
+        innst = innst || {};
+        Homey.api('GET', '/nettselskap', null, (f2, liste) => {
+          selskap = liste || [];
+          fyll(el('nettselskap'), selskap, innst.nettselskap);
+          visSikring(innst.sikringstrinn);
+          el('nettselskap').addEventListener('change', () => visSikring(''));
+        });
+        Homey.api('GET', '/enheter', null, (f3, liste) => {
+          if (f3) el('status').textContent = `Kunne ikke hente enheter: ${f3.message || f3}`;
+          enheter = liste || [];
+          fyll(el('maalerEnhet'), enheter.map((e) => ({ id: e.id, navn: e.sone ? `${e.navn} (${e.sone})` : e.navn })), innst.maalerEnhet, 'Velg strømmåler …');
+          visKapabiliteter(innst);
+          el('maalerEnhet').addEventListener('change', () => visKapabiliteter({}));
+        });
+        el('boligtype').value = innst.boligtype || 'bolig';
+        el('harNorgespris').checked = Boolean(innst.harNorgespris);
+        for (const f of ['varselTerskelKw', 'energileddDagEksMva', 'energileddNattEksMva', 'egneTrinn']) el(f).value = innst[f] ?? '';
+        visStatus(Homey);
+        Homey.ready();
+      });
+
+      el('lagre').addEventListener('click', () => {
+        const ny = {};
+        for (const f of FELT) {
+          const e = el(f);
+          if (e.type === 'checkbox') ny[f] = e.checked;
+          else if (e.type === 'number') ny[f] = e.value === '' ? null : Number(e.value);
+          else ny[f] = e.value === '' && f !== 'egneTrinn' ? null : e.value;
+        }
+        if (ny.varselTerskelKw === null) ny.varselTerskelKw = 2;
+        Homey.api('PUT', '/innstillinger', ny, (feil) => {
+          if (feil) return Homey.alert(feil.message || String(feil));
+          el('status').textContent = 'Lagret.';
+          setTimeout(() => visStatus(Homey), 1500);
+        });
+      });
+    }
+  </script>
+</body>
+</html>
