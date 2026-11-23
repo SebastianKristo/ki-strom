@@ -31,7 +31,7 @@ må den lokale fjernes først — læringen der blir da borte.
 
 Python 3.13, Home Assistant 2026.2.3, pytest-homeassistant-custom-component 0.13.316: 232 tester, ni av dem
 nye (`tests/test_kontrollversjon.py`). De prøves mot svar skrevet av Homey-appens egen test, så formatet
-er det appen faktisk sender. Homey-appen: 89 tester.
+er det appen faktisk sender. Homey-appen: 99 tester.
 
 Ikke verifisert mot en ekte Homey: at Homeys API-nøkkel godtas som Bearer-token mot appens lokale API,
 og adressen `http://<homey>/api/app/no.kristo.kienergi/…`.
