@@ -1,7 +1,7 @@
 {
   "_comment": "Bygget av scripts/lag-app-json.js — ikke rediger for hånd.",
   "id": "no.kristo.kienergi",
-  "version": "0.4.0",
+  "version": "0.4.2",
   "compatibility": ">=12.3.0",
   "sdk": 3,
   "platforms": [
@@ -139,7 +139,7 @@
       "getable": true,
       "setable": false,
       "uiComponent": "sensor",
-      "icon": "/assets/sensor.svg"
+      "icon": "/assets/ikoner/tariff.svg"
     },
     "ki_energiledd": {
       "type": "number",
@@ -150,7 +150,7 @@
       "getable": true,
       "setable": false,
       "uiComponent": "sensor",
-      "icon": "/assets/sensor.svg",
+      "icon": "/assets/ikoner/pris.svg",
       "units": {
         "no": "kr/kWh",
         "en": "kr/kWh"
@@ -167,7 +167,7 @@
       "getable": true,
       "setable": false,
       "uiComponent": "sensor",
-      "icon": "/assets/sensor.svg",
+      "icon": "/assets/ikoner/kostnad.svg",
       "units": {
         "no": "kr/mnd",
         "en": "kr/mnd"
@@ -184,7 +184,7 @@
       "getable": true,
       "setable": false,
       "uiComponent": "sensor",
-      "icon": "/assets/sensor.svg"
+      "icon": "/assets/ikoner/trinn.svg"
     },
     "ki_snitt_topp": {
       "type": "number",
@@ -195,7 +195,7 @@
       "getable": true,
       "setable": false,
       "uiComponent": "sensor",
-      "icon": "/assets/sensor.svg",
+      "icon": "/assets/ikoner/effekt.svg",
       "units": {
         "no": "kW",
         "en": "kW"
@@ -212,7 +212,7 @@
       "getable": true,
       "setable": false,
       "uiComponent": "sensor",
-      "icon": "/assets/sensor.svg",
+      "icon": "/assets/ikoner/effekt.svg",
       "units": {
         "no": "kW",
         "en": "kW"
@@ -229,7 +229,7 @@
       "getable": true,
       "setable": false,
       "uiComponent": "sensor",
-      "icon": "/assets/sensor.svg",
+      "icon": "/assets/ikoner/effekt.svg",
       "units": {
         "no": "kW",
         "en": "kW"
@@ -246,7 +246,7 @@
       "getable": true,
       "setable": false,
       "uiComponent": "sensor",
-      "icon": "/assets/sensor.svg",
+      "icon": "/assets/ikoner/effekt.svg",
       "units": {
         "no": "kW",
         "en": "kW"
@@ -263,7 +263,7 @@
       "getable": true,
       "setable": false,
       "uiComponent": "sensor",
-      "icon": "/assets/sensor.svg",
+      "icon": "/assets/ikoner/effekt.svg",
       "units": {
         "no": "kW",
         "en": "kW"
@@ -280,7 +280,7 @@
       "getable": true,
       "setable": false,
       "uiComponent": "sensor",
-      "icon": "/assets/sensor.svg",
+      "icon": "/assets/ikoner/energi.svg",
       "units": {
         "no": "kWh",
         "en": "kWh"
@@ -297,7 +297,7 @@
       "getable": true,
       "setable": false,
       "uiComponent": "sensor",
-      "icon": "/assets/sensor.svg",
+      "icon": "/assets/ikoner/varsel.svg",
       "insights": true,
       "insightsTitleTrue": {
         "no": "Kapasitetsvarsel: ja",
@@ -317,7 +317,7 @@
       "getable": true,
       "setable": false,
       "uiComponent": "sensor",
-      "icon": "/assets/sensor.svg",
+      "icon": "/assets/ikoner/pris.svg",
       "units": {
         "no": "kr/kWh",
         "en": "kr/kWh"
@@ -334,7 +334,7 @@
       "getable": true,
       "setable": false,
       "uiComponent": "sensor",
-      "icon": "/assets/sensor.svg",
+      "icon": "/assets/ikoner/pris.svg",
       "units": {
         "no": "kr/kWh",
         "en": "kr/kWh"
@@ -351,7 +351,7 @@
       "getable": true,
       "setable": false,
       "uiComponent": "sensor",
-      "icon": "/assets/sensor.svg",
+      "icon": "/assets/ikoner/pris.svg",
       "units": {
         "no": "kr/kWh",
         "en": "kr/kWh"
@@ -368,7 +368,7 @@
       "getable": true,
       "setable": false,
       "uiComponent": "sensor",
-      "icon": "/assets/sensor.svg",
+      "icon": "/assets/ikoner/pris.svg",
       "units": {
         "no": "kr/kWh",
         "en": "kr/kWh"
@@ -385,7 +385,7 @@
       "getable": true,
       "setable": false,
       "uiComponent": "sensor",
-      "icon": "/assets/sensor.svg",
+      "icon": "/assets/ikoner/pris.svg",
       "units": {
         "no": "kr/kWh",
         "en": "kr/kWh"
@@ -402,7 +402,7 @@
       "getable": true,
       "setable": false,
       "uiComponent": "sensor",
-      "icon": "/assets/sensor.svg",
+      "icon": "/assets/ikoner/status.svg",
       "insights": true,
       "insightsTitleTrue": {
         "no": "Norgespris aktiv nå: ja",
@@ -422,7 +422,7 @@
       "getable": true,
       "setable": false,
       "uiComponent": "sensor",
-      "icon": "/assets/sensor.svg",
+      "icon": "/assets/ikoner/energi.svg",
       "units": {
         "no": "kWh",
         "en": "kWh"
@@ -439,7 +439,7 @@
       "getable": true,
       "setable": false,
       "uiComponent": "sensor",
-      "icon": "/assets/sensor.svg",
+      "icon": "/assets/ikoner/energi.svg",
       "units": {
         "no": "kWh",
         "en": "kWh"
@@ -456,7 +456,7 @@
       "getable": true,
       "setable": false,
       "uiComponent": "sensor",
-      "icon": "/assets/sensor.svg",
+      "icon": "/assets/ikoner/energi.svg",
       "units": {
         "no": "kWh",
         "en": "kWh"
@@ -473,7 +473,7 @@
       "getable": true,
       "setable": false,
       "uiComponent": "sensor",
-      "icon": "/assets/sensor.svg",
+      "icon": "/assets/ikoner/kostnad.svg",
       "units": {
         "no": "kr",
         "en": "kr"
@@ -490,7 +490,7 @@
       "getable": true,
       "setable": false,
       "uiComponent": "sensor",
-      "icon": "/assets/sensor.svg",
+      "icon": "/assets/ikoner/kostnad.svg",
       "units": {
         "no": "kr",
         "en": "kr"
@@ -507,7 +507,7 @@
       "getable": true,
       "setable": false,
       "uiComponent": "sensor",
-      "icon": "/assets/sensor.svg",
+      "icon": "/assets/ikoner/kostnad.svg",
       "units": {
         "no": "kr",
         "en": "kr"
@@ -524,7 +524,7 @@
       "getable": true,
       "setable": false,
       "uiComponent": "sensor",
-      "icon": "/assets/sensor.svg",
+      "icon": "/assets/ikoner/kostnad.svg",
       "units": {
         "no": "kr",
         "en": "kr"
@@ -541,7 +541,7 @@
       "getable": true,
       "setable": false,
       "uiComponent": "sensor",
-      "icon": "/assets/sensor.svg",
+      "icon": "/assets/ikoner/kostnad.svg",
       "units": {
         "no": "kr",
         "en": "kr"
@@ -558,7 +558,7 @@
       "getable": true,
       "setable": false,
       "uiComponent": "sensor",
-      "icon": "/assets/sensor.svg",
+      "icon": "/assets/ikoner/energi.svg",
       "units": {
         "no": "kWh",
         "en": "kWh"
@@ -575,7 +575,7 @@
       "getable": true,
       "setable": false,
       "uiComponent": "sensor",
-      "icon": "/assets/sensor.svg",
+      "icon": "/assets/ikoner/kostnad.svg",
       "units": {
         "no": "kr",
         "en": "kr"
@@ -592,7 +592,7 @@
       "getable": true,
       "setable": false,
       "uiComponent": "sensor",
-      "icon": "/assets/sensor.svg",
+      "icon": "/assets/ikoner/energi.svg",
       "units": {
         "no": "kWh",
         "en": "kWh"
@@ -609,7 +609,7 @@
       "getable": true,
       "setable": false,
       "uiComponent": "sensor",
-      "icon": "/assets/sensor.svg",
+      "icon": "/assets/ikoner/energi.svg",
       "units": {
         "no": "kWh",
         "en": "kWh"
@@ -626,7 +626,7 @@
       "getable": true,
       "setable": false,
       "uiComponent": "sensor",
-      "icon": "/assets/sensor.svg",
+      "icon": "/assets/ikoner/kostnad.svg",
       "units": {
         "no": "kr",
         "en": "kr"
@@ -643,7 +643,7 @@
       "getable": true,
       "setable": false,
       "uiComponent": "sensor",
-      "icon": "/assets/sensor.svg",
+      "icon": "/assets/ikoner/kostnad.svg",
       "units": {
         "no": "kr",
         "en": "kr"
@@ -660,7 +660,7 @@
       "getable": true,
       "setable": false,
       "uiComponent": "sensor",
-      "icon": "/assets/sensor.svg",
+      "icon": "/assets/ikoner/effekt.svg",
       "units": {
         "no": "kW",
         "en": "kW"
@@ -677,7 +677,7 @@
       "getable": true,
       "setable": false,
       "uiComponent": "sensor",
-      "icon": "/assets/sensor.svg",
+      "icon": "/assets/ikoner/varsel.svg",
       "insights": true,
       "insightsTitleTrue": {
         "no": "Måledata-problem: ja",
@@ -697,7 +697,7 @@
       "getable": true,
       "setable": false,
       "uiComponent": "sensor",
-      "icon": "/assets/sensor.svg"
+      "icon": "/assets/ikoner/status.svg"
     },
     "ki_motor_forklaring": {
       "type": "string",
@@ -708,7 +708,7 @@
       "getable": true,
       "setable": false,
       "uiComponent": "sensor",
-      "icon": "/assets/sensor.svg"
+      "icon": "/assets/ikoner/forklaring.svg"
     },
     "ki_time_grense": {
       "type": "number",
@@ -719,7 +719,7 @@
       "getable": true,
       "setable": false,
       "uiComponent": "sensor",
-      "icon": "/assets/sensor.svg",
+      "icon": "/assets/ikoner/energi.svg",
       "units": {
         "no": "kWh",
         "en": "kWh"
@@ -736,7 +736,7 @@
       "getable": true,
       "setable": false,
       "uiComponent": "sensor",
-      "icon": "/assets/sensor.svg",
+      "icon": "/assets/ikoner/energi.svg",
       "units": {
         "no": "kWh",
         "en": "kWh"
@@ -753,7 +753,7 @@
       "getable": true,
       "setable": false,
       "uiComponent": "sensor",
-      "icon": "/assets/sensor.svg",
+      "icon": "/assets/ikoner/energi.svg",
       "units": {
         "no": "kWh",
         "en": "kWh"
@@ -770,7 +770,7 @@
       "getable": true,
       "setable": false,
       "uiComponent": "sensor",
-      "icon": "/assets/sensor.svg",
+      "icon": "/assets/ikoner/effekt.svg",
       "units": {
         "no": "kW",
         "en": "kW"
@@ -787,7 +787,7 @@
       "getable": true,
       "setable": false,
       "uiComponent": "sensor",
-      "icon": "/assets/sensor.svg",
+      "icon": "/assets/ikoner/effekt.svg",
       "units": {
         "no": "kW",
         "en": "kW"
@@ -804,7 +804,7 @@
       "getable": true,
       "setable": false,
       "uiComponent": "sensor",
-      "icon": "/assets/sensor.svg",
+      "icon": "/assets/ikoner/effekt.svg",
       "units": {
         "no": "W",
         "en": "W"
@@ -821,7 +821,7 @@
       "getable": true,
       "setable": false,
       "uiComponent": "sensor",
-      "icon": "/assets/sensor.svg",
+      "icon": "/assets/ikoner/hus.svg",
       "units": {
         "no": "",
         "en": ""
@@ -838,7 +838,7 @@
       "getable": true,
       "setable": false,
       "uiComponent": "sensor",
-      "icon": "/assets/sensor.svg",
+      "icon": "/assets/ikoner/kostnad.svg",
       "units": {
         "no": "kr",
         "en": "kr"
@@ -855,7 +855,7 @@
       "getable": true,
       "setable": false,
       "uiComponent": "sensor",
-      "icon": "/assets/sensor.svg"
+      "icon": "/assets/ikoner/hus.svg"
     },
     "ki_hjemkomst": {
       "type": "string",
@@ -866,7 +866,7 @@
       "getable": true,
       "setable": false,
       "uiComponent": "sensor",
-      "icon": "/assets/sensor.svg"
+      "icon": "/assets/ikoner/hus.svg"
     },
     "ki_bereder_status": {
       "type": "string",
@@ -877,7 +877,7 @@
       "getable": true,
       "setable": false,
       "uiComponent": "sensor",
-      "icon": "/assets/sensor.svg"
+      "icon": "/assets/ikoner/bereder.svg"
     },
     "ki_lading_status": {
       "type": "string",
@@ -888,7 +888,7 @@
       "getable": true,
       "setable": false,
       "uiComponent": "sensor",
-      "icon": "/assets/sensor.svg"
+      "icon": "/assets/ikoner/lading.svg"
     },
     "ki_bereder_dager": {
       "type": "number",
@@ -899,7 +899,7 @@
       "getable": true,
       "setable": false,
       "uiComponent": "sensor",
-      "icon": "/assets/sensor.svg",
+      "icon": "/assets/ikoner/bereder.svg",
       "units": {
         "no": "d",
         "en": "d"
@@ -916,7 +916,7 @@
       "getable": true,
       "setable": true,
       "uiComponent": "toggle",
-      "icon": "/assets/sensor.svg",
+      "icon": "/assets/ikoner/status.svg",
       "insights": false
     },
     "ki_bortemodus": {
@@ -928,7 +928,7 @@
       "getable": true,
       "setable": true,
       "uiComponent": "toggle",
-      "icon": "/assets/sensor.svg",
+      "icon": "/assets/ikoner/hus.svg",
       "insights": true,
       "insightsTitleTrue": {
         "no": "Bortemodus på",
@@ -1003,7 +1003,8 @@
       ],
       "images": {
         "small": "/drivers/stromkalkulator/assets/images/small.png",
-        "large": "/drivers/stromkalkulator/assets/images/large.png"
+        "large": "/drivers/stromkalkulator/assets/images/large.png",
+        "xlarge": "/drivers/stromkalkulator/assets/images/xlarge.png"
       },
       "pair": [
         {
@@ -1063,7 +1064,8 @@
       },
       "images": {
         "small": "/drivers/energimotor/assets/images/small.png",
-        "large": "/drivers/energimotor/assets/images/large.png"
+        "large": "/drivers/energimotor/assets/images/large.png",
+        "xlarge": "/drivers/energimotor/assets/images/xlarge.png"
       },
       "pair": [
         {

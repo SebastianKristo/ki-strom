@@ -10,11 +10,24 @@ const path = require('node:path');
 const { SENSORER, MOTOR_SENSORER } = require('../lib/sensorer');
 const pakke = require('../package.json');
 
+// Ikon per sensor: eget valg i tabellen (ikon), ellers etter id og enhet.
+const IKON_ID = {
+  ki_tariff: 'tariff', ki_kapasitetstrinn: 'trinn', ki_motor_status: 'status', ki_motor_forklaring: 'forklaring',
+  ki_modus: 'hus', ki_hjemkomst: 'hus', ki_senkede_rom: 'hus', ki_bereder_status: 'bereder', ki_bereder_dager: 'bereder',
+  ki_lading_status: 'lading', ki_norgespris_aktiv: 'status',
+};
+const IKON_ENHET = { 'kr/kWh': 'pris', 'kr/mnd': 'kostnad', kr: 'kostnad', kWh: 'energi', kW: 'effekt', W: 'effekt' };
+const ikon = (s) => {
+  const navn = IKON_ID[s.id] || IKON_ENHET[s.enhet] || (s.type === 'boolean' ? 'varsel' : 'status');
+  if (!fs.existsSync(path.join(__dirname, '..', 'assets', 'ikoner', `${navn}.svg`))) throw new Error(`Mangler ikon: ${navn}`);
+  return `/assets/ikoner/${navn}.svg`;
+};
+
 const kapabiliteter = {};
 for (const s of [...SENSORER, ...MOTOR_SENSORER]) {
   const k = {
     type: s.type, title: { no: s.no, en: s.en }, getable: true, setable: false,
-    uiComponent: 'sensor', icon: '/assets/sensor.svg',
+    uiComponent: 'sensor', icon: ikon(s),
   };
   if (s.type === 'number') {
     k.units = { no: s.enhet, en: s.enhet };
@@ -30,11 +43,11 @@ for (const s of [...SENSORER, ...MOTOR_SENSORER]) {
 }
 kapabiliteter.ki_skyggemodus = {
   type: 'boolean', title: { no: 'Skyggemodus', en: 'Shadow mode' }, getable: true, setable: true,
-  uiComponent: 'toggle', icon: '/assets/sensor.svg', insights: false,
+  uiComponent: 'toggle', icon: '/assets/ikoner/status.svg', insights: false,
 };
 kapabiliteter.ki_bortemodus = {
   type: 'boolean', title: { no: 'Bortemodus', en: 'Away mode' }, getable: true, setable: true,
-  uiComponent: 'toggle', icon: '/assets/sensor.svg', insights: true,
+  uiComponent: 'toggle', icon: '/assets/ikoner/hus.svg', insights: true,
   insightsTitleTrue: { no: 'Bortemodus på', en: 'Away mode on' }, insightsTitleFalse: { no: 'Bortemodus av', en: 'Away mode off' },
 };
 const paaAv = [{ id: 'paa', label: { no: 'på', en: 'on' } }, { id: 'av', label: { no: 'av', en: 'off' } }];
@@ -43,7 +56,7 @@ const statusvalg = [['gronn', 'God margin', 'Good margin'], ['gul', 'Følger med
   ['rod', 'På grensen', 'At the limit'], ['kritisk', 'Over grensen', 'Over the limit'], ['av', 'Av', 'Off']]
   .map(([id, no, en]) => ({ id, label: { no, en } }));
 const romArg = { name: 'rom', type: 'autocomplete', placeholder: { no: 'Rom', en: 'Room' } };
-const bilder = (driver) => ({ small: `/drivers/${driver}/assets/images/small.png`, large: `/drivers/${driver}/assets/images/large.png` });
+const bilder = (driver) => ({ small: `/drivers/${driver}/assets/images/small.png`, large: `/drivers/${driver}/assets/images/large.png`, xlarge: `/drivers/${driver}/assets/images/xlarge.png` });
 const paring = [
   { id: 'list_devices', template: 'list_devices', navigation: { next: 'add_devices' } },
   { id: 'add_devices', template: 'add_devices' },

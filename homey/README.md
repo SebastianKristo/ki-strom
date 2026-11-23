@@ -1,29 +1,71 @@
-# KI Energi for Homey
+<p align="center"><img src="assets/logo.svg" width="120" alt="KI Energi"></p>
 
-Homey-versjonen av KI Energi. Appen bygges trinnvis:
+<h1 align="center">KI Energi for Homey</h1>
 
-1. **Strømkalkulator:** nettleie, kapasitetstrinn, strømstøtte, Norgespris og månedskostnad.
-2. **Energimotor:** timebudsjett, rom med prioritet, værvarsel og prisoptimal varmeplan.
-3. **Huset:** personer, bortemodus og hjemkomst, bereder, håndklevarmer, vaner, widget, elbillading og lysregler.
-4. **Kontrollversjon i Home Assistant:** integrasjonen i dette repoet kan kobles til appen («På Homey» i oppsettet)
-   og viser og betjener den derfra.
+<p align="center">Strømkalkulator og smart energistyring for norske hjem.<br>
+Krever Homey Pro (2023 eller nyere).</p>
 
-Krever Homey Pro (2023 eller nyere).
+KI Energi viser hva strømmen faktisk koster, og styrer varme, varmtvannsbereder og elbillading slik at du
+holder deg under kapasitetstrinnet og bruker strømmen når den er billig. Alt regnes på Homey; ingen sky.
+
+| | |
+| --- | --- |
+| <img src="drivers/stromkalkulator/assets/images/small.png" width="48" alt=""> | **Strømkalkulator** — nettleie for 76 nettselskap, kapasitetstrinn, strømstøtte, Norgespris og kostnad for timen, dagen og måneden. |
+| <img src="drivers/energimotor/assets/images/small.png" width="48" alt=""> | **Energimotor** — timebudsjett, rom med prioritet, værvarsel og prisoptimal varmeplan. |
+| 🏠 | **Huset** — personer, bortemodus og hjemkomst, bereder, håndklevarmer, elbillading, lysregler og lærte vaner. |
+| 🔗 | **Home Assistant** — integrasjonen i dette repoet kan vise og betjene appen («På Homey» i oppsettet). |
+
+## Innhold
+
+- [Installere](#installere)
+- [Kom i gang](#kom-i-gang)
+- [Skyggemodus](#skyggemodus)
+- [Strømkalkulatoren](#strømkalkulatoren)
+- [Energimotoren](#energimotoren)
+- [Huset](#huset)
+- [Enheter, sensorer og widget](#enheter-sensorer-og-widget)
+- [Flow-kort](#flow-kort)
+- [Home Assistant](#home-assistant)
+- [Lokalt API](#lokalt-api)
+- [Feilsøking](#feilsøking)
+- [Utvikling](#utvikling)
 
 ## Installere
 
+**Fra testkanalen i Homey App Store** (enklest når appen er publisert dit): åpne
+`https://homey.app/a/no.kristo.kienergi/test/` og trykk *Installer*.
+
+**Med Homey CLI** fra en maskin på samme nett som Homey:
+
 ```bash
+npm install -g homey      # bare første gang
 cd homey
 npm install
-homey app install      # eller: homey app run  (viser loggen direkte)
+homey login
+homey select
+homey app install         # eller: homey app run  (viser loggen direkte)
 ```
 
-Deretter:
+## Kom i gang
 
-1. Legg til enheten **KI Energi → Strømkalkulator** i Homey.
-2. Åpne appens innstillinger. Velg strømmåleren (effekt og helst kWh-register), nettselskap og boligtype, og kryss av hvis du har Norgespris.
+1. **Legg til enhetene.** *Enheter → + → KI Energi*: først **Strømkalkulator**, så **Energimotor**.
+2. **Åpne innstillingene.** *Mer → Apper → KI Energi → Konfigurer*. Siden har tre deler:
 
-Spotprisene hentes av appen selv fra hvakosterstrommen.no for nettselskapets prisområde.
+   | Del | Hva du setter opp |
+   | --- | --- |
+   | **KI Energi** | Strømmåler (effekt, og helst kWh-register), nettselskap, boligtype, Norgespris og eventuelle egne satser. |
+   | **Energimotor** | Styring og skyggemodus, grenser og døgnrytme, og rommene. «Hent rom fra Homey-sonene» lager ett rom per sone med termostater. |
+   | **Huset** | Personer, bortemodus og hjemkomst, bereder, håndklevarmer, elbillading og lys. |
+
+3. **La den gå i skyggemodus noen døgn.** Se på forklaringene på Energimotor-enheten og i widgeten.
+4. **Slå av skyggemodus** når forslagene ser fornuftige ut.
+
+Spotprisene hentes av appen selv fra hvakosterstrommen.no for nettselskapets prisområde, og værvarselet fra Yr.
+
+## Skyggemodus
+
+Skyggemodus er **på som standard**. Appen regner og forklarer hva den ville gjort, men rører verken termostater,
+bereder, håndklevarmer, lader eller lys. Slå den av på Energimotor-enheten, i innstillingene eller med et flow-kort.
 
 ## Strømkalkulatoren
 
@@ -45,9 +87,6 @@ Ikke med ennå: eksport/plusskunde, sammenligning mot strømleverandørens pris,
 
 ## Energimotoren
 
-Legg til enheten **KI Energi → Energimotor**, og sett opp rommene i appens innstillinger
-(«Hent rom fra Homey-sonene» lager ett rom per sone med termostater).
-
 Hvert minutt:
 
 1. **Timens grense:** det høyeste timen kan ende på uten at kapasitetsleddet går opp et trinn,
@@ -64,12 +103,7 @@ forvarming i billige timer, og start i tide før dagen begynner — tidligere jo
 
 **Læringen** trenger effektmåling på ovnene (W) og noen døgn med data. Til et rom er lært, følger det programmet.
 
-**Skyggemodus** er på som standard: appen regner og forklarer, men rører verken termostater, bereder eller håndklevarmer.
-Slå den av på enheten eller i innstillingene når forslagene ser fornuftige ut.
-
 ## Huset
-
-Settes opp under «Huset» i appens innstillinger.
 
 **Personer.** Hver person følger en Homey-bruker eller en ja/nei-variabel (ja = hjemme). Et rom kan følge
 en person: barn har fast opp/legg og er borte på dagtid, ungdom har egen leggetid og vekking for hverdag og helg.
@@ -104,25 +138,38 @@ En sensor som har falt ut regnes ikke som «ingen i rommet».
 **Vanene** lærer når dere pleier å komme hjem etter en tur og når huset våkner, og foreslår endringer i
 innstillingene. Lært hjemkomsttid kan brukes automatisk.
 
-**Widgeten** «KI Energi – oversikt» viser status, timen, prisen nå, måneden, modus og hvert rom.
-
 Homey-varsler kan ikke ha svarknapper, så spørsmålene fra Home Assistant-versjonen («Skal dere bort i helgen?»)
 er erstattet av automatisk bortemodus og flow-kort.
 
-## Sensorer
+## Enheter, sensorer og widget
 
-Enheten **Strømkalkulator** har 33 sensorer: tariff, energiledd, kapasitetstrinn, de tre toppene, margin til neste trinn,
-spotpris, strømstøtte, totalpris, forbruk og kostnad for timen, dagen og måneden, og forrige måned til å sjekke fakturaen mot.
+- **Strømkalkulator** har 33 sensorer: tariff, energiledd, kapasitetstrinn, de tre toppene, margin til neste trinn,
+  spotpris, strømstøtte, totalpris, forbruk og kostnad for timen, dagen og måneden, og forrige måned til å sjekke fakturaen mot.
+- **Energimotor** har av/på, skyggemodus, bortemodus, utetemperatur og 15 sensorer: status og forklaring, timens grense,
+  forventet og brukt, ledig, uregulert og styrt effekt, senkede rom, spart med varmeplanen, modus, hjemkomst,
+  bereder og elbillading.
+- **Widgeten** «KI Energi – oversikt» viser status, timen, prisen nå, måneden, modus og hvert rom.
+
+Tallsensorene logges i Homey Insights.
 
 ## Flow-kort
 
-- **Når:** kapasitetsvarsel, kapasitetstrinnet endret seg, en time er ferdig, tariffen skiftet, strømprisen endret seg,
-  energimotorens status endret seg, et rom ble senket, bortemodus ble slått av eller på, noen kom hjem, berederen er varm.
-- **Og:** tariffen er dagtariff, Norgespris er aktiv, kapasitetsvarsel er på, totalprisen er over …, energimotorens status er …,
-  bortemodus er på, alle er borte.
-- **Så:** overstyr temperaturen i et rom, fjern overstyringen, slå skyggemodus eller bortemodus av eller på,
-  «vi kommer hjem kl. …», «vi blir borte lenger», varm opp berederen nå, kjør en full oppvarming av berederen,
-  slå automatisk elbillading av eller på.
+| | Kort |
+| --- | --- |
+| **Når** | Kapasitetsvarsel · kapasitetstrinnet endret seg · en time er ferdig · tariffen skiftet · strømprisen endret seg · energimotorens status endret seg · et rom ble senket · bortemodus ble slått av eller på · noen kom hjem · berederen er varm |
+| **Og** | Tariffen er dagtariff · Norgespris er aktiv · kapasitetsvarsel er på · totalprisen er over … · energimotorens status er … · bortemodus er på · alle er borte |
+| **Så** | Overstyr temperaturen i et rom · fjern overstyringen · slå skyggemodus eller bortemodus av eller på · «vi kommer hjem kl. …» · «vi blir borte lenger» · varm opp berederen nå · kjør en full oppvarming av berederen · slå automatisk elbillading av eller på |
+
+## Home Assistant
+
+Integrasjonen i dette repoet (`custom_components/ki_energi`, installeres med HACS) har en kontrollversjon som gjør
+appen om til entiteter i Home Assistant. All beregning og styring skjer fortsatt på Homey.
+
+1. Lag en API-nøkkel i Homey: *Innstillinger → API-nøkler*.
+2. I Home Assistant: legg til **KI Energi**, velg **På Homey**, og oppgi Homeys IP-adresse og nøkkelen.
+
+Du får sensorer, rom som klimaenheter, brytere, tall og klokkeslett for innstillingene, og knapper for bereder og
+bortemodus. Svarer ikke Homey, blir entitetene utilgjengelige og kommer tilbake av seg selv.
 
 ## Lokalt API
 
@@ -144,7 +191,25 @@ spotpris, strømstøtte, totalpris, forbruk og kostnad for timen, dagen og måne
 | GET | `/personkilder`, `/brytere`, `/alleenheter` | Til oppsettet |
 | POST | `/bortemodus`, `/hjemkomst`, `/forleng`, `/bereder` | `{paa}` / `{tid}` / – / `{handling, minutter}` |
 
+## Feilsøking
+
+| Det du ser | Sannsynlig årsak og løsning |
+| --- | --- |
+| `homey app install` stopper med `✖ 400` | CLI-en gikk via skyadressen (`…homeypro.net`) i stedet for lokalt. Sett Mac/PC på samme nett som Homey, slå av VPN, eller koble til med USB‑C. Blokkerer ruteren oppslag av `…homey.homeylocal.com` (DNS rebind-beskyttelse), bytt DNS til f.eks. 1.1.1.1. |
+| `homey app publish` klager på `README.txt` | Filen skal ligge i `homey/`. Hent siste versjon av repoet. |
+| Ingenting styres | Skyggemodus står på, eller Energimotor-enheten er slått av. |
+| Et rom følger bare programmet | Rommet er ikke lært ennå. Læringen trenger effektmåling (W) på ovnene og noen døgn med data. |
+| Ingen priser | Sjekk at nettselskap er valgt, og at Homey har internett. |
+| Home Assistant sier «avvist» eller «ingen kontakt» | Sjekk IP-adressen og at API-nøkkelen er riktig. Koblingen er ikke prøvd mot en ekte Homey ennå — meld fra hvis den ikke virker. |
+
 ## Utvikling
 
 All beregning ligger i `lib/` uten avhengighet til Homey, og testes med `npm test`.
-`app.json` bygges fra tabellene i `lib/` med `npm run bygg`.
+`app.json` bygges fra tabellene i `lib/` med `npm run bygg` — ikke rediger den for hånd. Versjonsnummeret settes i
+`package.json`; svar derfor nei når `homey app publish` tilbyr å øke det, og endre det i `package.json` i stedet.
+
+Ikonene er ensfargede SVG-er: appens i `assets/icon.svg`, enhetenes i `drivers/*/assets/icon.svg` og sensorenes i
+`assets/ikoner/`. Hvilket ikon en sensor får, bestemmes av id og enhet i `scripts/lag-app-json.js`.
+
+Tariffene og beregningsreglene kommer fra [Strømkalkulator for Home Assistant](https://github.com/fredrik-lindseth/Stromkalkulator)
+av Fredrik Lindseth (MIT, se `lib/LISENS-Stromkalkulator.txt`).
