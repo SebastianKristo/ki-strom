@@ -240,6 +240,7 @@ test('appen starter, leser måleren, fyller enheten og svarer på API-et', async
   // --- Huset: personer, bortemodus og bereder ---
   assert.deepEqual((await api.personkilder({ homey })).map((k) => `${k.type}:${k.id}`), ['variabel:v1', 'bruker:u1']);
   assert.deepEqual((await api.brytere({ homey })).map((b) => b.id), ['vvb']);
+  homey.skrevet.length = 0;
   await api.settHusinnstillinger({ homey, body: {
     personer: [{ key: 'rune', navn: 'Rune', type: 'voksen', kilde: { type: 'variabel', id: 'v1' } },
       { key: 'sebastian', navn: 'Sebastian', type: 'ungdom', kilde: { type: 'bruker', id: 'u1' } }],
@@ -247,8 +248,11 @@ test('appen starter, leser måleren, fyller enheten og svarer på API-et', async
     vvb: { bryter: { enhet: 'vvb', kap: 'onoff' }, effekt: { enhet: 'vvb', kap: 'measure_power' } },
   } });
   assert.equal(app.hus.innstillinger().vvb.vinduStart, '22:00', 'uendrede bereder-innstillinger beholdes');
+  // Skyggemodus står på: berederen vurderes, men releet røres ikke
+  assert.equal(app.motor.innstillinger().skygge, true);
+  assert.equal((await api.hus({ homey })).bereder.status, 'Venter på vinduet');
+  assert.deepEqual(homey.skrevet, []);
   await app.motor.settInnstillinger({ skygge: false });
-  homey.skrevet.length = 0;
   await app._motorTick(Date.now());
   let hus = await api.hus({ homey });
   assert.equal(hus.modus, 'Hjemme');
@@ -293,6 +297,19 @@ test('appen starter, leser måleren, fyller enheten og svarer på API-et', async
   await app._motorTick(Date.now());
   assert.equal((await api.hus({ homey })).bereder.status, 'Boost');
   await assert.rejects(async () => api.bereder({ homey, body: { handling: 'tull' } }), /Ukjent handling/);
+
+  // Svarene Home Assistant-kontrollversjonen leser. Skrives til tests/fixtures når
+  // KI_SKRIV_FIXTUR er satt, så Python-testene der prøves mot det appen faktisk sender.
+  if (process.env.KI_SKRIV_FIXTUR) {
+    const fs = require('node:fs');
+    const fixtur = {
+      status: await api.status({ homey }), motor: await api.motor({ homey }), hus: await api.hus({ homey }),
+      innstillinger: await api.hentInnstillinger({ homey }), motorinnstillinger: await api.hentMotorinnstillinger({ homey }),
+      husinnstillinger: await api.hentHusinnstillinger({ homey }),
+    };
+    fs.mkdirSync(path.join(__dirname, '..', '..', 'tests', 'fixtures'), { recursive: true });
+    fs.writeFileSync(path.join(__dirname, '..', '..', 'tests', 'fixtures', 'homey_svar.json'), `${JSON.stringify(fixtur, null, 1)}\n`);
+  }
 
   // Widgeten får ett samlet sammendrag
   const oversikt = await require('../widgets/oversikt/api').oversikt({ homey });

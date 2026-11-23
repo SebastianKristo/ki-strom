@@ -7,6 +7,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN, SWITCHES
+from .const import CONF_MODUS, MODUS_HOMEY  # noqa: E402
 from .entity import KiHelper
 
 
@@ -33,6 +34,10 @@ class KiSwitch(KiHelper, SwitchEntity):
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
+    if entry.data.get(CONF_MODUS) == MODUS_HOMEY:
+        from .fjern import entiteter  # noqa: PLC0415
+        async_add_entities(entiteter.lag("switch", hass.data[DOMAIN][entry.entry_id]))
+        return
     hub = hass.data[DOMAIN][entry.entry_id]
     entiteter = [KiSwitch(hub, *s) for s in SWITCHES]
     from .const import PERSON_BRYTERE  # noqa: PLC0415

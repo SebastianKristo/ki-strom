@@ -44,6 +44,13 @@ offisielle [Nord Pool-integrasjonen](https://www.home-assistant.io/integrations/
 
 ---
 
+## To måter å kjøre KI Energi på
+
+- **I Home Assistant** (denne integrasjonen, som alltid): motoren regner og styrer her.
+- **På Homey**, med Home Assistant som kontrollpanel: appen i [`homey/`](homey/README.md) regner og styrer,
+  og denne integrasjonen viser og betjener den. Velg «På Homey» når du legger til integrasjonen, og oppgi
+  Homeys IP-adresse og en API-nøkkel fra Homey.
+
 ## Innhold
 
 - [Hva den gjør](#hva-den-gjør)

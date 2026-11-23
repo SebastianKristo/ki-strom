@@ -15,7 +15,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
 
-TIL_STRYKING = {"varsel_mottakere"}
+TIL_STRYKING = {"varsel_mottakere", "homey_token"}
 
 
 async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigEntry) -> dict[str, Any]:
@@ -27,6 +27,10 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
     }
     if hub is None:
         ut["feil"] = "Integrasjonen er ikke lastet"
+        return ut
+    if entry.data.get("modus") == "homey":
+        # Kontrollversjonen: det Homey sist svarte.
+        ut["homey"] = {"sist_ok": hub.last_update_success, "data": hub.data}
         return ut
 
     motor = getattr(hub, "engine", None)
