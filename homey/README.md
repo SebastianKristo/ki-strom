@@ -213,6 +213,7 @@ bortemodus. Svarer ikke Homey, blir entitetene utilgjengelige og kommer tilbake 
 | --- | --- |
 | `homey app install` stopper med `✖ 400` | CLI-en gikk via skyadressen (`…homeypro.net`) i stedet for lokalt. Sett Mac/PC på samme nett som Homey, slå av VPN, eller koble til med USB‑C. Blokkerer ruteren oppslag av `…homey.homeylocal.com` (DNS rebind-beskyttelse), bytt DNS til f.eks. 1.1.1.1. |
 | `homey app publish` klager på `README.txt` | Filen skal ligge i `homey/`. Hent siste versjon av repoet. |
+| Kapasitetstrinnet er for lavt, eller toppene mangler | Appen kjenner bare forbruket fra den ble installert. Legg inn månedens tre høyeste topper fra nettselskapet under *Strøm*. Trinnet vises som «(usikkert)» til det er gjort eller en ny måned har startet. Den første målte toppen kommer når en hel klokketime er målt. |
 | Ingenting styres | Skyggemodus står på, eller Energimotor-enheten er slått av. |
 | Et rom følger bare programmet | Rommet er ikke lært ennå. Læringen trenger effektmåling (W) på ovnene og noen døgn med data. |
 | Ingen priser | Sjekk at nettselskap er valgt, og at Homey har internett. |

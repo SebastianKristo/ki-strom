@@ -41,7 +41,16 @@ const STANDARD_INNSTILLINGER = {
   energileddNattEksMva: null,
   egneTrinn: '',                // «2:155,5:250,10:415»
   prisomraade: null,            // null = følger nettselskapet
+  // Månedens topper fra før appen begynte å måle (kW, fra nettselskapet). Gjelder bare måneden de ble lagt inn i.
+  startTopper: [],
+  startMaaned: null,            // «2026-11» — settes når toppene lagres
 };
+
+/** «5,2 4.8;4,6» eller [5.2, 4.8] → inntil tre positive tall. */
+function tolkTopper(verdi) {
+  const deler = Array.isArray(verdi) ? verdi : String(verdi ?? '').split(/[\s;]+|,(?=\s)/);
+  return deler.map((x) => Number(String(x).replace(',', '.'))).filter((x) => Number.isFinite(x) && x > 0 && x < 100).slice(0, 3);
+}
 
 class Stromkalkulator {
   /**
@@ -175,6 +184,7 @@ class Stromkalkulator {
     if (!Number.isFinite(kwh) || kwh < 0) return [];
     const t = this.t;
     if (t.maaned === null) t.maaned = kal.osloMaaned(ms);
+    if (!t.startet_ms) t.startet_ms = ms;      // første måling noensinne: herfra kjenner vi forbruket
     const sist = t.sist;
     // Uendret register er ikke en ny måling. Mange HAN-målere oppdaterer registeret bare én
     // gang i timen; flyttet vi nullpunktet fram hvert minutt, ville hele timens forbruk blitt
@@ -278,9 +288,14 @@ class Stromkalkulator {
   // ------------------------------------------------------------------
   /** Månedens døgnmakser, høyeste først: [{dato, kw, time}]. */
   topper(maaned = this.t.maaned) {
+    // Toppene fra før appen begynte å måle teller som egne dager i måneden de ble lagt inn for.
+    const start = this.i.startMaaned === maaned
+      ? tolkTopper(this.i.startTopper).map((kw, n) => ({ dato: `${maaned}-00 (${n + 1})`, kw, time: null, start: true }))
+      : [];
     return Object.entries(this.t.doegnmaks)
       .filter(([dato]) => dato.slice(0, 7) === maaned)
       .map(([dato, v]) => ({ dato, kw: v.kw, time: v.time }))
+      .concat(start)
       .sort((a, b) => b.kw - a.kw || (a.dato < b.dato ? -1 : 1));
   }
 
@@ -393,6 +408,17 @@ class Stromkalkulator {
     if (!this.tariffer.nettselskap[i.nettselskap] && i.nettselskap !== EGENDEFINERT) problemer.push('ukjent nettselskap');
     if (f.pris === null) problemer.push(f.trinn_tekst);
     if (this.trinnfeil) problemer.push(`egne trinn: ${this.trinnfeil}`);
+    // Kapasitetstrinnet bygger på månedens topper. Uten målinger, eller med målinger fra bare en
+    // del av måneden, er det for lavt — si fra i stedet for å vise et galt trinn uten forbehold.
+    const harStart = i.startMaaned === t.maaned && tolkTopper(i.startTopper).length > 0;
+    const maaltFra = t.startet_ms ? kal.osloDato(t.startet_ms) : null;
+    const delAvMaaned = maaltFra !== null && maaltFra.slice(0, 7) === t.maaned && maaltFra.slice(8) !== '01';
+    if (!t.sist) problemer.push('ingen målerdata ennå — sjekk at strømmåleren er valgt');
+    const merknader = [];      // forbehold som ikke er feil: vises, men slår ikke ut som måledata-problem
+    if (t.sist && !f.topp3.length) merknader.push('ingen topper ennå — den første kommer når en hel klokketime er målt');
+    if (delAvMaaned && !harStart && fl.TRINNBASERTE.has(f.metode)) {
+      merknader.push(`kapasitetstrinnet bygger bare på målinger fra ${maaltFra.slice(8)}.${maaltFra.slice(5, 7)}. — legg inn månedens topper fra nettselskapet under Strøm`);
+    }
     if (kroner.kwh_uten_pris > 0.01) problemer.push(`${rund(kroner.kwh_uten_pris, 1)} kWh uten spotpris denne måneden`);
 
     const forrige = t.forrige ? this._forrigeSnapshot() : null;
@@ -416,7 +442,10 @@ class Stromkalkulator {
         kapasitetstrinn: f.trinn_tekst,
         grunnlag_kw: rund(f.grunnlag_kw, 2),
         snitt_topp_kw: rund(f.topp3.length ? f.topp3.reduce((s, x) => s + x.kw, 0) / f.topp3.length : 0, 2),
-        topper: f.topp3.map((x) => ({ dato: x.dato, time: x.time, kw: rund(x.kw, 2) })),
+        topper: f.topp3.map((x) => ({ dato: x.start ? null : x.dato, time: x.time, kw: rund(x.kw, 2), start: Boolean(x.start) })),
+        maalt_fra: maaltFra,
+        kapasitetstrinn_usikkert: delAvMaaned && !harStart && fl.TRINNBASERTE.has(f.metode),
+        startverdier: harStart,
         margin_kw: f.margin_kw,
         neste_trinn_pris: f.neste_pris,
         kapasitetsvarsel: f.har_neste ? f.margin_kw < Number(i.varselTerskelKw) : false,
@@ -463,6 +492,7 @@ class Stromkalkulator {
       time: { kwh: rund(timeKwh, 3), kvalitet: timeKvalitet },
       forrige_maaned: forrige,
       problemer,
+      merknader,
     };
   }
 

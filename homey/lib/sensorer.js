@@ -14,7 +14,7 @@ const SENSORER = [
   { id: 'ki_tariff', type: 'string', no: 'Tariff', en: 'Tariff', hent: (s) => s.nettleie.tariff },
   { id: 'ki_energiledd', type: 'number', no: 'Energiledd', en: 'Energy charge', enhet: 'kr/kWh', desimaler: 4, hent: (s) => s.nettleie.energiledd },
   { id: 'ki_kapasitetsledd', type: 'number', no: 'Kapasitetsledd', en: 'Capacity charge', enhet: 'kr/mnd', desimaler: 0, hent: (s) => s.nettleie.kapasitetsledd },
-  { id: 'ki_kapasitetstrinn', type: 'string', no: 'Kapasitetstrinn', en: 'Capacity step', hent: (s) => s.nettleie.kapasitetstrinn },
+  { id: 'ki_kapasitetstrinn', type: 'string', no: 'Kapasitetstrinn', en: 'Capacity step', hent: (s) => (s.nettleie.kapasitetstrinn_usikkert ? `${s.nettleie.kapasitetstrinn} (usikkert)` : s.nettleie.kapasitetstrinn) },
   { id: 'ki_snitt_topp', type: 'number', no: 'Snitt toppforbruk', en: 'Average peak', enhet: 'kW', desimaler: 2, hent: (s) => s.nettleie.snitt_topp_kw },
   { id: 'ki_topp_1', type: 'number', no: 'Toppforbruk 1', en: 'Peak 1', enhet: 'kW', desimaler: 2, hent: topp(0) },
   { id: 'ki_topp_2', type: 'number', no: 'Toppforbruk 2', en: 'Peak 2', enhet: 'kW', desimaler: 2, hent: topp(1) },
