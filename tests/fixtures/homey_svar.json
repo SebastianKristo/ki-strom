@@ -22,9 +22,13 @@
     {
      "dato": "2026-11-23",
      "time": 12,
-     "kw": 3
+     "kw": 3,
+     "start": false
     }
    ],
+   "maalt_fra": "2026-11-23",
+   "kapasitetstrinn_usikkert": true,
+   "startverdier": false,
    "margin_kw": 2,
    "neste_trinn_pris": 420,
    "kapasitetsvarsel": false,
@@ -74,6 +78,9 @@
   },
   "forrige_maaned": null,
   "problemer": [],
+  "merknader": [
+   "kapasitetstrinnet bygger bare på målinger fra 23.11. — legg inn månedens topper fra nettselskapet under Strøm"
+  ],
   "effekt_w": 2400
  },
  "motor": {
@@ -292,6 +299,8 @@
   "energileddNattEksMva": null,
   "egneTrinn": "",
   "prisomraade": null,
+  "startTopper": [],
+  "startMaaned": null,
   "maalerEnhet": "maaler1",
   "effektKapabilitet": "measure_power",
   "energiKapabilitet": "meter_power"

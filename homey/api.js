@@ -7,6 +7,8 @@
  * fra Homey som Bearer-token). Alt her er en tynn inngang til app.js.
  */
 
+const { osloMaaned } = require('./lib/kalender');
+
 const NOKLER = ['nettselskap', 'boligtype', 'harNorgespris', 'avgiftssone', 'sikringstrinn', 'varselTerskelKw',
   'energileddDagEksMva', 'energileddNattEksMva', 'egneTrinn', 'prisomraade',
   'maalerEnhet', 'effektKapabilitet', 'energiKapabilitet'];
@@ -135,6 +137,14 @@ module.exports = {
     const ny = { ...homey.app.innstillinger() };
     for (const k of NOKLER) {
       if (body && Object.prototype.hasOwnProperty.call(body, k)) ny[k] = body[k];
+    }
+    if (body && Object.prototype.hasOwnProperty.call(body, 'startTopper')) {
+      // Toppene fra før appen begynte å måle gjelder bare måneden de legges inn i.
+      const topper = (Array.isArray(body.startTopper) ? body.startTopper : []).map(Number).filter((x) => Number.isFinite(x) && x > 0 && x < 100).slice(0, 3);
+      const endret = JSON.stringify(topper) !== JSON.stringify(ny.startTopper || []);
+      ny.startTopper = topper;
+      if (!topper.length) ny.startMaaned = null;
+      else if (endret || !ny.startMaaned) ny.startMaaned = osloMaaned(Date.now());
     }
     homey.settings.set('innstillinger', ny);
     const svar = ny;

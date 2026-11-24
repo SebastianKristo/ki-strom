@@ -122,6 +122,15 @@
       </label>
     </div>
     <div class="homey-form-group rad">
+      <label class="homey-form-label">Månedens tre høyeste topper før appen begynte å måle (kW)</label>
+      <div class="rutenett" style="grid-template-columns: 1fr 1fr 1fr">
+        <input class="homey-form-input" id="startTopp1" type="number" step="0.01" min="0" placeholder="Topp 1" />
+        <input class="homey-form-input" id="startTopp2" type="number" step="0.01" min="0" placeholder="Topp 2" />
+        <input class="homey-form-input" id="startTopp3" type="number" step="0.01" min="0" placeholder="Topp 3" />
+      </div>
+      <p class="hjelp" id="startHjelp">Appen kjenner bare forbruket fra den ble installert. Legg inn de tre høyeste døgntoppene hittil denne måneden fra nettselskapets app eller Min side, så blir kapasitetstrinnet riktig med en gang. Verdiene gjelder bare denne måneden; fra neste måned måler appen alt selv.</p>
+    </div>
+    <div class="homey-form-group rad">
       <label class="homey-form-label" for="varselTerskelKw">Varsle når margin til neste trinn er under (kW)</label>
       <input class="homey-form-input" id="varselTerskelKw" type="number" step="0.1" min="0" />
     </div>
@@ -413,10 +422,11 @@
         const linjer = [
           `${s.nettselskap} · ${s.prisomraade} · tariff ${s.nettleie.tariff}`,
           `Kapasitetstrinn: ${s.nettleie.kapasitetstrinn} (${s.nettleie.kapasitetsledd ?? '?'} kr/mnd), snitt ${s.nettleie.snitt_topp_kw} kW`,
+          `Topper: ${s.nettleie.topper.length ? s.nettleie.topper.map((x) => `${x.kw} kW${x.start ? ' (lagt inn)' : ''}`).join(' · ') : 'ingen ennå'}`,
           `Total strømpris nå: ${s.pris.total ?? '–'} kr/kWh`,
           `Denne måneden: ${s.maaned.kwh} kWh, ${s.maaned.kostnad_kr} kr`,
         ];
-        if (s.problemer.length) linjer.push(`⚠ ${s.problemer.join(' · ')}`);
+        for (const p of s.problemer.concat(s.merknader || [])) linjer.push(`⚠ ${p}`);
         el('status').textContent = linjer.join('\n');
       });
     }
@@ -747,6 +757,7 @@
         el('boligtype').value = innst.boligtype || 'bolig';
         el('harNorgespris').checked = Boolean(innst.harNorgespris);
         for (const f of ['varselTerskelKw', 'energileddDagEksMva', 'energileddNattEksMva', 'egneTrinn']) el(f).value = innst[f] ?? '';
+        [1, 2, 3].forEach((n) => { el(`startTopp${n}`).value = (innst.startTopper || [])[n - 1] ?? ''; });
         visStatus(Homey);
         Homey.ready();
       });
@@ -760,6 +771,7 @@
           else ny[f] = e.value === '' && f !== 'egneTrinn' ? null : e.value;
         }
         if (ny.varselTerskelKw === null) ny.varselTerskelKw = 2;
+        ny.startTopper = [1, 2, 3].map((n) => Number(el(`startTopp${n}`).value)).filter((x) => x > 0);
         Homey.api('PUT', '/innstillinger', ny, (feil) => {
           if (feil) return Homey.alert(feil.message || String(feil));
           meld('Lagret ✓');

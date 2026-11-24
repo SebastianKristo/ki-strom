@@ -301,3 +301,28 @@ test('måler som oppdaterer registeret én gang i timen: riktig time, pris og ta
   assert.equal(s.nettleie.topper[0].time, 22);
   naer(s.nettleie.topper[0].kw, 5, 0.02);
 });
+
+test('topper fra før appen begynte å måle gir riktig trinn, og gjelder bare sin måned', () => {
+  const { Stromkalkulator: K } = require('../lib/stromkalkulator');
+  const tariffer = require('../lib/tariffer.json');
+  const start = kal.osloTilUtc(2026, 11, 24, 10, 0);
+  const uten = new K({}, { nettselskap: 'elvia' }, tariffer);
+  uten.energi(start, 1000, null);
+  const s0 = uten.snapshot(start + 60000, null);
+  assert.deepEqual(s0.nettleie.topper, []);
+  assert.ok(s0.merknader.some((p) => p.includes('ingen topper ennå')));
+  assert.ok(s0.merknader.some((p) => p.includes('bygger bare på målinger fra 24.11.')));
+
+  const med = new K({}, { nettselskap: 'elvia', startTopper: [6.2, 5.8, 5.5], startMaaned: '2026-11' }, tariffer);
+  med.energi(start, 1000, null);
+  const s1 = med.snapshot(start + 60000, null);
+  assert.deepEqual(s1.nettleie.topper.map((x) => [x.kw, x.start]), [[6.2, true], [5.8, true], [5.5, true]]);
+  assert.equal(s1.nettleie.snitt_topp_kw, 5.83);
+  assert.notEqual(s1.nettleie.kapasitetstrinn, s0.nettleie.kapasitetstrinn);
+  assert.ok(!s1.merknader.some((p) => p.includes('bygger bare')));
+  // En målt dag som er høyere, går foran den laveste startverdien
+  med.t.doegnmaks['2026-11-25'] = { kw: 7, time: 18 };
+  assert.deepEqual(med.snapshot(start + 60000, null).nettleie.topper.map((x) => x.kw), [7, 6.2, 5.8]);
+  // Neste måned teller de ikke
+  assert.deepEqual(med.topper('2026-12'), []);
+});
