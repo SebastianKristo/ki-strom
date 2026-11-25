@@ -18,7 +18,7 @@
 
 const kal = require('./kalender');
 const { forvarmingMinutter } = require('./termisk');
-const { Rommodeller, innsikt } = require('./rommodell');
+const { Rommodeller, innsikt, innsiktTekst } = require('./rommodell');
 const { planlegg, settpunktNaa } = require('./varmeplan');
 const { kravVed, erDag } = require('./program');
 const { Lastprofil } = require('./profil');
@@ -55,6 +55,7 @@ const STANDARD = {
   korreksjonTimer: 3,           // så lenge holdes en manuell endring på termostaten
   vinduPauseMin: 3,             // åpent vindu så lenge: varmen pauses
   vinduTemp: 7,                 // settpunktet mens det luftes (frostsikring)
+  vinduMaksMin: 90,             // lenger enn dette pauses ikke varmen: da er det heller sensoren som henger
   vind: null,                   // {enhet, kap} — egen vindmåler; ellers brukes værvarselet
   soner: [],                    // [{key, navn, termostater, effekt, temp, type, prio, nominell, profil, dag, natt, aktiv, styrt}]
 };
@@ -85,7 +86,8 @@ class Motor {
     this.t.treff = this.t.treff || {};             // key → {faktor, krav, borte, varmFra, n, sene}
     this.t.justering = this.t.justering || {};     // key → {dag, natt, logg: [{ms, delta, periode}]}
     this.t.sp = this.t.sp || {};                   // key → {onsket, onsketMs, sett, settMs}
-    this.t.aapent = this.t.aapent || {};           // key → ms da vinduet ble åpnet
+    this.t.aapent = this.t.aapent || {};
+    this.t.logg = this.t.logg || [];               // de siste hendelsene: [{ms, type, tekst}]           // key → ms da vinduet ble åpnet
     this.t.overstyringer = this.t.overstyringer || {};
     this.t.senket = this.t.senket || {};
     // Det forrige læringssystemet (t.laering) er utgangspunkt for rom som alt var lært.
@@ -518,7 +520,10 @@ class Motor {
 
       // Åpent vindu eller dør mot ute: varmen pauses etter noen minutter.
       if (m.aapen) { if (!this.t.aapent[s.key]) this.t.aapent[s.key] = ms; } else delete this.t.aapent[s.key];
-      const lufter = Boolean(this.t.aapent[s.key]) && ms - this.t.aapent[s.key] >= Number(i.vinduPauseMin) * MIN_MS;
+      const aapenMin = this.t.aapent[s.key] ? (ms - this.t.aapent[s.key]) / MIN_MS : 0;
+      // En sensor som henger på «åpen» skal ikke få la rommet stå kaldt: etter en stund varmes det igjen.
+      const lufter = aapenMin >= Number(i.vinduPauseMin) && aapenMin < Number(i.vinduMaksMin);
+      const sensorHenger = aapenMin >= Number(i.vinduMaksMin);
 
       // Læring. Pådraget kommer fra effektmålingen; uten den fra termostaten når den tydelig
       // varmer eller tydelig står (nær settpunktet vet vi ikke, og lærer ingenting).
@@ -533,13 +538,18 @@ class Motor {
 
       // Har du skrudd på termostaten selv? Verdien den melder har stått stille, og endrer seg
       // uten at vi har bedt om det.
-      const sp = this.t.sp[s.key] || { onsket: null, onsketMs: 0, sett: null, settMs: 0 };
+      const sp = this.t.sp[s.key] || { onsket: null, onsketMs: 0, forrige: null, sett: null, settMs: 0 };
       this.t.sp[s.key] = sp;
       if (Number.isFinite(m.settpunkt) && m.settpunkt !== sp.sett) {
         const stabil = sp.sett !== null && ms - sp.settMs >= 3 * MIN_MS;
         const vaartSkifte = ms - sp.onsketMs < 3 * MIN_MS;
+        // En termostat som bare tar hele grader melder 22 når vi ba om 21,5: det er ikke en
+        // justering. Det er heller ikke en treg termostat som først nå melder det vi ba om sist.
+        const slakk = Math.max(0.5, Number(m.steg) || 0.5);
+        const vaart = (verdi) => verdi !== null && verdi !== undefined && Math.abs(m.settpunkt - verdi) < slakk + (slakk > 0.5 ? 0.01 : 0);
+        const treg = vaart(sp.forrige) && ms - sp.onsketMs < 30 * MIN_MS;
         if (styrer && s.styrt !== false && m.levende && stabil && !vaartSkifte && sp.onsket !== null
-          && Math.abs(m.settpunkt - sp.sett) >= 0.5 && Math.abs(m.settpunkt - sp.onsket) >= 0.5) {
+          && Math.abs(m.settpunkt - sp.sett) >= 0.5 && !vaart(sp.onsket) && !treg) {
           const kx0 = { ...kontekst };
           const grunnkrav = kravVed(s, ms, { ...i, ...(kontekst.husinnst || {}) }, null, kx0).min;
           hendelser.push(...this._manuellEndring(s, ms, m.settpunkt, grunnkrav));
@@ -563,11 +573,12 @@ class Motor {
         key: s.key, navn: s.navn || s.key, type: s.type || 'panel', prio: Number(s.prio) || 3,
         levende: Boolean(m.levende), styrt: s.styrt !== false,
         temp: m.temp, settpunkt_naa: m.settpunkt, effekt_w: m.effektW,
-        krav: maal.krav, mal: maal.mal, grunn: maal.grunn, laert: maal.laert,
+        krav: maal.krav, mal: maal.mal, laert: maal.laert,
+        grunn: sensorHenger ? `${maal.grunn}. Vinduet har meldt åpent i over ${Math.round(Number(i.vinduMaksMin))} minutter — varmer likevel (sjekk sensoren)` : maal.grunn,
         avvik: rund(avvik), trenger: trenger && !lufter, effekt: rund(effekt, 3), lufter,
         aapen: m.aapen === null ? null : Boolean(m.aapen),
         justering: this.justering(s.key, ms),
-        modell: { ...innsikt(lm, effektKw), laert: lm.laert, vinduer: lm.n, treff_faktor: faktor, effekt_kw: rund(effektKw, 2), omlaeringer: lm.omlaeringer },
+        modell: { ...innsikt(lm, effektKw), tekst: innsiktTekst(lm, effektKw), laert: lm.laert, vinduer: lm.n, treff_faktor: faktor, effekt_kw: rund(effektKw, 2), omlaeringer: lm.omlaeringer },
         plan: maal.plan ? maal.plan.timer.slice(0, 24).map((t) => ({ u: t.u, til: rund(t.til, 1), min: t.min, pris: rund(t.pris, 3) })) : null,
       });
     }
@@ -576,7 +587,7 @@ class Motor {
     // Det vi ber termostatene om, huskes — så en endring vi ikke har bedt om kan kjennes igjen.
     for (const p of plan) {
       const sp = this.t.sp[p.key];
-      if (sp && p.settpunkt !== sp.onsket) { sp.onsket = p.settpunkt; sp.onsketMs = ms; }
+      if (sp && p.settpunkt !== sp.onsket) { sp.forrige = sp.onsket; sp.onsket = p.settpunkt; sp.onsketMs = ms; }
     }
     const styrtKw = plan.filter((p) => p.handling === 'normal').reduce((s, p) => s + p.effekt, 0);
     const forventetKw = prognose + styrtKw + reservertKw;
@@ -591,6 +602,8 @@ class Motor {
     else if (farge === 'gronn') forklaring = `God margin: timen ligger an til ${rund(forventetTime)} kWh av ${budsjett.grense}.`;
     else forklaring = `Følger med: timen ligger an til ${rund(forventetTime)} kWh av ${budsjett.grense}.`;
     if (i.aktiv && i.skygge && soner.length) forklaring += ' Skyggemodus: termostatene røres ikke.';
+
+    if (hendelser.length) this.t.logg = this.t.logg.concat(hendelser.map((h) => ({ ms, type: h.type, tekst: h.tekst }))).slice(-30);
 
     return {
       tid: new Date(ms).toISOString(),
@@ -614,6 +627,7 @@ class Motor {
       vind: rund(vindNaa, 1),
       sol: solNaa,
       hendelser,
+      logg: this.t.logg.slice(-10).reverse().map((h) => ({ tid: new Date(h.ms).toISOString(), type: h.type, tekst: h.tekst })),
       soner: plan,
     };
   }

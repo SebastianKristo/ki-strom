@@ -423,7 +423,13 @@ class KiHomeyRom(Grunn, ClimateEntity):
     @property
     def extra_state_attributes(self) -> dict:
         r = self._rom() or {}
-        return {k: r.get(k) for k in ("krav", "mal", "handling", "forklaring", "senket", "laert", "prio", "type", "effekt_w")}
+        ut = {k: r.get(k) for k in ("krav", "mal", "handling", "forklaring", "senket", "laert", "prio", "type", "effekt_w", "justering", "aapen")}
+        # Det appen har lært om rommet: varmetap, tidskonstant, vind, sol og hvor sikker den er.
+        modell = r.get("modell") or {}
+        ut["laert_tekst"] = modell.get("tekst")
+        for k in ("sikkerhet_pst", "tidskonstant_t", "tap_w_per_grad", "oppvarming_c_per_t", "vind_pst_ved_5ms", "sol_fra", "treghet_t"):
+            ut[k] = modell.get(k)
+        return ut
 
     async def async_set_temperature(self, **kwargs) -> None:
         temp = kwargs.get(ATTR_TEMPERATURE)

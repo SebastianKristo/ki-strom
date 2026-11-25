@@ -368,6 +368,10 @@ test('åpent vindu: varmen pauses etter noen minutter og kommer tilbake når det
   assert.equal(b.soner[0].settpunkt, 7);
   assert.match(b.soner[0].forklaring, /åpen/);
   assert.equal(forlop(m, start + 5 * 60000, 1, aapen(false)).soner[0].settpunkt, 22);
+  // En sensor som henger på «åpen» får ikke la rommet stå kaldt
+  const henger = forlop(m, start + 10 * 60000, 95, aapen(true));
+  assert.equal(henger.soner[0].settpunkt, 22);
+  assert.match(henger.soner[0].grunn, /sjekk sensoren/);
 });
 
 test('planen unngår timer der huset pleier å bruke mye', () => {
@@ -387,4 +391,23 @@ test('planen unngår timer der huset pleier å bruke mye', () => {
   assert.ok(med[4].u < uten[4].u || med[4].u === 0, `pådrag kl. 17: ${med[4].u} mot ${uten[4].u}`);
   assert.ok(med[3].til > uten[3].til, 'rommet varmes litt ekstra før middagstimen');
   assert.ok(Math.min(...med.slice(0, 8).map((t) => t.til)) >= 21.5, 'uten at det blir kaldt');
+});
+
+test('en termostat som runder av eller melder sent, regnes ikke som en justering', () => {
+  // Hele grader: vi ber om 21,5 og den melder 22 — fem minutter senere
+  const m = new Motor({}, { soner: [{ ...SONER[0], dag: 21.5 }], skygge: false });
+  const start = oslo(2026, 11, 23, 12);
+  forlop(m, start, 8, () => ({ maalinger: { stue: { settpunkt: 20, steg: 1 } }, laas: { stue: true } }));
+  forlop(m, start + 8 * 60000, 4, () => ({ maalinger: { stue: { settpunkt: 22, steg: 1 } }, laas: { stue: true } }));
+  assert.deepEqual(m.t.overstyringer, {});
+  // Men 24 °C er noe annet enn det vi ba om
+  forlop(m, start + 12 * 60000, 2, () => ({ maalinger: { stue: { settpunkt: 24, steg: 1 } }, laas: { stue: true } }));
+  assert.equal(m.t.overstyringer.stue.temp, 24);
+
+  // Treg termostat: kl. 23 ber vi om 19, men den melder først dagens 22 (som den fikk tidligere) og så 19
+  const m2 = new Motor({}, { soner: [SONER[0]], skygge: false });
+  const kveld = oslo(2026, 11, 23, 22, 50);
+  forlop(m2, kveld, 14, () => ({ maalinger: { stue: { settpunkt: 21 } }, laas: { stue: true } }));          // har ikke fått med seg noe ennå
+  forlop(m2, kveld + 14 * 60000, 3, () => ({ maalinger: { stue: { settpunkt: 22 } }, laas: { stue: true } }));   // dagens, forsinket
+  assert.deepEqual(m2.t.overstyringer, {});
 });

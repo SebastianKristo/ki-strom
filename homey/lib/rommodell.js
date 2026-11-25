@@ -300,4 +300,21 @@ function ferdigLaert(p) {
   return { ...rom, best: best < 0 ? 0 : best, n: 60, nVarm: 20, nKald: 20, s2: 0.01, feilKort: 0.08, feilLang: 0.08 };
 }
 
-module.exports = { Rommodeller, ferdigLaert, vilkaar, innsikt, trekk, TREGHETER, VERSJON };
+/** Det samme i en setning eller tre, til innstillingssiden. */
+function innsiktTekst(modell, effektKw) {
+  const i = innsikt(modell, effektKw);
+  if (!modell.laert) {
+    return modell.n === 0
+      ? 'Ikke lært ennå. Følger programmet til rommet er kjent — vanligvis innen et døgn.'
+      : `Lærer rommet (${modell.n} av 12 målevinduer). Følger programmet imens.`;
+  }
+  const deler = [`Lært (${i.sikkerhet_pst} % sikker): taper ${i.tap_w_per_grad} W per grad mot ute og holder på varmen med en tidskonstant på ${i.tidskonstant_t} timer.`];
+  deler.push(`Ovnen løfter rommet ${String(i.oppvarming_c_per_t).replace('.', ',')} °C i timen.`);
+  if (i.treghet_t > 0) deler.push(`Varmen bruker rundt ${String(i.treghet_t).replace('.', ',')} timer på å nå rommet.`);
+  if (i.vind_pst_ved_5ms >= 8) deler.push(`Vind på 5 m/s øker tapet med ${i.vind_pst_ved_5ms} %.`);
+  if (i.sol_fra) deler.push(`Får mest solvarme fra ${i.sol_fra}.`);
+  if (modell.omlaeringer > 0) deler.push(`Har lært rommet på nytt ${modell.omlaeringer} gang${modell.omlaeringer > 1 ? 'er' : ''} etter at det endret seg.`);
+  return deler.join(' ');
+}
+
+module.exports = { Rommodeller, ferdigLaert, innsiktTekst, vilkaar, innsikt, trekk, TREGHETER, VERSJON };

@@ -48,6 +48,12 @@ module.exports = {
     return svar;
   },
 
+  async glem({ homey, body }) {
+    homey.app.motor.glem(body && body.hva, body && body.rom);
+    await homey.app.regnNaa();
+    return { ok: true };
+  },
+
   async termostater({ homey }) {
     return homey.app.motor.termostater();
   },

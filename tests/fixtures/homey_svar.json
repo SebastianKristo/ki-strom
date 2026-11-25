@@ -108,6 +108,21 @@
   "vaervarsel": true,
   "plan_spart_kr": 0,
   "reservert_kw": 2,
+  "reserve_kw": 0.35,
+  "prognose_treff": {
+   "feil_kw": null,
+   "skjevhet_kw": 0,
+   "varighet": 0.75,
+   "n": 0
+  },
+  "vind": 0,
+  "sol": {
+   "ost": 0.029,
+   "sor": 0.384,
+   "vest": 0.215
+  },
+  "hendelser": [],
+  "logg": [],
   "soner": [
    {
     "key": "bad",
@@ -121,11 +136,33 @@
     "effekt_w": 0,
     "krav": 24,
     "mal": 24,
-    "grunn": "Holdes varmt hele døgnet",
     "laert": false,
+    "grunn": "Holdes varmt hele døgnet",
     "avvik": -0.5,
     "trenger": false,
     "effekt": 0,
+    "lufter": false,
+    "aapen": null,
+    "justering": 0,
+    "modell": {
+     "tidskonstant_t": 13,
+     "tap_w_per_grad": 17,
+     "lagring_kwh_per_grad": 0.21,
+     "oppvarming_c_per_t": 2.8,
+     "vind_pst_ved_5ms": 0,
+     "sol_fra": null,
+     "sol_c_per_t": 0,
+     "gratisvarme_c_per_t": 0,
+     "treghet_t": 0,
+     "treffer_c_per_t": 0.5,
+     "sikkerhet_pst": 0,
+     "tekst": "Ikke lært ennå. Følger programmet til rommet er kjent — vanligvis innen et døgn.",
+     "laert": false,
+     "vinduer": 0,
+     "treff_faktor": 1,
+     "effekt_kw": 0.6,
+     "omlaeringer": 0
+    },
     "plan": null,
     "handling": "normal",
     "settpunkt": 24,
@@ -143,11 +180,33 @@
     "effekt_w": 1500,
     "krav": 22,
     "mal": 22,
-    "grunn": "Dag",
     "laert": false,
+    "grunn": "Dag",
     "avvik": 1.5,
     "trenger": true,
     "effekt": 1.5,
+    "lufter": false,
+    "aapen": null,
+    "justering": 0,
+    "modell": {
+     "tidskonstant_t": 13,
+     "tap_w_per_grad": 43,
+     "lagring_kwh_per_grad": 0.54,
+     "oppvarming_c_per_t": 2.8,
+     "vind_pst_ved_5ms": 0,
+     "sol_fra": null,
+     "sol_c_per_t": 0,
+     "gratisvarme_c_per_t": 0,
+     "treghet_t": 0,
+     "treffer_c_per_t": 0.5,
+     "sikkerhet_pst": 0,
+     "tekst": "Ikke lært ennå. Følger programmet til rommet er kjent — vanligvis innen et døgn.",
+     "laert": false,
+     "vinduer": 0,
+     "treff_faktor": 1,
+     "effekt_kw": 1.5,
+     "omlaeringer": 0
+    },
     "plan": null,
     "handling": "senket",
     "settpunkt": 21.5,
@@ -322,6 +381,14 @@
   "shedGulvMaks": 3,
   "shedPanelMaks": 2,
   "gradvisIntervallMin": 3,
+  "kapasitetIPlan": true,
+  "solandel": 0.5,
+  "laerAvJusteringer": true,
+  "korreksjonTimer": 3,
+  "vinduPauseMin": 3,
+  "vinduTemp": 7,
+  "vinduMaksMin": 90,
+  "vind": null,
   "soner": [
    {
     "key": "bad",
@@ -346,6 +413,7 @@
       "kap": "measure_power"
      }
     ],
+    "aapning": [],
     "temp": {
      "enhet": "gulv1",
      "kap": "measure_temperature"
@@ -380,6 +448,7 @@
       "kap": "measure_power"
      }
     ],
+    "aapning": [],
     "temp": {
      "enhet": "ovn2",
      "kap": "measure_temperature"
