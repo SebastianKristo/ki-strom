@@ -1,7 +1,7 @@
 {
   "_comment": "Bygget av scripts/lag-app-json.js — ikke rediger for hånd.",
   "id": "no.kristo.kienergi",
-  "version": "0.4.4",
+  "version": "0.5.0",
   "compatibility": ">=12.3.0",
   "sdk": 3,
   "platforms": [
@@ -87,6 +87,10 @@
     "fjernOverstyring": {
       "method": "POST",
       "path": "/fjernoverstyring"
+    },
+    "glem": {
+      "method": "POST",
+      "path": "/glem"
     },
     "hus": {
       "method": "GET",

@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { simuler, forvarmingMinutter, holdepaadrag, Laering } = require('../lib/termisk');
+const { simuler, forvarmingMinutter, holdepaadrag } = require('../lib/termisk');
 const { planlegg, settpunktNaa } = require('../lib/varmeplan');
 const { Vaer, tolk, hent, adresse } = require('../lib/vaer');
 
@@ -23,40 +23,6 @@ test('simulering og forvarmingstid følger samme modell', () => {
   assert.equal(forvarmingMinutter(MODELL, 22, 21, 0), 0);
 });
 
-test('læringen finner k og oppvarmingsevne fra termostat i halve grader', () => {
-  const l = new Laering({});
-  const sann = { k: 0.04, r: 1.6 };
-  const halv = (T) => Math.round(T * 2) / 2;
-  let T = 22;
-  let ms = 0;
-  for (let dogn = 0; dogn < 14; dogn++) {
-    for (let n = 0; n < 12 * 8; n++) {            // åtte timer av: rommet faller
-      l.observer('stue', { ms, temp: halv(T), ute: 0, tilstand: 'av' });
-      T = simuler(T, 0, 0, sann, 1 / 12); ms += 300000;
-    }
-    for (let n = 0; n < 12 * 4; n++) {            // fire timer på: rommet stiger
-      l.observer('stue', { ms, temp: halv(T), ute: 0, tilstand: 'varmer' });
-      T = simuler(T, 0, 1, sann, 1 / 12); ms += 300000;
-    }
-  }
-  const m = l.modell('stue');
-  assert.equal(m.laert, true);
-  naer(m.k, 0.04, 0.012);
-  naer(m.r, 1.6, 0.35);
-});
-
-test('ukjent tilstand og for korte vinduer lærer ingenting', () => {
-  const l = new Laering({});
-  assert.equal(l.observer('a', { ms: 0, temp: 20, ute: 0, tilstand: 'av' }), false);
-  assert.equal(l.observer('a', { ms: 600000, temp: 19.5, ute: 0, tilstand: 'av' }), false);     // 10 min
-  assert.equal(l.observer('a', { ms: 1200000, temp: 19.5, ute: 0, tilstand: null }), false);
-  assert.equal(l.observer('a', { ms: 3600000, temp: 19, ute: 0, tilstand: 'av' }), false);      // nytt vindu
-  assert.equal(l.modell('a').laert, false);
-});
-
-// ----------------------------------------------------------------------
-//  Varmeplanen
-// ----------------------------------------------------------------------
 test('flat pris og fast krav: planen holder kravet, ikke mer', () => {
   const plan = planlegg({ start: 21, modell: MODELL, effektKw: 2, timer: timer(24, () => ({ ute: 0, pris: 1, min: 21, maks: 22 })) });
   for (const t of plan.timer) assert.ok(t.til >= 20.6 && t.til <= 22.01, `${t.til}`);

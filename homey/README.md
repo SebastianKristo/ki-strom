@@ -22,6 +22,7 @@ holder deg under kapasitetstrinnet og bruker strømmen når den er billig. Alt r
 - [Skyggemodus](#skyggemodus)
 - [Strømkalkulatoren](#strømkalkulatoren)
 - [Energimotoren](#energimotoren)
+- [Slik lærer appen](#slik-lærer-appen)
 - [Huset](#huset)
 - [Enheter, sensorer og widget](#enheter-sensorer-og-widget)
 - [Flow-kort](#flow-kort)
@@ -105,7 +106,53 @@ med rommets egen kurve (hvor fort det varmes og kjøles), værvarselet fra Yr og
 (kraft etter strømstøtte eller Norgespris, pluss energiledd). Det gir nattsenking bare når den lønner seg,
 forvarming i billige timer, og start i tide før dagen begynner — tidligere jo kaldere det er.
 
-**Læringen** trenger effektmåling på ovnene (W) og noen døgn med data. Til et rom er lært, følger det programmet.
+**Timer der huset bruker mye** får et påslag i planen: rommene varmes litt ekstra før middagstid og andre travle
+timer, så ovnene kan hvile når resten av huset trenger effekten.
+
+## Slik lærer appen
+
+Hvert rom får sin egen modell av fysikken, lært av det som faktisk skjer:
+
+| Appen lærer | Hva det brukes til |
+| --- | --- |
+| **Oppvarmingsevne** — hvor fort ovnen løfter rommet | Når oppvarmingen må starte for å rekke morgenen eller hjemkomsten |
+| **Varmetap** — hvor fort rommet faller mot utetemperaturen | Om nattsenking lønner seg, og hvor lavt rommet kan stå når huset er tomt |
+| **Vind** — hvor mye tapet øker når det blåser | Tidligere start og mindre senking på vindfulle netter |
+| **Sol fra øst, sør og vest** — rommet lærer selv hvor vinduene står | Mindre varme på forhånd når sola kommer til å gjøre jobben |
+| **Treghet** — hvor lenge varmen bruker på å nå rommet (gulvvarme) | Gulvvarme startes timer før, panelovner like før |
+| **Tap ved lufting** — når et vindu eller en dør mot ute står åpen | Varmen pauses mens det luftes |
+| **Ovnens virkelige effekt** | Riktig kostnad og riktig plass i timebudsjettet |
+| **Husets øvrige forbruk** — mønster per ukedag og time, og hvor forutsigbart det er | Hvor mye effekt som må holdes av, og hvilke timer planen bør unngå |
+
+**Lærer raskt.** Et rom er vanligvis lært i løpet av et døgn. Alle målinger brukes, også når ovnen går av og på.
+Termostater som bare melder i halve grader er tatt høyde for.
+
+**Lærer av feil.** Bommer modellen mer enn den pleier — ny ovn, ny årstid, møblert om — oppdager appen det og lærer
+rommet på nytt i løpet av et par døgn. Var rommet for kaldt da dagen begynte, starter den tidligere neste gang.
+Bommer forbruksprognosen ofte, holder den av mer effekt.
+
+**Kan korrigeres.** Skrur du på en termostat selv, holdes den verdien i tre timer. Gjør du den samme justeringen
+tre ganger på to forskjellige dager, blir den en fast justering for dag eller natt i det rommet (høyst ±2 °C).
+Under *Varme → Rom* kan du be appen glemme justeringene eller lære et rom helt på nytt.
+
+**Sikkerhet foran sparing.**
+
+- Til et rom er lært, følger det programmet. Trege anlegg senkes da bare 1,5 °C.
+- Planen regner forsiktig: litt svakere ovn og litt større tap enn lært, og bare halvparten av den varslede sola.
+  Marginen krymper etter hvert som modellen blir sikker.
+- Enkeltmålinger langt utenfor det vanlige får liten vekt.
+- En vindussensor som henger på «åpen» får ikke la rommet stå kaldt: etter 90 minutter varmes det igjen.
+- En termostat som runder av eller melder sent, regnes ikke som en justering fra deg.
+
+**Innsyn.** Oversikten i innstillingene viser hva appen har lært om hvert rom — varmetap i watt per grad,
+tidskonstant, vind, sol og hvor sikker den er — og de siste hendelsene i læringen.
+
+Læringen er prøvd mot et simulert hus med kjent fysikk (`test/simhus.js`): modellen finner tallene igjen, og i
+lukket sløyfe er rommene varme i tide og billigere enn en vanlig termostat med samme program. Hvor mye du sparer i
+ditt hus avhenger av prisene, været og hvor mye rommene får senkes.
+
+For best resultat: effektmåling på ovnene. Uten lærer appen bare når termostaten tydelig varmer eller tydelig står.
+Vindmåler og vindussensorer er valgfrie og velges under *Varme*.
 
 ## Huset
 
@@ -202,6 +249,7 @@ bortemodus. Svarer ikke Homey, blir entitetene utilgjengelige og kommer tilbake 
 | GET / PUT | `/motorinnstillinger` | Motorens innstillinger og rom |
 | GET | `/termostater`, `/temperatursensorer`, `/romforslag` | Til oppsettet |
 | POST | `/overstyr`, `/fjernoverstyring` | `{rom, temp, minutter}` / `{rom}` |
+| POST | `/glem` | `{hva: "laering" eller "justering", rom}` — glem det som er lært |
 | GET | `/hus` | Modus, personer, hjemkomst, bereder, håndklevarmer og vaner |
 | GET / PUT | `/husinnstillinger` | Personer, bortemodus, bereder og håndklevarmer |
 | GET | `/personkilder`, `/brytere`, `/alleenheter` | Til oppsettet |
@@ -215,7 +263,8 @@ bortemodus. Svarer ikke Homey, blir entitetene utilgjengelige og kommer tilbake 
 | `homey app publish` klager på `README.txt` | Filen skal ligge i `homey/`. Hent siste versjon av repoet. |
 | Kapasitetstrinnet er for lavt, eller toppene mangler | Appen kjenner bare forbruket fra den ble installert. Legg inn månedens tre høyeste topper fra nettselskapet under *Strøm*. Trinnet vises som «(usikkert)» til det er gjort eller en ny måned har startet. Den første målte toppen kommer når en hel klokketime er målt. |
 | Ingenting styres | Skyggemodus står på, eller Energimotor-enheten er slått av. |
-| Et rom følger bare programmet | Rommet er ikke lært ennå. Læringen trenger effektmåling (W) på ovnene og noen døgn med data. |
+| Et rom følger bare programmet | Rommet er ikke lært ennå; det tar vanligvis et døgn. Uten effektmåling (W) på ovnene går det saktere. Oversikten viser hvor langt den er kommet. |
+| Appen holder en temperatur du ikke har bedt om | Du (eller termostatens eget program) har endret settpunktet; det holdes i tre timer. Eller appen har lært en fast justering — se rommet under *Varme*, der kan den glemmes. |
 | Ingen priser | Sjekk at nettselskap er valgt, og at Homey har internett. |
 | Home Assistant sier «avvist» eller «ingen kontakt» | Sjekk IP-adressen og at API-nøkkelen er riktig. Koblingen er ikke prøvd mot en ekte Homey ennå — meld fra hvis den ikke virker. |
 

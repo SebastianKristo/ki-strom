@@ -68,10 +68,28 @@ class MotorKobling {
       let temp = MotorKobling.verdi(enheter, s.temp);
       if (temp === null && forste) temp = MotorKobling.verdi(enheter, { enhet: forste.id, kap: 'measure_temperature' });
       const settpunkt = forste ? MotorKobling.verdi(enheter, { enhet: forste.id, kap: 'target_temperature' }) : null;
+      const tt = forste && forste.capabilitiesObj && forste.capabilitiesObj.target_temperature;
+      const grenser = tt ? { min: Number.isFinite(Number(tt.min)) ? Number(tt.min) : 5, maks: Number.isFinite(Number(tt.max)) ? Number(tt.max) : 35 } : {};
+      const steg = forste && forste.capabilitiesObj && forste.capabilitiesObj.target_temperature ? Number(forste.capabilitiesObj.target_temperature.step) || 0.5 : 0.5;
       const effekter = (s.effekt || []).map((k) => MotorKobling.verdi(enheter, k)).filter((v) => v !== null);
-      ut[s.key] = { temp, settpunkt, effektW: effekter.length ? effekter.reduce((a, b) => a + b, 0) : null, levende };
+      // Vindu- og dørsensorer mot ute: åpen hvis minst én er det. Uten sensorer vet vi ikke (null).
+      const kontakter = (s.aapning || []).map((k) => {
+        const e = enheter[k.enhet];
+        const kap = e && e.capabilitiesObj && e.capabilitiesObj[k.kap || 'alarm_contact'];
+        return kap && e.available !== false && typeof kap.value === 'boolean' ? kap.value : null;
+      }).filter((v) => v !== null);
+      const aapen = kontakter.length ? kontakter.some(Boolean) : null;
+      ut[s.key] = { temp, settpunkt, effektW: effekter.length ? effekter.reduce((a, b) => a + b, 0) : null, levende, aapen, steg, ...grenser };
     }
     return ut;
+  }
+
+  /** Vind fra egen vindmåler, i m/s. Homey måler vind i km/t med mindre enheten sier noe annet. */
+  static vind(enheter, kilde) {
+    const v = MotorKobling.verdi(enheter, kilde);
+    if (v === null) return null;
+    const kap = enheter[kilde.enhet].capabilitiesObj[kilde.kap];
+    return /m\/s/i.test(String(kap.units || '')) ? v : v / 3.6;
   }
 
   // ------------------------------------------------------------------
@@ -90,6 +108,8 @@ class MotorKobling {
       spot: this.app.spot,
       vaer: this.vaer,
       uteMaalt: MotorKobling.verdi(enheter, innst.ute),
+      vindMaalt: MotorKobling.vind(enheter, innst.vind),
+      sted: { lat: this.homey.geolocation.getLatitude(), lon: this.homey.geolocation.getLongitude() },
       totalW: this.app.siste.effekt,
       timeKwh: kalkBilde && kalkBilde.time ? kalkBilde.time.kwh : null,
       maalinger: this.maalinger(enheter),
@@ -102,6 +122,12 @@ class MotorKobling {
     await this.app.hus.etterMotor(naa, enheter, this.bilde);
     this.bilde.hus = this.app.hus.bilde;
     await this._skriv(enheter, naa);
+    for (const h of this.bilde.hendelser || []) {
+      this.app.log(`Læring: ${h.tekst}`);
+      // Det som endrer hvordan huset styres framover, sies fra om; resten står i loggen på innstillingssiden.
+      if (h.type === 'laert_justering') this.homey.notifications.createNotification({ excerpt: `KI Energi: ${h.tekst}` }).catch(() => {});
+    }
+    if ((this.bilde.hendelser || []).length) this.lagre();
     return this.bilde;
   }
 
@@ -173,6 +199,15 @@ class MotorKobling {
   async forslag() {
     const termostater = await this.termostater();
     const eksisterende = Object.fromEntries(this.innstillinger().soner.map((s) => [s.key, s]));
+    const api = await this.app.api();
+    const alle = await api.devices.getDevices();
+    const sonenavn = await api.zones.getZones().catch(() => ({}));
+    const kontakter = new Map();
+    for (const e of Object.values(alle)) {
+      if (!(e.capabilities || []).includes('alarm_contact') || !/vindu|window|veranda|terrasse|balkong|ytterd/i.test(e.name || '')) continue;
+      const navn = (sonenavn[e.zone] && sonenavn[e.zone].name) || 'Uten sone';
+      kontakter.set(navn, (kontakter.get(navn) || []).concat([e.id]));
+    }
     const grupper = new Map();
     for (const t of termostater) {
       if (t.klasse === 'car' || /bil|car|tesla/i.test(t.navn)) continue;      // bilens klima er ikke et rom
@@ -197,6 +232,8 @@ class MotorKobling {
         termostatnavn: liste.map((t) => t.navn),
         effekt: liste.filter((t) => t.harEffekt).map((t) => ({ enhet: t.id, kap: 'measure_power' })),
       };
+      // Vindu- og ytterdørsensorer i samme sone foreslås, hvis rommet ikke alt har noen.
+      if (!ny.aapning) ny.aapning = (kontakter.get(sone) || []).map((id) => ({ enhet: id, kap: 'alarm_contact' }));
       if (!ny.temp) {
         const medTemp = liste.find((t) => t.harTemp);
         ny.temp = medTemp ? { enhet: medTemp.id, kap: 'measure_temperature' } : null;
@@ -204,6 +241,13 @@ class MotorKobling {
       ut.push(ny);
     }
     return ut.sort((a, b) => a.navn.localeCompare(b.navn, 'no'));
+  }
+
+  /** Glem det som er lært om et rom (eller alle): 'laering' = rommodellen, 'justering' = dine justeringer. */
+  glem(hva, key) {
+    if (hva === 'justering') this.motor.glemJusteringer(key || null);
+    else this.motor.glemLaering(key || null);
+    this.lagre();
   }
 
   overstyr(key, temp, minutter) {

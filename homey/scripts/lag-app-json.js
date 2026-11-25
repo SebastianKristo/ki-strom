@@ -95,6 +95,7 @@ const app = {
     romforslag: { method: 'GET', path: '/romforslag' },
     overstyr: { method: 'POST', path: '/overstyr' },
     fjernOverstyring: { method: 'POST', path: '/fjernoverstyring' },
+    glem: { method: 'POST', path: '/glem' },
     hus: { method: 'GET', path: '/hus' },
     hentHusinnstillinger: { method: 'GET', path: '/husinnstillinger' },
     settHusinnstillinger: { method: 'PUT', path: '/husinnstillinger' },

@@ -53,6 +53,43 @@ class Vaer {
     return null;
   }
 
+  /** Varslet verdi av et felt («vind» m/s, «sky» %) på tidspunktet, eller null. */
+  feltVed(ms, felt) {
+    const p = this.punkter;
+    if (!p.length || ms < p[0].ms - TIME_MS || ms > p[p.length - 1].ms) return null;
+    let forrige = p[0];
+    for (const punkt of p) {
+      if (punkt.ms >= ms) {
+        const a = forrige[felt];
+        const b = punkt[felt];
+        if (!Number.isFinite(a) || !Number.isFinite(b)) return Number.isFinite(b) ? b : (Number.isFinite(a) ? a : null);
+        const f = punkt.ms === forrige.ms ? 0 : (ms - forrige.ms) / (punkt.ms - forrige.ms);
+        return a + Math.min(1, Math.max(0, f)) * (b - a);
+      }
+      forrige = punkt;
+    }
+    return null;
+  }
+
+  /**
+   * Vind (m/s) og skydekke (%) time for time fra `ms`. Målt vind nå retter varselet de første
+   * timene, som for temperaturen. Uten varsel: målt vind (eller 0) og halvskyet.
+   */
+  vindOgSky(ms, antall, maaltVind = null) {
+    const varselNaa = this.feltVed(ms, 'vind');
+    const avvik = maaltVind !== null && varselNaa !== null ? maaltVind - varselNaa : 0;
+    const ut = [];
+    for (let n = 0; n < antall; n++) {
+      const t = ms + (n + 0.5) * TIME_MS;
+      const vind = this.feltVed(t, 'vind');
+      ut.push({
+        vind: vind === null ? (maaltVind ?? 0) : Math.max(0, vind + avvik * Math.max(0, 1 - n / 3)),
+        sky: this.feltVed(t, 'sky'),
+      });
+    }
+    return ut;
+  }
+
   /**
    * Utetemperatur time for time fra `ms`. Den målte temperaturen nå brukes til å rette
    * varselet: avviket mellom måler og varsel fases ut over seks timer. Uten varsel holdes
