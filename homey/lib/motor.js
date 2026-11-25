@@ -92,6 +92,7 @@ class Motor {
     this.t.senket = this.t.senket || {};
     // Det forrige læringssystemet (t.laering) er utgangspunkt for rom som alt var lært.
     this.modeller = new Rommodeller(this.t.modeller, this.t.laering);
+    this.synket = new Set();                       // rom der termostatens settpunkt er lest siden oppstart (lagres ikke)
     this.profil = new Lastprofil(this.t.profil);
     this.settInnstillinger(innstillinger);
   }
@@ -183,19 +184,22 @@ class Motor {
    * justeringer på to forskjellige dager blir en fast justering for dag eller natt.
    * @returns {Array} hendelser
    */
-  _manuellEndring(sone, ms, verdi, grunnkrav) {
+  _manuellEndring(sone, ms, verdi, grunnkrav, laer = true) {
     const i = this.i;
     const hendelser = [];
     const timer = Number(i.korreksjonTimer) || 3;
     this.overstyr(sone.key, verdi, timer * 60, ms);
     hendelser.push({ type: 'manuell', rom: sone.key, tekst: `${sone.navn || sone.key}: du satte ${verdi} °C på termostaten. Det holdes i ${timer} timer.` });
-    if (!i.laerAvJusteringer) return hendelser;
+    if (!i.laerAvJusteringer || !laer) return hendelser;
     const j = this.t.justering[sone.key] || { dag: 0, natt: 0, logg: [] };
     const periode = erDag(ms, i) ? 'dag' : 'natt';
     j.logg = j.logg.filter((x) => ms - x.ms < 14 * DOGN_MS).concat([{ ms, delta: Math.round((verdi - grunnkrav) * 2) / 2, periode }]).slice(-20);
-    const like = j.logg.filter((x) => x.periode === periode && Math.abs(x.delta) >= 0.5);
-    const opp = like.filter((x) => x.delta > 0);
-    const ned = like.filter((x) => x.delta < 0);
+    // Det som teller, er justeringer som er uenige med det rommet har nå — også tilbake til
+    // programmet, så en lært justering kan læres bort igjen på samme måte som den ble lært.
+    const naa = Number(j[periode]) || 0;
+    const like = j.logg.filter((x) => x.periode === periode && Math.abs(x.delta - naa) >= 0.5);
+    const opp = like.filter((x) => x.delta > naa);
+    const ned = like.filter((x) => x.delta < naa);
     const gruppe = opp.length >= ned.length ? opp : ned;
     const dager = new Set(gruppe.map((x) => kal.osloDato(x.ms)));
     if (gruppe.length >= 3 && dager.size >= 2) {
@@ -204,7 +208,10 @@ class Motor {
       const ny = Math.min(2, Math.max(-2, median));
       if (ny !== j[periode]) {
         j[periode] = ny;
-        hendelser.push({ type: 'laert_justering', rom: sone.key, tekst: `${sone.navn || sone.key}: lærte at du vil ha det ${Math.abs(ny)} °C ${ny > 0 ? 'varmere' : 'kaldere'} om ${periode === 'dag' ? 'dagen' : 'natten'}.` });
+        const naar = periode === 'dag' ? 'dagen' : 'natten';
+        hendelser.push({ type: 'laert_justering', rom: sone.key, tekst: ny === 0
+          ? `${sone.navn || sone.key}: følger programmet igjen om ${naar}.`
+          : `${sone.navn || sone.key}: lærte at du vil ha det ${Math.abs(ny)} °C ${ny > 0 ? 'varmere' : 'kaldere'} om ${naar}.` });
       }
       j.logg = j.logg.filter((x) => x.periode !== periode);
     }
@@ -225,13 +232,20 @@ class Motor {
     // Straff fra før rommet var lært gjelder gjetningene, ikke den lærte modellen.
     if (maal.laert && !tr.laert && tr.faktor < 1) tr.faktor = 1;
     tr.laert = Boolean(maal.laert);
+    // En straff som ikke blir prøvd på nytt, skal ikke bli stående: den trappes ned litt hvert døgn.
+    const dato = kal.osloDato(ms);
+    if (tr.dato && tr.dato !== dato && tr.faktor < 1) tr.faktor = Math.round(Math.min(1, tr.faktor * 1.03) * 1000) / 1000;
+    tr.dato = dato;
     if (senket) tr.senketMs = ms;
     if (tr.krav !== null && maal.krav > tr.krav + 0.4 && temp !== null && !maal.overstyrt) {
       const klokke = (t) => this.krav(sone, t, i, null, { ...kx, naaMs: t - 3 * TIME_MS }).min;
       const forutsigbart = Math.abs(klokke(ms) - maal.krav) < 0.3 && klokke(ms - 2 * MIN_MS) <= tr.krav + 0.3 && tr.borte === borte;
       const forstyrret = tr.senketMs && ms - tr.senketMs < 90 * MIN_MS;      // timebudsjettet holdt rommet nede: ikke modellens feil
       // Klarer ikke ovnen spranget i dette været uansett, er det ikke en planleggingsfeil.
-      const behov = ute === null ? 0 : forvarmingMinutter(this.planmodell(sone.key), tr.krav, maal.krav, ute);
+      // Regnes med modellen uten straff: ellers kunne en lav faktor gjøre alt «umulig», og da
+      // ville den aldri blitt prøvd på nytt.
+      const raa = this.modeller.modell(sone.key);
+      const behov = ute === null ? 0 : forvarmingMinutter({ ...raa, r: raa.laert ? raa.rSikker : raa.r, k: raa.laert ? raa.kSikker : raa.k }, tr.krav, maal.krav, ute);
       const umulig = behov === null || behov > Number(i.forvarmingMaksTimer) * 60;
       if (forutsigbart && !forstyrret && !umulig) {
         const mangel = maal.krav - temp;
@@ -540,19 +554,33 @@ class Motor {
       // uten at vi har bedt om det.
       const sp = this.t.sp[s.key] || { onsket: null, onsketMs: 0, forrige: null, sett: null, settMs: 0 };
       this.t.sp[s.key] = sp;
+      if (Number.isFinite(m.settpunkt) && !this.synket.has(s.key)) {
+        // Første måling etter oppstart: tilstanden kan være minutter gammel (den lagres ikke
+        // hvert minutt), så det termostaten står på nå er utgangspunktet — ikke en justering.
+        this.synket.add(s.key);
+        sp.sett = m.settpunkt;
+        sp.settMs = ms;
+      }
       if (Number.isFinite(m.settpunkt) && m.settpunkt !== sp.sett) {
         const stabil = sp.sett !== null && ms - sp.settMs >= 3 * MIN_MS;
         const vaartSkifte = ms - sp.onsketMs < 3 * MIN_MS;
         // En termostat som bare tar hele grader melder 22 når vi ba om 21,5: det er ikke en
         // justering. Det er heller ikke en treg termostat som først nå melder det vi ba om sist.
         const slakk = Math.max(0.5, Number(m.steg) || 0.5);
-        const vaart = (verdi) => verdi !== null && verdi !== undefined && Math.abs(m.settpunkt - verdi) < slakk + (slakk > 0.5 ? 0.01 : 0);
-        const treg = vaart(sp.forrige) && ms - sp.onsketMs < 30 * MIN_MS;
+        // Det vi ba om klemmes til termostatens egne grenser før det skrives (en varmepumpe går ikke under 16 °C).
+        const klemt = (verdi) => Math.min(Number.isFinite(m.maks) ? m.maks : 35, Math.max(Number.isFinite(m.min) ? m.min : 5, verdi));
+        const vaart = (verdi) => verdi !== null && verdi !== undefined && Math.abs(m.settpunkt - klemt(verdi)) < slakk + (slakk > 0.5 ? 0.01 : 0);
+        // «Treg» gjelder bare til termostaten har bekreftet det vi sist ba om; etter det er en
+        // endring tilbake til en eldre verdi noe du har gjort.
+        const treg = !sp.bekreftet && vaart(sp.forrige) && ms - sp.onsketMs < 30 * MIN_MS;
+        if (vaart(sp.onsket)) sp.bekreftet = true;
         if (styrer && s.styrt !== false && m.levende && stabil && !vaartSkifte && sp.onsket !== null
           && Math.abs(m.settpunkt - sp.sett) >= 0.5 && !vaart(sp.onsket) && !treg) {
-          const kx0 = { ...kontekst };
-          const grunnkrav = kravVed(s, ms, { ...i, ...(kontekst.husinnst || {}) }, null, kx0).min;
-          hendelser.push(...this._manuellEndring(s, ms, m.settpunkt, grunnkrav));
+          const grunnkrav = kravVed(s, ms, { ...i, ...(kontekst.husinnst || {}) }, null, { ...kontekst }).min;
+          // Justeringen sier noe om hva du vil ha bare når appen ba om selve kravet. Under
+          // forvarming, senking eller lufting er den et svar på noe annet, og holdes uten å læres.
+          const baOmKravet = !kontekst.borte && Math.abs(sp.onsket - (grunnkrav + this.justering(s.key, ms))) < 0.3;
+          hendelser.push(...this._manuellEndring(s, ms, m.settpunkt, grunnkrav, baOmKravet));
         }
         sp.sett = m.settpunkt;
         sp.settMs = ms;
@@ -587,7 +615,7 @@ class Motor {
     // Det vi ber termostatene om, huskes — så en endring vi ikke har bedt om kan kjennes igjen.
     for (const p of plan) {
       const sp = this.t.sp[p.key];
-      if (sp && p.settpunkt !== sp.onsket) { sp.forrige = sp.onsket; sp.onsket = p.settpunkt; sp.onsketMs = ms; }
+      if (sp && p.settpunkt !== sp.onsket) { sp.forrige = sp.onsket; sp.onsket = p.settpunkt; sp.onsketMs = ms; sp.bekreftet = false; }
     }
     const styrtKw = plan.filter((p) => p.handling === 'normal').reduce((s, p) => s + p.effekt, 0);
     const forventetKw = prognose + styrtKw + reservertKw;

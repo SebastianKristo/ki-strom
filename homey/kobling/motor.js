@@ -68,6 +68,8 @@ class MotorKobling {
       let temp = MotorKobling.verdi(enheter, s.temp);
       if (temp === null && forste) temp = MotorKobling.verdi(enheter, { enhet: forste.id, kap: 'measure_temperature' });
       const settpunkt = forste ? MotorKobling.verdi(enheter, { enhet: forste.id, kap: 'target_temperature' }) : null;
+      const tt = forste && forste.capabilitiesObj && forste.capabilitiesObj.target_temperature;
+      const grenser = tt ? { min: Number.isFinite(Number(tt.min)) ? Number(tt.min) : 5, maks: Number.isFinite(Number(tt.max)) ? Number(tt.max) : 35 } : {};
       const steg = forste && forste.capabilitiesObj && forste.capabilitiesObj.target_temperature ? Number(forste.capabilitiesObj.target_temperature.step) || 0.5 : 0.5;
       const effekter = (s.effekt || []).map((k) => MotorKobling.verdi(enheter, k)).filter((v) => v !== null);
       // Vindu- og dørsensorer mot ute: åpen hvis minst én er det. Uten sensorer vet vi ikke (null).
@@ -77,7 +79,7 @@ class MotorKobling {
         return kap && e.available !== false && typeof kap.value === 'boolean' ? kap.value : null;
       }).filter((v) => v !== null);
       const aapen = kontakter.length ? kontakter.some(Boolean) : null;
-      ut[s.key] = { temp, settpunkt, effektW: effekter.length ? effekter.reduce((a, b) => a + b, 0) : null, levende, aapen, steg };
+      ut[s.key] = { temp, settpunkt, effektW: effekter.length ? effekter.reduce((a, b) => a + b, 0) : null, levende, aapen, steg, ...grenser };
     }
     return ut;
   }

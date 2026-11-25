@@ -38,7 +38,10 @@ Også i 0.4.4: månedens topper fra før appen begynte å måle kan legges inn u
 
 ### Kontrollert
 
-Homey-appen: 124 tester, blant dem læring mot et simulert hus med kjent fysikk og hele motoren i lukket sløyfe
+Homey-appen: 129 tester, blant dem læring mot et simulert hus med kjent fysikk og hele motoren i lukket sløyfe
 (panelovn og gulvvarme). `homey app validate --level publish`. Home Assistant: 233 tester.
+
+Styringslogikken er gjennomgått uavhengig; de fem feilene som ble funnet (blant dem at en omstart kunne tolke
+appens eget settpunkt som en justering fra deg) er rettet og dekket av egne tester.
 
 Ikke prøvd på en ekte Homey. Simuleringen viser at metoden virker; hvor mye den sparer i et virkelig hus er ikke målt.

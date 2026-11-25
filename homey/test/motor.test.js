@@ -411,3 +411,71 @@ test('en termostat som runder av eller melder sent, regnes ikke som en justering
   forlop(m2, kveld + 14 * 60000, 3, () => ({ maalinger: { stue: { settpunkt: 22 } }, laas: { stue: true } }));   // dagens, forsinket
   assert.deepEqual(m2.t.overstyringer, {});
 });
+
+// ----------------------------------------------------------------------
+//  Funn fra gjennomgangen
+// ----------------------------------------------------------------------
+test('omstart: det termostaten står på etter et strømbrudd, regnes ikke som en justering', () => {
+  const tilstand = {};
+  const m = new Motor(tilstand, { soner: [SONER[0]], skygge: false });
+  const start = oslo(2026, 11, 23, 12);
+  forlop(m, start, 10, () => ({}));
+  const lagret = JSON.parse(JSON.stringify(tilstand));          // sist lagret: termostaten sto på 22
+  // Etter lagringen åpnes et vindu og appen skriver 7. Så går strømmen, og den starter igjen seks minutter senere.
+  const m2 = new Motor(lagret, { soner: [SONER[0]], skygge: false });
+  m2.testSp = { stue: 7 };
+  const b = forlop(m2, start + 16 * 60000, 5, () => ({}));
+  assert.deepEqual(m2.t.overstyringer, {});
+  assert.deepEqual(m2.t.justering, {});
+  assert.equal(b.soner[0].settpunkt, 22);
+});
+
+test('justeringer under forvarming eller senking holdes, men læres ikke', () => {
+  const sone = { key: 'stue', navn: 'Stue', type: 'panel', prio: 3, nominell: 2, profil: 'fellesrom', dag: 22, natt: 19 };
+  const m = new Motor({}, { soner: [sone], skygge: false, korreksjonTimer: 1 });
+  for (const dag of [24, 25, 26]) {
+    // Kl. 05: appen forvarmer mot 22 (kravet er fortsatt 19). Du skrur ned til 21.
+    const start = oslo(2026, 11, dag, 5, 0);
+    forlop(m, start, 6, () => ({ maalinger: { stue: { temp: 19 } } }));
+    assert.equal(m.testSp.stue, 22);
+    forlop(m, start + 6 * 60000, 2, () => ({ maalinger: { stue: { temp: 19, settpunkt: 21 } }, laas: { stue: true } }));
+    assert.equal(m.t.overstyringer.stue.temp, 21);
+  }
+  assert.deepEqual(m.t.justering, {});
+});
+
+test('en lært justering læres bort igjen ved å stille tilbake til programmet', () => {
+  const m = new Motor({ justering: { stue: { dag: 2, natt: 0, logg: [] } } }, { soner: [SONER[0]], skygge: false, korreksjonTimer: 1 });
+  for (const [dag, time] of [[23, 12], [23, 18], [24, 12]]) {
+    const start = oslo(2026, 11, dag, time);
+    forlop(m, start, 6, () => ({}));
+    assert.equal(m.testSp.stue, 24);
+    forlop(m, start + 6 * 60000, 2, () => ({ maalinger: { stue: { settpunkt: 22 } }, laas: { stue: true } }));
+    forlop(m, start + 90 * 60000, 5, () => ({}));
+  }
+  assert.equal(m.t.justering.stue.dag, 0);
+  assert.equal(forlop(m, oslo(2026, 11, 25, 12), 3, () => ({})).soner[0].settpunkt, 22);
+});
+
+test('en lav treff-faktor blir ikke stående: den prøves på nytt i kulde og trappes ned over tid', () => {
+  const sone = { key: 'stue', navn: 'Stue', type: 'panel', prio: 3, nominell: 2, profil: 'fellesrom', dag: 22, natt: 19 };
+  const m = new Motor({ modeller: { rom: { stue: ferdigLaert({ r: 3.0, k: 0.07 }) } }, treff: { stue: { faktor: 0.7, krav: null, borte: false, varmFra: null, n: 4, sene: 4, laert: true } } }, { soner: [sone], skygge: false });
+  const kaldt = { uteMaalt: -8, vaer: flattVaer(oslo(2026, 11, 24, 0), -8) };
+  // Med straffen regnet inn «klarer ikke» ovnen 19 → 22 i −8. Det skal likevel telle når rommet er varmt i tide.
+  forlop(m, oslo(2026, 11, 24, 5, 58), 5, () => ({ ...kaldt, maalinger: { stue: { temp: 22 } } }));
+  assert.ok(m.t.treff.stue.faktor > 0.72, `etter en god morgen: ${m.t.treff.stue.faktor}`);
+  // Og uten at noe prøves, trappes den ned et lite steg per døgn
+  const foer = m.t.treff.stue.faktor;
+  forlop(m, oslo(2026, 11, 25, 12), 2, () => kaldt);
+  assert.ok(m.t.treff.stue.faktor > foer);
+});
+
+test('termostat med høyere minimum: det den klemmer til, er ikke en justering', () => {
+  const m = new Motor({}, { soner: [{ ...SONER[0], type: 'varmepumpe' }], skygge: false, vinduPauseMin: 3 });
+  const start = oslo(2026, 11, 23, 12);
+  forlop(m, start, 6, () => ({ maalinger: { stue: { min: 16, maks: 30 } } }));
+  // Vinduet åpnes: appen ber om 7, varmepumpa tar 16 — og melder det først fem minutter senere
+  forlop(m, start + 6 * 60000, 8, () => ({ maalinger: { stue: { aapen: true, settpunkt: 22, min: 16, maks: 30 } }, laas: { stue: true } }));
+  forlop(m, start + 14 * 60000, 3, () => ({ maalinger: { stue: { aapen: true, settpunkt: 16, min: 16, maks: 30 } }, laas: { stue: true } }));
+  assert.deepEqual(m.t.overstyringer, {});
+});
