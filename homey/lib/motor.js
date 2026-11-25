@@ -17,15 +17,20 @@
  */
 
 const kal = require('./kalender');
-const { Laering, forvarmingMinutter } = require('./termisk');
+const { forvarmingMinutter } = require('./termisk');
+const { Rommodeller, innsikt } = require('./rommodell');
 const { planlegg, settpunktNaa } = require('./varmeplan');
-const { kravVed } = require('./program');
+const { kravVed, erDag } = require('./program');
 const { Lastprofil } = require('./profil');
+const { solmot } = require('./sol');
 
 const TIME_MS = 3600000;
 const TREGE = new Set(['gulv', 'vannbaaren']);
 const BORTE_MARGIN = 1.3;
 const TYPER = ['panel', 'gulv', 'vannbaaren', 'varmepumpe'];
+const MIN_MS = 60000;
+const DOGN_MS = 86400000;
+const INGEN_SOL = { ost: 0, sor: 0, vest: 0 };
 
 const STANDARD = {
   aktiv: true,
@@ -44,6 +49,13 @@ const STANDARD = {
   shedGulvMaks: 3.0,            // største senking av tregt anlegg
   shedPanelMaks: 2.0,
   gradvisIntervallMin: 3,
+  kapasitetIPlan: true,         // varmeplanen unngår timer der huset pleier å bruke mye
+  solandel: 0.5,                // hvor mye av den varslede solvarmen planen tør å regne med
+  laerAvJusteringer: true,      // skrur du på termostaten selv, holdes det — og gjentatte justeringer læres
+  korreksjonTimer: 3,           // så lenge holdes en manuell endring på termostaten
+  vinduPauseMin: 3,             // åpent vindu så lenge: varmen pauses
+  vinduTemp: 7,                 // settpunktet mens det luftes (frostsikring)
+  vind: null,                   // {enhet, kap} — egen vindmåler; ellers brukes værvarselet
   soner: [],                    // [{key, navn, termostater, effekt, temp, type, prio, nominell, profil, dag, natt, aktiv, styrt}]
 };
 
@@ -68,11 +80,16 @@ class Motor {
    */
   constructor(tilstand, innstillinger) {
     this.t = tilstand;
-    this.t.laering = this.t.laering || {};
+    this.t.modeller = this.t.modeller || {};
     this.t.profil = this.t.profil || {};
+    this.t.treff = this.t.treff || {};             // key → {faktor, krav, borte, varmFra, n, sene}
+    this.t.justering = this.t.justering || {};     // key → {dag, natt, logg: [{ms, delta, periode}]}
+    this.t.sp = this.t.sp || {};                   // key → {onsket, onsketMs, sett, settMs}
+    this.t.aapent = this.t.aapent || {};           // key → ms da vinduet ble åpnet
     this.t.overstyringer = this.t.overstyringer || {};
     this.t.senket = this.t.senket || {};
-    this.laering = new Laering(this.t.laering);
+    // Det forrige læringssystemet (t.laering) er utgangspunkt for rom som alt var lært.
+    this.modeller = new Rommodeller(this.t.modeller, this.t.laering);
     this.profil = new Lastprofil(this.t.profil);
     this.settInnstillinger(innstillinger);
   }
@@ -102,6 +119,143 @@ class Motor {
     if (!o) return null;
     if (ms >= o.tilMs) { delete this.t.overstyringer[key]; return null; }
     return o;
+  }
+
+  // ------------------------------------------------------------------
+  //  Læring: modellen planen bruker, dine justeringer og treffsikkerheten
+  // ------------------------------------------------------------------
+  /**
+   * Modellen planleggeren bruker for et rom. Et lært rom planlegges med den forsiktige
+   * utgaven (litt svakere ovn, litt større tap), og med treff-faktoren: har rommet kommet
+   * for sent til et kjent tidspunkt, regnes ovnen som svakere til det treffer igjen.
+   */
+  planmodell(key) {
+    const m = this.modeller.modell(key);
+    const faktor = (this.t.treff[key] && this.t.treff[key].faktor) || 1;
+    return {
+      ...m,
+      r: Math.max(0.1, (m.laert ? m.rSikker : m.r) * faktor),
+      k: m.laert ? m.kSikker : m.k,
+      faktor,
+    };
+  }
+
+  /** Timens varmetap og gratisvarme for et rom: vinden øker tapet, sola gir varme (forsiktig regnet). */
+  vilkaar(modell, forhold) {
+    const f = forhold || {};
+    const sol = f.sol || INGEN_SOL;
+    const s = modell.sol || INGEN_SOL;
+    return {
+      k: Math.max(0.005, modell.k + (modell.kv || 0) * Math.max(0, f.vind || 0)),
+      gevinst: (modell.g || 0) + Number(this.i.solandel) * (s.ost * sol.ost + s.sor * sol.sor + s.vest * sol.vest),
+    };
+  }
+
+  /** Lært justering for rommet på tidspunktet (°C), fra dine egne endringer på termostaten. */
+  justering(key, ms) {
+    const j = this.t.justering[key];
+    if (!j || !this.i.laerAvJusteringer) return 0;
+    return Number(erDag(ms, this.i) ? j.dag : j.natt) || 0;
+  }
+
+  glemJusteringer(key = null) {
+    if (key) delete this.t.justering[key]; else this.t.justering = {};
+  }
+
+  glemLaering(key = null) {
+    this.modeller.glem(key);
+    if (key) delete this.t.treff[key]; else this.t.treff = {};
+  }
+
+  /** Kravet for rommet, med lært justering lagt til (ikke i bortemodus og ikke ved overstyring). */
+  krav(sone, ms, i, o, kx) {
+    const k = kravVed(sone, ms, i, o, kx);
+    if (k.fast) return k;
+    const borte = kx.borte && !(kx.hjemkomstMs !== null && kx.hjemkomstMs !== undefined && ms >= kx.hjemkomstMs);
+    const j = borte ? 0 : this.justering(sone.key, ms);
+    return j ? { ...k, min: k.min + j, grunn: `${k.grunn} (${j > 0 ? '+' : '−'}${Math.abs(j)} °C lært av dine justeringer)` } : k;
+  }
+
+  /**
+   * Du har skrudd på termostaten selv. Det holdes i noen timer, og huskes: tre like
+   * justeringer på to forskjellige dager blir en fast justering for dag eller natt.
+   * @returns {Array} hendelser
+   */
+  _manuellEndring(sone, ms, verdi, grunnkrav) {
+    const i = this.i;
+    const hendelser = [];
+    const timer = Number(i.korreksjonTimer) || 3;
+    this.overstyr(sone.key, verdi, timer * 60, ms);
+    hendelser.push({ type: 'manuell', rom: sone.key, tekst: `${sone.navn || sone.key}: du satte ${verdi} °C på termostaten. Det holdes i ${timer} timer.` });
+    if (!i.laerAvJusteringer) return hendelser;
+    const j = this.t.justering[sone.key] || { dag: 0, natt: 0, logg: [] };
+    const periode = erDag(ms, i) ? 'dag' : 'natt';
+    j.logg = j.logg.filter((x) => ms - x.ms < 14 * DOGN_MS).concat([{ ms, delta: Math.round((verdi - grunnkrav) * 2) / 2, periode }]).slice(-20);
+    const like = j.logg.filter((x) => x.periode === periode && Math.abs(x.delta) >= 0.5);
+    const opp = like.filter((x) => x.delta > 0);
+    const ned = like.filter((x) => x.delta < 0);
+    const gruppe = opp.length >= ned.length ? opp : ned;
+    const dager = new Set(gruppe.map((x) => kal.osloDato(x.ms)));
+    if (gruppe.length >= 3 && dager.size >= 2) {
+      const sortert = gruppe.map((x) => x.delta).sort((a, b) => a - b);
+      const median = sortert[Math.floor(sortert.length / 2)];
+      const ny = Math.min(2, Math.max(-2, median));
+      if (ny !== j[periode]) {
+        j[periode] = ny;
+        hendelser.push({ type: 'laert_justering', rom: sone.key, tekst: `${sone.navn || sone.key}: lærte at du vil ha det ${Math.abs(ny)} °C ${ny > 0 ? 'varmere' : 'kaldere'} om ${periode === 'dag' ? 'dagen' : 'natten'}.` });
+      }
+      j.logg = j.logg.filter((x) => x.periode !== periode);
+    }
+    this.t.justering[sone.key] = j;
+    return hendelser;
+  }
+
+  /**
+   * Treffsikkerheten: i det kravet stiger på et tidspunkt klokka kunne forutsi, sjekkes det
+   * om rommet var varmt. For sent → ovnen regnes som svakere neste gang. Varmt lenge før →
+   * den regnes som litt sterkere. Uforutsette sprang (noen kom hjem) teller ikke.
+   */
+  _treff(sone, ms, maal, temp, i, kx, senket, ute = null) {
+    const tr = this.t.treff[sone.key] || { faktor: 1, krav: null, borte: false, varmFra: null, n: 0, sene: 0 };
+    this.t.treff[sone.key] = tr;
+    let hendelse = null;
+    const borte = Boolean(kx.borte);
+    // Straff fra før rommet var lært gjelder gjetningene, ikke den lærte modellen.
+    if (maal.laert && !tr.laert && tr.faktor < 1) tr.faktor = 1;
+    tr.laert = Boolean(maal.laert);
+    if (senket) tr.senketMs = ms;
+    if (tr.krav !== null && maal.krav > tr.krav + 0.4 && temp !== null && !maal.overstyrt) {
+      const klokke = (t) => this.krav(sone, t, i, null, { ...kx, naaMs: t - 3 * TIME_MS }).min;
+      const forutsigbart = Math.abs(klokke(ms) - maal.krav) < 0.3 && klokke(ms - 2 * MIN_MS) <= tr.krav + 0.3 && tr.borte === borte;
+      const forstyrret = tr.senketMs && ms - tr.senketMs < 90 * MIN_MS;      // timebudsjettet holdt rommet nede: ikke modellens feil
+      // Klarer ikke ovnen spranget i dette været uansett, er det ikke en planleggingsfeil.
+      const behov = ute === null ? 0 : forvarmingMinutter(this.planmodell(sone.key), tr.krav, maal.krav, ute);
+      const umulig = behov === null || behov > Number(i.forvarmingMaksTimer) * 60;
+      if (forutsigbart && !forstyrret && !umulig) {
+        const mangel = maal.krav - temp;
+        tr.n += 1;
+        if (mangel > 0.7) {
+          tr.sene += 1;
+          tr.faktor = Math.round(Math.max(0.5, tr.faktor * (1 - Math.min(0.25, 0.08 * mangel))) * 1000) / 1000;
+          hendelse = { type: 'for_sent', rom: sone.key, tekst: `${sone.navn || sone.key} var ${mangel.toFixed(1)} °C for kaldt da kravet steg. Starter tidligere neste gang.` };
+        } else if (tr.varmFra && ms - tr.varmFra > 45 * MIN_MS) {
+          // Varmt lenge før tiden: ovnen er sterkere enn planen regner med.
+          tr.faktor = Math.round(Math.min(1.15, tr.faktor * 1.05) * 1000) / 1000;
+        } else if (tr.faktor < 1) {
+          // Traff: en tidligere straff trappes ned.
+          tr.faktor = Math.round(Math.min(1, tr.faktor * 1.05) * 1000) / 1000;
+        }
+      }
+    }
+    // Under forvarming: når nådde rommet målet?
+    if (maal.mal > maal.krav + 0.4 && temp !== null) {
+      if (temp >= maal.mal - 0.3) { if (!tr.varmFra) tr.varmFra = ms; } else tr.varmFra = null;
+    } else {
+      tr.varmFra = null;
+    }
+    tr.krav = maal.krav;
+    tr.borte = borte;
+    return hendelse;
   }
 
   // ------------------------------------------------------------------
@@ -142,17 +296,18 @@ class Motor {
    * Hva rommet skal ha nå: krav fra programmet, og mål fra varmeplanen når rommet er lært.
    * Returnerer {krav, mal, grunn, plan, modell}.
    */
-  maal(sone, ms, maaling, { kalk, spot, uteTimer, kontekst = {} }) {
+  maal(sone, ms, maaling, { kalk, spot, uteTimer, forhold = null, grenseKwh = null, andreKw = 0, kontekst = {} }) {
     const i = { ...this.i, ...(kontekst.husinnst || {}) };
     const o = this._overstyring(sone.key, ms);
-    const modell = this.laering.modell(sone.key);
+    const modell = this.planmodell(sone.key);
     // Bortetemperaturen for dette rommet, hvis huset er i bortemodus og motoren skal velge den.
     const kx = { ...kontekst, bortetemp: kontekst.borte && i.borteAutoTemp !== false ? this.bortetemp(sone, uteTimer) : null };
-    const krav = kravVed(sone, ms, i, o, kx);
+    const krav = this.krav(sone, ms, i, o, kx);
     const temp = maaling.temp;
-    const ut = { krav: krav.min, mal: krav.min, grunn: krav.grunn, plan: null, laert: modell.laert };
+    const ut = { krav: krav.min, mal: krav.min, grunn: krav.grunn, plan: null, laert: modell.laert, overstyrt: Boolean(krav.fast), kx };
     if (krav.fast || temp === null || temp === undefined) return ut;
-    const effektKw = Number(sone.nominell) || 1;
+    const effektKw = modell.pmaks || Number(sone.nominell) || 1;
+    const vilkaarVed = (h) => (forhold && forhold[h] ? this.vilkaar(modell, forhold[h]) : null);
 
     if (i.planAktiv && modell.laert && uteTimer && uteTimer.length) {
       const start = kal.timestart(ms);
@@ -161,8 +316,17 @@ class Motor {
       const timer = [];
       for (let h = 0; h < n; h++) {
         // Kravet gjelder ved timens slutt: da må rommet være varmt når kravet stiger.
-        const k = kravVed(sone, start + (h + 1) * TIME_MS, i, o, kx);
-        timer.push({ ute: uteTimer[h], pris: kalk ? kalk.marginalpris(start + h * TIME_MS, spot) : 1, min: k.min, maks: k.min + opp });
+        const k = this.krav(sone, start + (h + 1) * TIME_MS, i, o, kx);
+        const grunnpris = kalk ? kalk.marginalpris(start + h * TIME_MS, spot) : 1;
+        // Timer der huset pleier å bruke mye, er dyre på en annen måte: varmer rommet da, kan
+        // timen sprenge kapasitetstrinnet. Planen får et påslag, så den varmer før eller etter.
+        let paaslag = 0;
+        const last = h > 0 && i.kapasitetIPlan && grenseKwh !== null ? this.profil.time(start + h * TIME_MS) : null;
+        if (last) {
+          const mangler = effektKw + andreKw - (grenseKwh - last.kw - last.sigma);
+          if (mangler > 0) paaslag = Math.min(3, (1.5 * mangler) / Math.max(effektKw, 0.1));
+        }
+        timer.push({ ute: uteTimer[h], pris: grunnpris + paaslag, grunnpris, min: k.min, maks: k.min + opp, vilkaar: vilkaarVed(h) });
       }
       // Før kravet stiger må rommet få varme seg opp mot det nye nivået. Båndet åpnes så
       // mange timer i forveien som rommet trenger i det været — ikke hele natta.
@@ -170,13 +334,13 @@ class Motor {
       for (let h = 0; h < n; h++) {
         for (let j = h + 1; j < Math.min(n, h + 1 + maksFram); j++) {
           if (timer[j].min <= timer[h].min + 0.2) continue;
-          const behov = forvarmingMinutter(modell, timer[h].min, timer[j].min, timer[h].ute);
+          const behov = forvarmingMinutter(modell, timer[h].min, timer[j].min, timer[h].ute, timer[h].vilkaar);
           const timerBehov = behov === null ? maksFram : Math.ceil(behov / 60) + 1;
           if (j - h <= timerBehov) timer[h].maks = Math.max(timer[h].maks, timer[j].min + opp);
           break;
         }
       }
-      const plan = planlegg({ start: temp, modell, effektKw, timer });
+      const plan = planlegg({ start: temp, modell, effektKw, timer, ueff: modell.ueff });
       const settpunkt = settpunktNaa(plan);
       ut.plan = plan;
       // Planens første time gjelder til neste hele time. Kravet akkurat nå går alltid foran.
@@ -193,15 +357,20 @@ class Motor {
     // Ulært rom: programmet, med enkel forvarming mot neste gang kravet stiger.
     const maksMin = Number(i.forvarmingMaksTimer) * 60;
     for (let m = 15; m <= maksMin; m += 15) {
-      const neste = kravVed(sone, ms + m * 60000, i, o, kx);
+      const neste = this.krav(sone, ms + m * 60000, i, o, kx);
       if (neste.min > krav.min + 0.2) {
         const ute = uteTimer && uteTimer.length ? uteTimer[0] : 0;
-        let behov = forvarmingMinutter(modell, temp, neste.min, ute);
+        let behov = forvarmingMinutter(modell, temp, neste.min, ute, vilkaarVed(0));
         if (behov === null) behov = maksMin;
         if (TREGE.has(sone.type)) behov = Math.max(behov, 45);
         if (m <= behov + 10 && temp < neste.min - 0.2) {
           ut.mal = neste.min;
           ut.grunn = `Forvarming — trenger ca. ${Math.round(behov)} min for å nå ${neste.min} °C`;
+        } else if (TREGE.has(sone.type) && neste.min - 1.5 > krav.min) {
+          // Et tregt anlegg vi ikke kjenner ennå, senkes bare litt: hvor lang tid det bruker
+          // på å hente seg inn, vet vi først når rommet er lært.
+          ut.mal = neste.min - 1.5;
+          ut.grunn = `${krav.grunn} — senkes bare 1,5 °C til rommet er lært`;
         }
         break;
       }
@@ -218,7 +387,7 @@ class Motor {
    * og deler effektbudsjettet, så hvert rom får en margin (BORTE_MARGIN).
    */
   bortetemp(sone, uteTimer) {
-    const modell = this.laering.modell(sone.key);
+    const modell = this.planmodell(sone.key);
     if (!modell.laert || !uteTimer || !uteTimer.length) return null;
     const i = this.i;
     const ute = Math.min(...uteTimer);
@@ -238,7 +407,9 @@ class Motor {
   /** Fordel tillatt effekt på rommene etter prioritet. Returnerer {plan, ledig}. */
   fordel(laster, budsjett, prognoseKw, ms, reservertKw = 0) {
     const i = this.i;
-    let tilgjengelig = budsjett.tillatt_kw - prognoseKw - i.reserveUregulertKw - reservertKw;
+    // Reserven følger hvor godt forbruksprognosen pleier å treffe: uforutsigbart hus, større reserve.
+    const reserve = this.profil.reserve(Number(i.reserveUregulertKw));
+    let tilgjengelig = budsjett.tillatt_kw - prognoseKw - reserve - reservertKw;
     const romslig = tilgjengelig - laster.filter((l) => l.trenger).reduce((s, l) => s + l.effekt, 0) > 1.0;
     const intervall = Number(i.gradvisIntervallMin) * 60000;
     const forrige = this.t.senket;
@@ -248,7 +419,9 @@ class Motor {
     const rangert = [...laster].sort((a, b) => a.prio - b.prio || b.avvik - a.avvik);
     for (const last of rangert) {
       const p = { ...last };
-      if (!last.levende) {
+      if (last.lufter && last.levende && last.styrt) {
+        Object.assign(p, { handling: 'lufting', settpunkt: Number(i.vinduTemp) || 7, forklaring: 'Vindu eller dør står åpen — varmen pauses til det lukkes' });
+      } else if (!last.levende) {
         Object.assign(p, { handling: 'utilgjengelig', settpunkt: null, forklaring: 'Termostaten svarer ikke — rører den ikke' });
       } else if (!last.styrt) {
         Object.assign(p, { handling: 'manuell', settpunkt: null, forklaring: 'Rommet styres manuelt' });
@@ -303,7 +476,18 @@ class Motor {
     const soner = this.soner();
     const totalKw = Number.isFinite(inn.totalW) ? inn.totalW / 1000 : null;
     const ute = Number.isFinite(inn.uteMaalt) ? inn.uteMaalt : (vaer ? vaer.tempVed(ms) : null);
-    const uteTimer = vaer ? vaer.timer(ms, Number(i.planTimer) || 36, ute, ute ?? 0) : null;
+    const antallTimer = Number(i.planTimer) || 36;
+    const uteTimer = vaer ? vaer.timer(ms, antallTimer, ute, ute ?? 0) : null;
+    // Vind og sol: nå (til læringen) og time for time framover (til planen).
+    const sted = inn.sted || {};
+    const vindMaalt = Number.isFinite(inn.vindMaalt) ? inn.vindMaalt : null;
+    const vindNaa = vindMaalt ?? (vaer ? vaer.feltVed(ms, 'vind') : null) ?? 0;
+    const solNaa = solmot(ms, sted.lat, sted.lon, vaer ? vaer.feltVed(ms, 'sky') : null);
+    const start = kal.timestart(ms);
+    const forhold = vaer ? vaer.vindOgSky(ms, antallTimer, vindMaalt).map((f, h) => ({
+      vind: f.vind, sol: solmot(start + (h + 0.5) * TIME_MS, sted.lat, sted.lon, f.sky),
+    })) : null;
+    const hendelser = [];
 
     // Det motoren styrer, og resten
     let styrtW = 0;
@@ -322,30 +506,78 @@ class Motor {
     }
     const prognose = this.profil.prognose(ms, uregulertKw ?? 0.5, 15);
     const budsjett = this.budsjett(ms, kalk, inn.timeKwh, totalKw);
+    const styrer = Boolean(i.aktiv) && !i.skygge;
+    const nominellAlle = soner.reduce((sum, x) => sum + (Number(x.nominell) || 1), 0);
 
     const laster = [];
     let spart = 0;
     for (const s of soner) {
-      const m = { temp: null, settpunkt: null, effektW: null, levende: false, ...(inn.maalinger[s.key] || {}) };
-      // Læring: ovnen går (over 100 W) eller står (under 30 W). Uten effektmåling vet vi ikke.
-      const tilstand = !Number.isFinite(m.effektW) ? null : m.effektW > 100 ? 'varmer' : m.effektW < 30 ? 'av' : null;
-      if (ute !== null && m.temp !== null) this.laering.observer(s.key, { ms, temp: m.temp, ute, tilstand });
-      const maal = this.maal(s, ms, m, { kalk, spot, uteTimer, kontekst });
+      const m = { temp: null, settpunkt: null, effektW: null, levende: false, aapen: null, ...(inn.maalinger[s.key] || {}) };
+      const raa = this.modeller.modell(s.key);
+      const effektKw = raa.pmaks || Number(s.nominell) || 1;
+
+      // Åpent vindu eller dør mot ute: varmen pauses etter noen minutter.
+      if (m.aapen) { if (!this.t.aapent[s.key]) this.t.aapent[s.key] = ms; } else delete this.t.aapent[s.key];
+      const lufter = Boolean(this.t.aapent[s.key]) && ms - this.t.aapent[s.key] >= Number(i.vinduPauseMin) * MIN_MS;
+
+      // Læring. Pådraget kommer fra effektmålingen; uten den fra termostaten når den tydelig
+      // varmer eller tydelig står (nær settpunktet vet vi ikke, og lærer ingenting).
+      let u = null;
+      if (Number.isFinite(m.effektW)) u = Math.max(0, m.effektW) / 1000 / effektKw;
+      else if (Number.isFinite(m.settpunkt) && m.temp !== null) u = m.settpunkt - m.temp >= 0.6 ? 1 : m.settpunkt - m.temp <= -0.6 ? 0 : null;
+      if (ute !== null && m.temp !== null) {
+        const foer = raa.omlaeringer;
+        this.modeller.observer(s.key, { ms, temp: m.temp, ute, u, vind: vindNaa, sol: solNaa, aapen: Boolean(m.aapen), effektKw: Number.isFinite(m.effektW) ? m.effektW / 1000 : null });
+        if (this.modeller.modell(s.key).omlaeringer > foer) hendelser.push({ type: 'laerer_om', rom: s.key, tekst: `${s.navn || s.key}: modellen bommet mer enn den pleier og lærer rommet på nytt.` });
+      }
+
+      // Har du skrudd på termostaten selv? Verdien den melder har stått stille, og endrer seg
+      // uten at vi har bedt om det.
+      const sp = this.t.sp[s.key] || { onsket: null, onsketMs: 0, sett: null, settMs: 0 };
+      this.t.sp[s.key] = sp;
+      if (Number.isFinite(m.settpunkt) && m.settpunkt !== sp.sett) {
+        const stabil = sp.sett !== null && ms - sp.settMs >= 3 * MIN_MS;
+        const vaartSkifte = ms - sp.onsketMs < 3 * MIN_MS;
+        if (styrer && s.styrt !== false && m.levende && stabil && !vaartSkifte && sp.onsket !== null
+          && Math.abs(m.settpunkt - sp.sett) >= 0.5 && Math.abs(m.settpunkt - sp.onsket) >= 0.5) {
+          const kx0 = { ...kontekst };
+          const grunnkrav = kravVed(s, ms, { ...i, ...(kontekst.husinnst || {}) }, null, kx0).min;
+          hendelser.push(...this._manuellEndring(s, ms, m.settpunkt, grunnkrav));
+        }
+        sp.sett = m.settpunkt;
+        sp.settMs = ms;
+      }
+
+      const andreKw = 0.4 * (nominellAlle - (Number(s.nominell) || 1));
+      const maal = this.maal(s, ms, m, { kalk, spot, uteTimer, forhold, grenseKwh: budsjett.grense, andreKw, kontekst });
+      const treff = this._treff(s, ms, maal, m.temp, { ...i, ...(kontekst.husinnst || {}) }, maal.kx, Object.prototype.hasOwnProperty.call(this.t.senket, s.key), ute);
+      if (treff) hendelser.push(treff);
       if (maal.plan) spart += maal.plan.spart;
       const avvik = m.temp === null ? 0.3 : maal.mal - m.temp;
       const trenger = avvik > 0.2;
-      const effekt = !trenger ? 0 : (Number.isFinite(m.effektW) && m.effektW > 50 ? m.effektW / 1000 : (Number(s.nominell) || 1) * 0.5);
+      const trekker = !trenger ? 0 : (Number.isFinite(m.effektW) && m.effektW > 50 ? m.effektW / 1000 : effektKw * 0.5);
+      const effekt = lufter ? 0 : trekker;
+      const lm = this.modeller.modell(s.key);
+      const faktor = (this.t.treff[s.key] && this.t.treff[s.key].faktor) || 1;
       laster.push({
         key: s.key, navn: s.navn || s.key, type: s.type || 'panel', prio: Number(s.prio) || 3,
         levende: Boolean(m.levende), styrt: s.styrt !== false,
         temp: m.temp, settpunkt_naa: m.settpunkt, effekt_w: m.effektW,
         krav: maal.krav, mal: maal.mal, grunn: maal.grunn, laert: maal.laert,
-        avvik: rund(avvik), trenger, effekt: rund(effekt, 3),
+        avvik: rund(avvik), trenger: trenger && !lufter, effekt: rund(effekt, 3), lufter,
+        aapen: m.aapen === null ? null : Boolean(m.aapen),
+        justering: this.justering(s.key, ms),
+        modell: { ...innsikt(lm, effektKw), laert: lm.laert, vinduer: lm.n, treff_faktor: faktor, effekt_kw: rund(effektKw, 2), omlaeringer: lm.omlaeringer },
         plan: maal.plan ? maal.plan.timer.slice(0, 24).map((t) => ({ u: t.u, til: rund(t.til, 1), min: t.min, pris: rund(t.pris, 3) })) : null,
       });
     }
 
     const { plan, ledig } = this.fordel(laster, budsjett, prognose, ms, reservertKw);
+    // Det vi ber termostatene om, huskes — så en endring vi ikke har bedt om kan kjennes igjen.
+    for (const p of plan) {
+      const sp = this.t.sp[p.key];
+      if (sp && p.settpunkt !== sp.onsket) { sp.onsket = p.settpunkt; sp.onsketMs = ms; }
+    }
     const styrtKw = plan.filter((p) => p.handling === 'normal').reduce((s, p) => s + p.effekt, 0);
     const forventetKw = prognose + styrtKw + reservertKw;
     const farge = sonefarge(forventetKw, budsjett.tillatt_kw);
@@ -377,6 +609,11 @@ class Motor {
       vaervarsel: Boolean(vaer && vaer.punkter.length && !vaer.utdatert(ms)),
       plan_spart_kr: rund(spart),
       reservert_kw: rund(reservertKw),
+      reserve_kw: this.profil.reserve(Number(i.reserveUregulertKw)),
+      prognose_treff: this.profil.treffsikkerhet(),
+      vind: rund(vindNaa, 1),
+      sol: solNaa,
+      hendelser,
       soner: plan,
     };
   }
