@@ -36,9 +36,9 @@ const STANDARD = {
   intervallDager: 3,            // ønsket: metning minst så ofte
   maksDager: 7,                 // hard frist: da tvinges den
   terskelW: 150,
-  metningMinutter: 8,
+  metningMinutter: 12,          // så lenge må elementet ha stått uten å trekke strøm før releet slås av
   maksMinUtenEffekt: 10,
-  maksOppvarmingMin: 300,
+  maksOppvarmingMin: 720,       // øvre grense for hvor lang en oppvarming antas å være (til planleggingen)
   nominellKw: 2.0,
   borteSparing: true,
   klarForAnkomstTimer: 3,
@@ -52,7 +52,8 @@ class Bereder {
     this.m = tilstand;
     const m = this.m;
     for (const [k, v] of Object.entries({ siste_syklus: null, har_trukket: false, startet: null, tvungen: false, boost_til: null,
-      under_siden: null, var_aktiv: false, var_mettet: false, siste_bryter: null, allerede_varm: false, kritisk: false, billige: [],
+      under_siden: null, var_aktiv: false, var_mettet: false, siste_bryter: null, kritisk: false, billige: [],
+      syklus: false, uten_effekt: 0, logg: [],
       varigheter: [], morgen: null, legionella_varslet: false })) {
       if (m[k] === undefined) m[k] = v;
     }
@@ -169,15 +170,10 @@ class Bereder {
     return klar === false ? { type: 'ikke_klar', tekst: `Berederen ble ikke varm til kl. ${i.klarInnen}. ${tekst}` } : null;
   }
 
-  /** Elementet har trukket strøm siden påslag og termostaten har ikke koblet ut: la den varme ferdig. */
-  midtISyklus(ms, bryterPa) {
-    if (!bryterPa || this.m.var_mettet || !this.m.har_trukket || this.m.startet === null) return false;
-    return ms - this.m.startet < this.i.maksOppvarmingMin * 60000;
-  }
-
-  ingenRespons(ms, bryterPa, effektW) {
+  /** Releet står på, men elementet har ikke trukket strøm siden påslag (og vi har en måler som kunne sett det). */
+  utenEffekt(ms, bryterPa, effektW) {
     if (!bryterPa || this.m.har_trukket || this.m.startet === null || effektW === null) return false;
-    return (ms - this.m.startet) / 60000 > this.i.maksMinUtenEffekt;
+    return (ms - this.m.startet) / 60000 >= this.i.maksMinUtenEffekt;
   }
 
   /** De billigste timene (UTC-ms timestart) fra nå til fristen. Tom uten priser. */
@@ -212,20 +208,55 @@ class Bereder {
     return [true, 'huset står tomt — berederen hviler til noen kommer eller legionellafristen nærmer seg'];
   }
 
-  borVarme(ms, bryterPa, effektW, kontekst) {
+  /**
+   * Skal releet stå på nå? Returnerer {paa, grunn}.
+   *
+   * Hovedregelen: en oppvarming som er startet, avsluttes bare av berederens egen termostat.
+   * Pris, effekt og klokka bestemmer når den STARTER — aldri når den slutter. Releet slås av
+   * først når elementet har trukket strøm og deretter stått uten i `metningMinutter`, også
+   * om det er etter fristen. Slik er tanken alltid ferdig oppvarmet, og legionellasikringen
+   * er reell.
+   */
+  avgjor(ms, bryterPa, effektW, kontekst) {
     const i = this.i;
-    if (i.alltidPa) return true;
-    if (this.ingenRespons(ms, bryterPa, effektW)) return false;
-    if (this.forfalt(ms) || this.m.tvungen) return true;
-    if (this.boostAktiv(ms)) return !this.m.var_mettet;
-    if (!i.prisstyring) return bryterPa;
-    if (this.borteSparing(ms, kontekst)[0]) return false;
-    if (effektW === null) return this.iVindu(ms);          // uten effektmåling: følg vinduet, la termostaten styre
-    if (this.m.var_mettet) return false;
-    if (this.ferdigIVinduet(ms) && this.legionellaOk(ms)) return false;
-    if (this.maaRekke(ms, kontekst)) return true;          // fristen går foran pris og effekt
-    if (this.billigTimeNaa(ms, kontekst)) return this.m.var_aktiv ? true : !kontekst.trangt;
-    return false;
+    const m = this.m;
+    const tvang = this.forfalt(ms) || m.tvungen;
+    const boost = this.boostAktiv(ms);
+    if (i.alltidPa) return { paa: true, grunn: 'alltid på' };
+    if (!i.prisstyring && !tvang && !boost) return { paa: bryterPa, grunn: 'automatikken er av' };
+
+    // --- En oppvarming er i gang ---
+    if (bryterPa && m.syklus) {
+      if (m.var_mettet) return { paa: false, grunn: 'termostaten har koblet ut' };
+      // Har den først trukket strøm, står den til termostaten kobler ut — også om måleren faller ut en stund.
+      if (m.har_trukket) return { paa: true, grunn: m.var_aktiv ? 'varmer' : 'venter på at termostaten kobler ut' };
+      if (effektW === null) {
+        // Uten effektmåling vet vi ikke når den er ferdig: stå på ut vinduet og la termostaten styre.
+        const paa = this.iVindu(ms) || tvang || boost;
+        return { paa, grunn: paa ? 'ingen effektmåling — står på ut vinduet' : 'ingen effektmåling — vinduet er slutt' };
+      }
+      // Har ikke trukket strøm siden påslag: enten er vannet alt varmt, eller så ser ikke
+      // måleren elementet. Uansett skader det ikke å stå på — termostaten bestemmer.
+      const paa = this.iVindu(ms) || tvang || boost || !this.utenEffekt(ms, bryterPa, effektW);
+      return { paa, grunn: paa ? 'på, men trekker ikke strøm' : 'vinduet er slutt uten at den trakk strøm' };
+    }
+
+    // --- Skal en oppvarming starte? ---
+    if (tvang) return { paa: true, grunn: 'legionellasikring' };
+    if (boost) return { paa: true, grunn: 'boost' };
+    const [hviler, hvilegrunn] = this.borteSparing(ms, kontekst);
+    if (hviler) return { paa: false, grunn: hvilegrunn };
+    if (effektW === null) return { paa: this.iVindu(ms), grunn: this.iVindu(ms) ? 'i vinduet' : 'utenfor vinduet' };
+    if (this.ferdigIVinduet(ms) && this.legionellaOk(ms)) return { paa: false, grunn: 'ferdig for i natt' };
+    if (this.maaRekke(ms, kontekst)) return { paa: true, grunn: `må starte nå for å være ferdig til kl. ${i.klarInnen}` };
+    if (this.billigTimeNaa(ms, kontekst)) {
+      return kontekst.trangt ? { paa: false, grunn: 'i vinduet, men timen er trang — venter med å starte' } : { paa: true, grunn: i.folgSpotpris ? 'billig time' : 'i vinduet' };
+    }
+    return { paa: false, grunn: 'utenfor vinduet' };
+  }
+
+  borVarme(ms, bryterPa, effektW, kontekst) {
+    return this.avgjor(ms, bryterPa, effektW, kontekst).paa;
   }
 
   // ------------------------------------------------------------------
@@ -249,7 +280,9 @@ class Bereder {
     if (m.siste_syklus === null) m.siste_syklus = ms - DOGN_MS;
     if (bryter === null) return { paa: null, hendelser, bilde: this.bilde(ms, bryter, effektW, kontekst, 'Releet svarer ikke — rører det ikke') };
 
-    if (bryter && m.siste_bryter !== true) { m.har_trukket = false; m.startet = ms; }
+    // Releet er nettopp slått på (av oss, eller av noen andre): en oppvarming har begynt.
+    if (bryter && m.siste_bryter !== true) { m.har_trukket = false; m.startet = ms; m.syklus = true; m.under_siden = null; }
+    if (!bryter) m.syklus = false;
     m.siste_bryter = bryter;
 
     const aktiv = effektW !== null && effektW > i.terskelW;
@@ -267,6 +300,7 @@ class Bereder {
       m.siste_syklus = ms;
       m.tvungen = false;
       m.legionella_varslet = false;
+      m.uten_effekt = 0;
       if (min >= 10) m.varigheter = [...m.varigheter, min].slice(-5);
       if (this.boostAktiv(ms)) m.boost_til = ms;            // boosten har gjort jobben sin
       hendelser.push({ type: 'mettet', tekst: `Berederen er varm etter ${min} minutter. Legionellasikringen er bekreftet.` });
@@ -274,21 +308,10 @@ class Bereder {
     }
     m.var_mettet = Boolean(mettet);
 
-    // Bryter på, men ingen effekt: termostaten var alt utkoblet — vannet er varmt. Bare et
-    // helt døgn uten at elementet trekker strøm er en feil.
-    if (this.ingenRespons(ms, bryter, effektW)) {
-      const timer = (ms - m.startet) / TIME_MS;
-      if (timer >= 24) {
-        if (!m.kritisk) { m.kritisk = true; hendelser.push({ type: 'feil', tekst: 'Berederen har stått på i et døgn uten å trekke strøm. Sjekk sikring og element.' }); }
-      } else if (!m.allerede_varm) {
-        m.allerede_varm = true;
-        m.siste_syklus = ms;
-        m.tvungen = false;
-        if (this.boostAktiv(ms)) m.boost_til = ms;
-        hendelser.push({ type: 'allerede_varm', tekst: 'Berederen var alt varm (termostaten utkoblet ved påslag).' });
-      }
-    } else {
-      m.allerede_varm = false;
+    // Releet har stått på et helt døgn uten at elementet trekker strøm: da er noe galt.
+    if (this.utenEffekt(ms, bryter, effektW) && (ms - m.startet) / TIME_MS >= 24 && !m.kritisk) {
+      m.kritisk = true;
+      hendelser.push({ type: 'feil', tekst: 'Berederen har stått på i et døgn uten å trekke strøm. Sjekk sikring og element, og at releet måler berederens effekt.' });
     }
 
     if (this.forfalt(ms) && !mettet && !m.tvungen) {
@@ -308,11 +331,24 @@ class Bereder {
 
     if (!m.billige_ms || ms - m.billige_ms >= 15 * 60000) { m.billige = this.billigeTimer(ms, spot); m.billige_ms = ms; }
 
-    const bv = this.borVarme(ms, bryter, effektW, kontekst);
+    const valg = this.avgjor(ms, bryter, effektW, kontekst);
     const styrer = i.prisstyring || this.boostAktiv(ms) || m.tvungen || this.forfalt(ms);
     if (paa === null && styrer) {
-      if (bv && !bryter) paa = true;
-      else if (!bv && bryter && !m.var_aktiv && !this.midtISyklus(ms, bryter) && !this.forfalt(ms)) paa = false;
+      if (valg.paa && !bryter) paa = true;
+      else if (!valg.paa && bryter) {
+        paa = false;
+        // Sto på uten å trekke strøm: vi vet ikke om vannet var varmt. Det bekreftes ikke som
+        // varmt, og gjentar det seg, sier vi fra — da måler trolig ikke releet berederen.
+        if (m.syklus && !m.har_trukket && effektW !== null) {
+          m.uten_effekt += 1;
+          if (m.uten_effekt === 2) hendelser.push({ type: 'ingen_effekt', tekst: 'Berederen har stått på to netter uten at det er målt strømtrekk. Enten var vannet alt varmt, eller så måler ikke releet berederens effekt. Uten måling kan ikke appen bekrefte at vannet er varmt.' });
+        }
+      }
+    }
+    if (paa !== null) {
+      const grunn = mettet && !valg.paa ? `termostaten koblet ut etter ${m.startet ? Math.round((ms - m.startet) / 60000) : 0} min` : valg.grunn;
+      m.logg = m.logg.concat([{ ms, paa, grunn }]).slice(-12);
+      if (paa) m.syklus = true;
     }
     return { paa, hendelser, bilde: this.bilde(ms, bryter, effektW, kontekst) };
   }
@@ -337,13 +373,15 @@ class Bereder {
     let forklaring;
     if (feil) { status = 'Svarer ikke'; forklaring = feil; }
     else if (m.kritisk) { status = 'Feil'; forklaring = 'Har stått på uten å trekke strøm. Sjekk sikring og element.'; }
-    else if (m.var_aktiv) { status = 'Varmer'; forklaring = 'Varmer. Slår av av seg selv når termostaten kobler ut.'; }
+    else if (m.var_aktiv) { status = 'Varmer'; forklaring = 'Varmer. Slås ikke av før berederens egen termostat har koblet ut.'; }
+    else if (bryter && m.syklus && m.har_trukket && !m.var_mettet) { status = 'Venter på termostaten'; forklaring = `Elementet trekker ikke strøm. Slås av når det har vart i ${this.i.metningMinutter} minutter.`; }
     else if (m.var_mettet) { status = 'Varm'; forklaring = 'Termostaten har koblet ut — vannet er på settpunkt.'; }
     else if (this.forfalt(ms) || m.tvungen) { status = 'Tvungen kjøring'; forklaring = 'Legionellasikring: varmer uansett pris og effekt.'; }
     else if (this.boostAktiv(ms)) { status = 'Boost'; forklaring = 'Boost — varmer nå.'; }
     else if (!this.i.prisstyring) { status = 'Manuell'; forklaring = 'Automatikken er av. Berederen står som den står.'; }
     else if (hviler) { status = 'Hviler (borte)'; forklaring = `Bortemodus: ${hvilegrunn}.`; }
     else if (this.maaRekke(ms, kontekst || {})) { status = 'Må rekke fristen'; forklaring = `Varmer uansett pris og effekt for å være ferdig til kl. ${this.i.klarInnen}.`; }
+    else if (bryter && m.syklus && !m.har_trukket && effektW !== null && this.i.prisstyring && this.avgjor(ms, bryter, effektW, kontekst || {}).paa) { status = 'På, trekker ikke strøm'; forklaring = 'Står på, men elementet trekker ikke strøm: vannet er alt varmt, eller releet måler ikke berederens effekt.'; }
     else if (this.ferdigIVinduet(ms)) { status = 'Ferdig for i natt'; forklaring = `Neste vindu åpner kl. ${this.i.vinduStart}.`; }
     else if (this.iVindu(ms)) { status = 'Venter på start'; forklaring = kontekst && kontekst.trangt ? 'I vinduet, men timen er for trang akkurat nå.' : 'I vinduet, venter på start.'; }
     else { status = 'Venter på vinduet'; forklaring = `Vinduet åpner kl. ${this.i.vinduStart}.`; }
@@ -362,6 +400,7 @@ class Bereder {
       behov_min: this.behovMin(),
       boost_til: this.boostAktiv(ms) ? new Date(m.boost_til).toISOString() : null,
       billige_timer: m.billige.map((t) => osloDeler(t).time),
+      logg: m.logg.slice(-8).map((h) => ({ tid: new Date(h.ms).toISOString(), paa: h.paa, grunn: h.grunn })),
     };
   }
 

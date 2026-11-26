@@ -172,7 +172,12 @@ oppvarmingen i tide rom for rom. Etter tiden holdes dagtemperatur til noen komme
 «Vi blir borte lenger» hopper over den faste hjemkomsten.
 
 **Berederen** varmer i vinduet (standard 22–05) eller i de billigste timene, slår av når termostaten kobler ut,
-og hviler når huset står tomt. En påbegynt oppvarming avbrytes ikke.
+og hviler når huset står tomt.
+
+- **Varmer alltid ferdig.** Pris, effekt og klokka bestemmer når en oppvarming *starter* — aldri når den slutter.
+  Releet slås først av når elementet har trukket strøm og deretter stått uten i tolv minutter, altså når berederens
+  egen termostat har koblet ut. Det gjelder også etter fristen: kobler termostaten ut kl. 05:11, slås releet av
+  kl. 05:23. En trang time kan utsette starten, men aldri avbryte.
 
 - **Varmt til fristen.** Rekker ikke berederen å bli ferdig til «Ferdig innen» (standard kl. 05), varmer den uansett
   pris og effekt. Hvor lang tid den trenger, lærer appen av berederens egne oppvarminger (tre timer til den vet).
@@ -262,6 +267,7 @@ bortemodus. Svarer ikke Homey, blir entitetene utilgjengelige og kommer tilbake 
 | `homey app install` stopper med `✖ 400` | CLI-en gikk via skyadressen (`…homeypro.net`) i stedet for lokalt. Sett Mac/PC på samme nett som Homey, slå av VPN, eller koble til med USB‑C. Blokkerer ruteren oppslag av `…homey.homeylocal.com` (DNS rebind-beskyttelse), bytt DNS til f.eks. 1.1.1.1. |
 | `homey app publish` klager på `README.txt` | Filen skal ligge i `homey/`. Hent siste versjon av repoet. |
 | Kapasitetstrinnet er for lavt, eller toppene mangler | Appen kjenner bare forbruket fra den ble installert. Legg inn månedens tre høyeste topper fra nettselskapet under *Strøm*. Trinnet vises som «(usikkert)» til det er gjort eller en ny måned har startet. Den første målte toppen kommer når en hel klokketime er målt. |
+| Berederen står på hele natta uten å trekke strøm | Vannet var alt varmt, eller releet måler ikke berederens effekt (vanlig når berederen går via en kontaktor). Uten målt strømtrekk kan ikke appen bekrefte at vannet er varmt; etter to netter får du et varsel. Oversikten viser når releet ble slått av og på, og hvorfor. |
 | Ingenting styres | Skyggemodus står på, eller Energimotor-enheten er slått av. |
 | Et rom følger bare programmet | Rommet er ikke lært ennå; det tar vanligvis et døgn. Uten effektmåling (W) på ovnene går det saktere. Oversikten viser hvor langt den er kommet. |
 | Appen holder en temperatur du ikke har bedt om | Du (eller termostatens eget program) har endret settpunktet; det holdes i tre timer. Eller appen har lært en fast justering — se rommet under *Varme*, der kan den glemmes. |
