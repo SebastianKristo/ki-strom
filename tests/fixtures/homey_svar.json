@@ -176,7 +176,7 @@
     "levende": true,
     "styrt": true,
     "temp": 20.5,
-    "settpunkt_naa": 22,
+    "settpunkt_naa": 21.5,
     "effekt_w": 1500,
     "krav": 22,
     "mal": 22,
@@ -262,6 +262,23 @@
      17,
      18,
      19
+    ],
+    "logg": [
+     {
+      "tid": "2026-11-23T12:00:10.000Z",
+      "paa": false,
+      "grunn": "vinduet er slutt uten at den trakk strøm"
+     },
+     {
+      "tid": "2026-11-23T12:00:10.000Z",
+      "paa": false,
+      "grunn": "vinduet er slutt uten at den trakk strøm"
+     },
+     {
+      "tid": "2026-11-23T13:01:10.000Z",
+      "paa": true,
+      "grunn": "boost"
+     }
     ]
    },
    "hanklevarmer": null,
@@ -329,6 +346,23 @@
     17,
     18,
     19
+   ],
+   "logg": [
+    {
+     "tid": "2026-11-23T12:00:10.000Z",
+     "paa": false,
+     "grunn": "vinduet er slutt uten at den trakk strøm"
+    },
+    {
+     "tid": "2026-11-23T12:00:10.000Z",
+     "paa": false,
+     "grunn": "vinduet er slutt uten at den trakk strøm"
+    },
+    {
+     "tid": "2026-11-23T13:01:10.000Z",
+     "paa": true,
+     "grunn": "boost"
+    }
    ]
   },
   "hanklevarmer": null,
@@ -512,9 +546,9 @@
    "intervallDager": 3,
    "maksDager": 7,
    "terskelW": 150,
-   "metningMinutter": 8,
-   "maksMinUtenEffekt": 10,
-   "maksOppvarmingMin": 300,
+   "metningMinutter": 12,
+   "maksMinUtenEffekt": 0,
+   "maksOppvarmingMin": 720,
    "nominellKw": 2,
    "borteSparing": true,
    "klarForAnkomstTimer": 3,

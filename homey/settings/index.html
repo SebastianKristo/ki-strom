@@ -300,7 +300,7 @@
     </div>
     <div class="homey-form-group rad">
       <label class="homey-form-checkbox"><input class="homey-form-checkbox-input" type="checkbox" id="v_fristSjekk" /><span class="homey-form-checkbox-checkmark"></span><span class="homey-form-checkbox-text">Sørg for at vannet er varmt til «Ferdig innen»</span></label>
-      <p class="hjelp">Rekker ikke berederen å bli ferdig, varmer den uansett pris og effekt. Hver morgen sjekkes det at vannet ble varmt, og du får et varsel hvis ikke.</p>
+      <p class="hjelp">Rekker ikke berederen å bli ferdig, varmer den uansett pris og effekt. Hver morgen sjekkes det at vannet ble varmt, og du får et varsel hvis ikke. En oppvarming som er startet, avbrytes aldri: releet slås først av når berederens egen termostat har koblet ut, også om det er etter fristen.</p>
     </div>
     <div class="homey-form-group rad">
       <label class="homey-form-checkbox"><input class="homey-form-checkbox-input" type="checkbox" id="v_legionellaAktiv" /><span class="homey-form-checkbox-checkmark"></span><span class="homey-form-checkbox-text">Legionellasikring</span></label>
@@ -739,6 +739,7 @@
           linjer.push(`Bereder: ${h.bereder.status}. ${h.bereder.forklaring}`);
           linjer.push(`${h.bereder.klar_til_frist === false ? '⚠' : h.bereder.klar_til_frist ? '✓' : '·'} Varmt til kl. ${h.bereder.frist}: ${h.bereder.frist_tekst}`);
           linjer.push(`${h.bereder.legionella === 'sikret' ? '✓' : '⚠'} Legionella: ${h.bereder.legionella_tekst}`);
+          for (const x of (h.bereder.logg || []).slice(-6)) linjer.push(`   ${new Date(x.tid).toLocaleString('no', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}: slått ${x.paa ? 'på' : 'av'} — ${x.grunn}`);
         }
         if (h.hanklevarmer) linjer.push(`Håndklevarmer: ${h.hanklevarmer.paa ? 'på' : 'av'} (${h.hanklevarmer.grunn})`);
         if (h.lading) linjer.push(`Elbil: ${h.lading.forklaring}`);

@@ -13,7 +13,7 @@ const oslo = (...a) => kal.osloTilUtc(...a);
 /** En bereder med relé som gjør det styringen ber om. */
 function oppsett(start, innst = {}) {
   const s = { ms: start, bryter: false, effekt: 0, kall: [], hendelser: [], kontekst: {}, spot: new Spotpriser() };
-  s.b = new Bereder({ siste_syklus: start - 86400000 }, { bryter: { enhet: 'vvb', kap: 'onoff' }, effekt: { enhet: 'vvb', kap: 'measure_power' }, ...innst });
+  s.b = new Bereder({ siste_syklus: start - 86400000 }, { bryter: { enhet: 'vvb', kap: 'onoff' }, effekt: { enhet: 'vvb', kap: 'measure_power' }, metningMinutter: 8, ...innst });
   s.tick = () => {
     const r = s.b.tick({ ms: s.ms, bryter: s.bryter, effektW: s.effekt, spot: s.spot, kontekst: s.kontekst });
     if (r.paa !== null) { s.kall.push(r.paa ? 'paa' : 'av'); s.bryter = r.paa; }
@@ -57,11 +57,23 @@ test('slås ikke av midt i oppvarmingen selv om vinduet stenger og måleren glip
   assert.ok(s.b.dagerSiden(s.ms) < 0.01, 'metning etter vinduet skal bekrefte legionella');
 });
 
-test('utenfor vinduet uten oppvarming slås releet av', () => {
+test('utenfor vinduet uten strømtrekk slås releet av etter en stund', () => {
   const s = oppsett(oslo(2026, 11, 23, 12));
   s.bryter = true;
-  s.minutter(2);
+  s.minutter(5);
+  assert.equal(s.bryter, true, 'får først en sjanse til å vise at den varmer');
+  s.minutter(8);
   assert.equal(s.bryter, false);
+});
+
+test('noen slår den på midt på dagen: den får varme ferdig', () => {
+  const s = oppsett(oslo(2026, 11, 23, 12));
+  s.bryter = true; s.effekt = 2000;
+  s.minutter(90);
+  assert.deepEqual(s.kall, []);
+  s.effekt = 3; s.minutter(9);
+  assert.deepEqual(s.kall, ['av']);
+  assert.ok(s.hendelser.includes('mettet'));
 });
 
 test('tvungen syklus og boost går til vannet er varmt, og releet klikker ikke', () => {
@@ -147,14 +159,22 @@ test('trang time utsetter starten, men stopper ikke en oppvarming som går', () 
   assert.deepEqual(s.b.reservasjon(s.ms, true, 2000, s.kontekst), { kw: 2, maa: true });
 });
 
-test('allerede varm, dødt relé, manuell og alltid på', () => {
+test('på uten strømtrekk, dødt relé, manuell og alltid på', () => {
   const s = oppsett(oslo(2026, 11, 23, 22, 30));
   s.b.m.siste_syklus = s.ms - 5 * 86400000;
   s.tick();
-  s.minutter(12);                        // på, men trekker ingenting
-  assert.ok(s.hendelser.includes('allerede_varm'));
-  assert.ok(s.b.dagerSiden(s.ms) < 0.01);
-  assert.equal(s.bryter, false);
+  s.minutter(60);                        // på, men trekker ingenting: blir stående — termostaten bestemmer
+  assert.equal(s.bryter, true);
+  assert.equal(s.b.bilde(s.ms, true, 0, {}).status, 'På, trekker ikke strøm');
+  s.ms = oslo(2026, 11, 24, 5, 0); s.minutter(2);
+  assert.equal(s.bryter, false, 'slås av når vinduet er slutt');
+  // Uten målt strømtrekk er ingenting bekreftet: legionellatelleren står
+  assert.ok(s.b.dagerSiden(s.ms) > 5);
+  assert.ok(!s.hendelser.includes('mettet'));
+  // Gjentar det seg neste natt, sier vi fra: da måler trolig ikke releet berederen
+  s.ms = oslo(2026, 11, 24, 22, 30); s.minutter(30);
+  s.ms = oslo(2026, 11, 25, 5, 0); s.minutter(2);
+  assert.equal(s.hendelser.filter((h) => h === 'ingen_effekt').length, 1);
   // releet svarer ikke: ingenting røres
   const r = s.b.tick({ ms: s.ms, bryter: null, effektW: null, spot: s.spot, kontekst: {} });
   assert.equal(r.paa, null);
@@ -246,4 +266,50 @@ test('legionella: status og ett varsel når ønsket intervall er passert', () =>
   s.b.m.siste_syklus = s.ms - 8 * 86400000;
   assert.equal(s.minutter(1).bilde.legionella, 'forfalt');
   assert.ok(s.hendelser.includes('legionella'));
+});
+
+test('en oppvarming som er startet, avsluttes bare av berederens egen termostat', () => {
+  const s = oppsett(oslo(2026, 11, 23, 22, 0), { metningMinutter: 12 });
+  s.tick();
+  assert.equal(s.bryter, true);
+  // Berederen gjør selv timen trang, og effektmålingen fra releet henger noen minutter etter.
+  // Før førte det til av og på i ring; nå blir den stående.
+  s.kontekst = { trangt: true };
+  s.minutter(4);
+  assert.deepEqual(s.kall, ['paa']);
+  s.effekt = 2000;
+  s.minutter(120);
+  // Termostaten tar en kort pause, og måleren faller ut et øyeblikk: fortsatt på
+  s.effekt = 0; s.minutter(6);
+  s.effekt = null; s.minutter(3);
+  s.effekt = 2000;
+  // Vinduet stenger kl. 05 mens den fortsatt varmer
+  s.ms = oslo(2026, 11, 24, 5, 0); s.minutter(11);
+  assert.deepEqual(s.kall, ['paa']);
+  assert.equal(s.b.bilde(s.ms, true, 2000, s.kontekst).status, 'Varmer');
+  // Like etter kl. 05:11 kobler termostaten ut. Releet venter tolv minutter før det slår av.
+  s.effekt = 0;
+  s.minutter(11);
+  assert.deepEqual(s.kall, ['paa']);
+  assert.equal(s.b.bilde(s.ms, true, 0, s.kontekst).status, 'Venter på termostaten');
+  const r = s.minutter(2);
+  assert.deepEqual(s.kall, ['paa', 'av']);
+  assert.equal(kal.osloDeler(s.ms).minutt, 24);          // 05:24 — tolv minutter etter første måling uten strømtrekk
+  assert.equal(s.hendelser.filter((h) => h === 'mettet').length, 1);
+  // Loggen viser hva som skjedde og hvorfor
+  assert.deepEqual(r.bilde.logg.map((h) => [h.paa, h.grunn.replace(/\d+ min/, 'N min')]), [[true, 'i vinduet'], [false, 'termostaten koblet ut etter N min']]);
+  // Og den slår seg ikke på igjen etterpå
+  s.minutter(120);
+  assert.deepEqual(s.kall, ['paa', 'av']);
+});
+
+test('trang time utsetter bare starten', () => {
+  const s = oppsett(oslo(2026, 11, 23, 22, 0));
+  s.kontekst = { trangt: true };
+  s.minutter(20);
+  assert.deepEqual(s.kall, []);
+  assert.match(s.b.avgjor(s.ms, false, 0, s.kontekst).grunn, /venter med å starte/);
+  s.kontekst = {};
+  s.minutter(1);
+  assert.deepEqual(s.kall, ['paa']);
 });

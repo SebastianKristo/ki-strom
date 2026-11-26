@@ -254,7 +254,8 @@ test('appen starter, leser måleren, fyller enheten og svarer på API-et', async
     personer: [{ key: 'rune', navn: 'Rune', type: 'voksen', kilde: { type: 'variabel', id: 'v1' } },
       { key: 'sebastian', navn: 'Sebastian', type: 'ungdom', kilde: { type: 'bruker', id: 'u1' } }],
     borteAutoTimer: 1,
-    vvb: { bryter: { enhet: 'vvb', kap: 'onoff' }, effekt: { enhet: 'vvb', kap: 'measure_power' } },
+    // maksMinUtenEffekt 0: et relé som står på uten å trekke strøm utenfor vinduet slås av med en gang (ellers etter ti minutter)
+    vvb: { bryter: { enhet: 'vvb', kap: 'onoff' }, effekt: { enhet: 'vvb', kap: 'measure_power' }, maksMinUtenEffekt: 0 },
   } });
   assert.equal(app.hus.innstillinger().vvb.vinduStart, '22:00', 'uendrede bereder-innstillinger beholdes');
   // Skyggemodus står på: berederen vurderes, men releet røres ikke
