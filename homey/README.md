@@ -273,6 +273,7 @@ bortemodus. Svarer ikke Homey, blir entitetene utilgjengelige og kommer tilbake 
 | Ingenting styres | Skyggemodus står på, eller Energimotor-enheten er slått av. |
 | Et rom følger bare programmet | Rommet er ikke lært ennå; det tar vanligvis et døgn. Uten effektmåling (W) på ovnene går det saktere. Oversikten viser hvor langt den er kommet. |
 | Appen holder en temperatur du ikke har bedt om | Du (eller termostatens eget program) har endret settpunktet; det holdes i tre timer. Eller appen har lært en fast justering — se rommet under *Varme*, der kan den glemmes. |
+| Forbruket står på 0 kWh og toppene oppdateres ikke | Strømmåleren gir ikke verdier, eller feil kWh-register er valgt (velg importert energi, ikke eksport). «Strøm»-kortet på oversikten viser effekten nå, registerverdien, når den sist endret seg og hva appen regner fra. Står registeret stille i to timer mens huset bruker strøm, regner appen fra effekten i stedet og sier fra. |
 | Ingen priser | Sjekk at nettselskap er valgt, og at Homey har internett. |
 | Home Assistant sier «avvist» eller «ingen kontakt» | Sjekk IP-adressen og at API-nøkkelen er riktig. Koblingen er ikke prøvd mot en ekte Homey ennå — meld fra hvis den ikke virker. |
 

@@ -94,7 +94,7 @@
     <div class="homey-form-group rad">
       <label class="homey-form-label" for="energiKapabilitet">Energiregister (kWh)</label>
       <select class="homey-form-select" id="energiKapabilitet"></select>
-      <p class="hjelp">Målerens totale kWh-teller. Med den blir forbruket det samme som på fakturaen. Uten regnes det fra effekten, med 1–5 % avvik.</p>
+      <p class="hjelp">Velg registeret for <b>importert</b> energi — tallet som stiger hele tiden. Står det stille mens huset bruker strøm, regner appen fra effekten i stedet og sier fra på oversikten. Målerens totale kWh-teller. Med den blir forbruket det samme som på fakturaen. Uten regnes det fra effekten, med 1–5 % avvik.</p>
     </div>
   </fieldset>
 
@@ -445,6 +445,7 @@
         const linjer = [
           `${s.nettselskap} · ${s.prisomraade} · tariff ${s.nettleie.tariff}`,
           `Kapasitetstrinn: ${s.nettleie.kapasitetstrinn} (${s.nettleie.kapasitetsledd ?? '?'} kr/mnd), snitt ${s.nettleie.snitt_topp_kw} kW`,
+          ...(s.maaler ? [`Måler: ${s.maaler.effekt_w ?? '–'} W nå · register ${s.maaler.register_kwh ?? '–'} kWh${s.maaler.register_endret ? ` (sist endret ${new Date(s.maaler.register_endret).toLocaleTimeString('no', { hour: '2-digit', minute: '2-digit' })})` : ''} · regner fra ${s.maaler.kilde === 'register' ? 'registeret' : s.maaler.kilde === 'effekt' ? 'effekten' : 'ingenting — ingen verdier'}`] : []),
           `Topper: ${s.nettleie.topper.length ? s.nettleie.topper.map((x) => `${x.kw} kW${x.start ? ' (lagt inn)' : ''}`).join(' · ') : 'ingen ennå'}`,
           `Total strømpris nå: ${s.pris.total ?? '–'} kr/kWh`,
           `Denne måneden: ${s.maaned.kwh} kWh, ${s.maaned.kostnad_kr} kr`,
