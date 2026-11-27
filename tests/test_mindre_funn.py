@@ -86,7 +86,7 @@ def test_billige_timer_bruker_snittet_av_kvarterene(oslo):
     priser = KiVvb._timepriser(raa)
     assert priser[start] == pytest.approx(0.775)
     assert priser[start + timedelta(hours=1)] == pytest.approx(0.40)
-    assert min(priser, key=priser.get).hour == 3
+    assert dt_util.as_local(min(priser, key=priser.get)).hour == 3
 
 
 # ----------------------------------------------------------------------

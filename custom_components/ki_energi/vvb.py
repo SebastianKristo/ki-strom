@@ -46,6 +46,10 @@ class KiVvb:
         self._ekstern_varslet: datetime | None = None
         self.billige_timer: list[int] = []
         self.billige_sist: datetime | None = None
+        # Timestart i UTC. Lokale datetimer er ikke unike natta med to 02:00: Python ser bort fra
+        # `fold` både i == og hash, så de to timene ble slått sammen til én.
+        self._billige: set[datetime] = set()
+        self._pris: dict[datetime, float] = {}
         self._siste_bryter: str | None = None
 
     # ------------------------------------------------------------------
@@ -144,12 +148,21 @@ class KiVvb:
         s = self._dt("ki_vvb_oppvarming_startet")
         return s is not None and dt_util.now() - s < timedelta(minutes=h.num("ki_vvb_maks_oppvarming_min", 300))
 
+    @staticmethod
+    def _timestart(t: datetime) -> datetime:
+        """Starten på timen `t` ligger i, som UTC (se `_billige`)."""
+        return dt_util.as_local(t).replace(minute=0, second=0, microsecond=0).astimezone(dt_util.UTC)
+
     def billig_time_na(self) -> bool:
-        h = self.hub
-        # Uten priser (Nord Pool nede, `raw_today` tom) er lista tom. Da faller vi tilbake på
+        # Uten priser (Nord Pool nede, `raw_today` tom) er settet tomt. Da faller vi tilbake på
         # vinduet — ellers ville berederen stått kald til legionellafristen tvang den på.
-        if self.folger_spotpris() and self.billige_timer:
-            return dt_util.now().hour in self.billige_timer
+        if self.folger_spotpris() and self._billige:
+            time = self._timestart(dt_util.now())
+            if time in self._billige:
+                return True
+            # Timer uten pris (morgendagens priser kom aldri, et hull i dataene) kan ikke
+            # rangeres. Inne i vinduet gjelder vinduet, så natta ikke står uten oppvarming.
+            return time not in self._pris and self.i_vindu()
         return self.i_vindu()
 
     def folger_spotpris(self) -> bool:
@@ -511,33 +524,39 @@ class KiVvb:
             self._vi_slo_pa = None
             await h.kall("switch", "turn_off", {"entity_id": self.bryter()})
 
-    @staticmethod
-    def _timepriser(raa: list) -> dict[datetime, float]:
-        """Snittpris per time (lokal timestart). Nord Pool kan levere kvarterspriser (96 i
+    @classmethod
+    def _timepriser(cls, raa: list) -> dict[datetime, float]:
+        """Snittpris per time (timestart i UTC). Nord Pool kan levere kvarterspriser (96 i
         døgnet); før ble bare første kvarter i timen brukt, og billige timer ble valgt på ett
-        av fire tall. Natta med to 02:00 (vintertid) blir to timer, siden starten er tz-bevisst."""
+        av fire tall. Natta med to 02:00 (vintertid) blir to timer.
+
+        Kvarter uten pris (`value: None`) hoppes over. Før ble de 0 kr og dermed «billigst»."""
         samlet: dict[datetime, list[float]] = {}
         for p in raa:
             try:
+                v = p.get("value")
+                if v is None:
+                    continue
                 s = p.get("start")
                 if isinstance(s, str):
                     s = dt_util.parse_datetime(s)
-                s = dt_util.as_local(s).replace(minute=0, second=0, microsecond=0)
-                samlet.setdefault(s, []).append(float(p.get("value", 0) or 0))
+                samlet.setdefault(cls._timestart(s), []).append(float(v))
             except Exception:  # noqa: BLE001
                 continue
         return {t: sum(v) / len(v) for t, v in samlet.items()}
 
-    def _doegn(self, raa: list, naa: datetime) -> list[dict]:
+    def _doegn(self, naa: datetime) -> list[dict]:
         """24 timer fra nå: pris (hvis kjent), om timen er valgt som billig, og om den er i vinduet."""
-        pris = {(t.date(), t.hour): v for t, v in self._timepriser(raa).items()}
-        folg = self.folger_spotpris() and bool(self.billige_timer)
+        folg = self.folger_spotpris() and bool(self._billige)
+        start = self._timestart(naa)
         ut = []
         for i in range(24):
-            t = naa + timedelta(hours=i)
-            ut.append({"t": t.hour, "pris": pris.get((t.date(), t.hour)),
-                       "valgt": (t.hour in self.billige_timer) if folg else self.i_vindu(t.hour * 60),
-                       "vindu": self.i_vindu(t.hour * 60), "naa": i == 0})
+            t = start + timedelta(hours=i)
+            lokal = dt_util.as_local(t)
+            vindu = self.i_vindu(lokal.hour * 60)
+            ut.append({"t": lokal.hour, "pris": self._pris.get(t),
+                       "valgt": (t in self._billige or (vindu and t not in self._pris)) if folg else vindu,
+                       "vindu": vindu, "naa": i == 0})
         return ut
 
     def _beregn_billige_timer(self) -> None:
@@ -546,27 +565,30 @@ class KiVvb:
         n = int(h.num("vvb_billigste_timer_dogn", 6))
         if not nordpool:
             self.billige_timer = []
+            self._billige = set()
+            self._pris = {}
             metode = ("Norgespris er aktiv — energiprisen er lik hele døgnet, så spotpris trengs ikke. "
                       "Berederen følger vinduet (billigste nettleie)." if h.pa(h.cfg(CONF_NORGESPRIS_AKTIV))
                       else "Ingen spotprissensor valgt. Berederen følger vinduet, ikke enkelttimer.")
             h.sett_sensor("ki_vvb_billige_timer", n, {"timer": [], "metode": metode, "antall_kandidater": 0,
                                                         "norgespris": bool(h.pa(h.cfg(CONF_NORGESPRIS_AKTIV))), "har_priser": False,
-                                                        "doegn": self._doegn([], dt_util.now().replace(minute=0, second=0, microsecond=0))})
+                                                        "doegn": self._doegn(dt_util.now())})
             return
-        naa = dt_util.now().replace(minute=0, second=0, microsecond=0)
-        klar_min = h.tid_min("ki_vvb_klar_innen", "05:00")
-        klar = naa.replace(hour=klar_min // 60, minute=klar_min % 60)
-        if klar <= dt_util.now():
-            klar += timedelta(days=1)
+        naa = dt_util.now()
         rt = h.attr(nordpool, "raw_today", []) or []
         rm = h.attr(nordpool, "raw_tomorrow", []) or []
         timepriser = self._timepriser(list(rt) + list(rm))
-        kand = [(v, t.hour) for t, v in timepriser.items() if naa <= t < klar]
-        timer: list[int] = []
-        for _v, hr in sorted(kand):
-            if len(timer) < n and hr not in timer:
-                timer.append(hr)
-        self.billige_timer = sorted(timer)
+        self._pris = timepriser
+        klar_min = h.tid_min("ki_vvb_klar_innen", "05:00")
+        lokal = dt_util.as_local(naa)
+        klar = lokal.replace(hour=klar_min // 60, minute=klar_min % 60, second=0, microsecond=0)
+        if klar <= lokal:
+            klar += timedelta(days=1)
+        fra = self._timestart(naa)
+        kand = sorted((v, t) for t, v in timepriser.items() if fra <= t < klar)
+        valgt = {t for _v, t in kand[:n]}
+        self._billige = valgt
+        self.billige_timer = [dt_util.as_local(t).hour for t in sorted(valgt)]
         if not h.on("ki_vvb_folg_spotpris"):
             metode = "Ikke i bruk. Berederen følger vinduet, ikke enkelttimer."
         elif h.pa(h.cfg(CONF_NORGESPRIS_AKTIV)):
@@ -577,7 +599,7 @@ class KiVvb:
                                                     "antall_kandidater": len(timepriser),
                                                     "norgespris": bool(h.pa(h.cfg(CONF_NORGESPRIS_AKTIV))),
                                                     "har_priser": bool(rt or rm),
-                                                    "doegn": self._doegn(list(rt) + list(rm), naa)})
+                                                    "doegn": self._doegn(naa)})
 
     def status_tekst(self) -> str:
         h = self.hub
