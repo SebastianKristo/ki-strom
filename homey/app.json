@@ -1,7 +1,7 @@
 {
   "_comment": "Bygget av scripts/lag-app-json.js — ikke rediger for hånd.",
   "id": "no.kristo.kienergi",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "compatibility": ">=12.3.0",
   "sdk": 3,
   "platforms": [

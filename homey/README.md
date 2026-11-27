@@ -189,7 +189,9 @@ og hviler når huset står tomt.
 Sjekkene trenger et relé med effektmåling, og forutsetter at berederens termostat står på 65–70 °C. Uten
 effektmåling følger berederen bare vinduet, og morgensjekken sier at den ikke kan bekrefte.
 
-**Håndklevarmeren** står på i et morgen- og et kveldsvindu, og av når huset er tomt.
+**Håndklevarmeren** står på i et morgen- og et kveldsvindu, og av når huset er tomt. Den slås av og på ved skiftene —
+når et vindu åpner eller stenger, og når bortemodus slår inn eller ut. Slår du den av eller på selv i mellomtiden,
+får det stå til neste skifte.
 
 **Elbilladingen** gir bilen effekten varmen ikke bruker. Laderen trenger en av/på-bryter og en ladestrøm som kan
 settes i ampere; appen velger det høyeste trinnet som får plass i timen. Den går ned med en gang huset trenger

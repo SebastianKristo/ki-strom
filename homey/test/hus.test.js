@@ -227,6 +227,29 @@ test('håndklevarmeren følger vinduene og hviler når huset er tomt eller timen
   assert.equal(skalPaa(kl(20, 0), {}).paa, true);
   assert.equal(skalPaa(kl(12, 0), {}).paa, false);
   assert.equal(skalPaa(kl(6, 30), {}, { borte: true }).paa, false);
-  assert.equal(skalPaa(kl(6, 30), {}, { trangt: true }).paa, false);
+  assert.equal(skalPaa(kl(6, 30), {}, { trangt: true }).paa, true, 'timebudsjettet styrer ikke 100 W');
   assert.equal(skalPaa(kl(5, 30), { morgenStart: '05:00' }).paa, true);
+});
+
+test('håndklevarmeren settes ved skiftene, følges opp et kvarter, og det du gjør selv får stå', () => {
+  const { skriv } = require('../lib/hanklevarmer');
+  const MIN = 60000;
+  const t = {};
+  const kl6 = oslo(2026, 11, 23, 6, 0);
+  // Vinduet åpner: slås på. Releet svarer ikke med en gang — det prøves igjen.
+  assert.equal(skriv(t, kl6, true, false), true);
+  assert.equal(skriv(t, kl6 + 4 * MIN, true, false), true);
+  assert.equal(skriv(t, kl6 + 5 * MIN, true, true), null);
+  // Kl. 07 slår du den av selv: den får stå av
+  assert.equal(skriv(t, kl6 + 60 * MIN, true, false), null);
+  // Kl. 08 stenger vinduet: den er alt av, ingenting å gjøre
+  assert.equal(skriv(t, kl6 + 120 * MIN, false, false), null);
+  // Kl. 12 slår du den på selv: den får stå på til kveldsvinduet stenger
+  assert.equal(skriv(t, kl6 + 360 * MIN, false, true), null);
+  assert.equal(skriv(t, oslo(2026, 11, 23, 19, 0), true, true), null);
+  assert.equal(skriv(t, oslo(2026, 11, 23, 22, 0), false, true), false);
+  // Releet svarer ikke: ingenting skrives
+  assert.equal(skriv(t, oslo(2026, 11, 23, 22, 1), false, null), null);
+  // Første kjøring etter omstart: tilstanden settes
+  assert.equal(skriv({}, kl6, true, false), true);
 });
