@@ -160,8 +160,9 @@ test('appen starter, leser måleren, fyller enheten og svarer på API-et', async
 
   // Måleren går: 3 kWh på en time
   t.mock.timers.setTime(naa + 3600000 + 10000);
+  homey.maaler.capabilitiesObj.meter_power.value = 166685.27;
   homey.maaler.lyttere.meter_power(166685.27);
-  app._tick();
+  await app._tick();
   assert.equal(app.status().maaned.kwh, 3);
   // Første prøve kom på hel time, så timen 12–13 er en hel, målt time: flow-kortet utløses.
   assert.deepEqual(homey.utlost.filter(([id]) => id === 'time_lukket').map(([, tok]) => tok), [{ kwh: 3, ny_topp: true }]);
@@ -387,6 +388,44 @@ test('appen starter, leser måleren, fyller enheten og svarer på API-et', async
   assert.equal(homey.settings.get('tilstand').maaned, '2026-11');
   assert.ok(homey.settings.get('motor_tilstand').profil);
   assert.equal(homey.settings.get('hus_tilstand').hus.borte, false);
+});
+
+test('måleren leses også når den ikke melder selv, og et register som står stille erstattes av effekten', async (t) => {
+  const naa = kal.osloTilUtc(2026, 11, 26, 10, 0);
+  t.mock.timers.enable({ apis: ['Date'], now: naa });
+  t.mock.method(global, 'fetch', async () => ({ ok: false, json: async () => ({}) }));
+  const KiEnergiApp = require('../app');
+  const homey = lagHomey({ nettselskap: 'elvia', maalerEnhet: 'maaler1', effektKapabilitet: 'measure_power', energiKapabilitet: 'meter_power' });
+  const app = new KiEnergiApp();
+  app.homey = homey;
+  app.manifest = manifest;
+  homey.app = app;
+  await app.onInit();
+  const steg = async (minutter, hver) => {
+    for (let n = 0; n < minutter; n++) { t.mock.timers.setTime(Date.now() + 60000); if (hver) hver(); await app._tick(); }
+  };
+  // Lytteren kalles aldri (koblingen er falt ut), men verdiene på enheten endrer seg: 3 kW i en time
+  const m = homey.maaler.capabilitiesObj;
+  m.measure_power.value = 3000;
+  await steg(60, () => { m.meter_power.value += 0.05; });
+  assert.ok(Math.abs(app.status().maaned.kwh - 3) < 0.06, `lest hvert minutt: ${app.status().maaned.kwh}`);
+  assert.equal(app.status().maaler.kilde, 'register');
+  assert.equal(app.status().maaler.effekt_w, 3000);
+
+  // Så stopper registeret, mens huset fortsatt bruker 3 kW. Etter to timer regnes det fra effekten.
+  await steg(119);
+  assert.equal(app.status().maaler.kilde, 'register');
+  await steg(3);
+  assert.equal(app.status().maaler.kilde, 'effekt');
+  assert.ok(app.status().problemer.some((p) => p.includes('står stille')));
+  const foer = app.status().maaned.kwh;
+  await steg(60);
+  assert.ok(Math.abs(app.status().maaned.kwh - foer - 3) < 0.1, `fra effekten: ${app.status().maaned.kwh - foer}`);
+  // Registeret våkner: tilbake til det, uten hopp
+  await steg(30, () => { m.meter_power.value += 0.05; });
+  assert.equal(app.status().maaler.kilde, 'register');
+  assert.ok(app.status().maaned.kwh - foer < 5);
+  assert.ok(Math.max(...app.status().nettleie.topper.map((x) => x.kw)) < 3.5);
 });
 
 test('app.json er bygget fra tabellene', () => {

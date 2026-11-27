@@ -363,6 +363,9 @@ KNAPPER = [
     ("bereder_boost", "Varm opp berederen nå (60 min)", "/bereder", {"handling": "boost", "minutter": 60}, "mdi:water-boiler"),
     ("bereder_tving", "Full oppvarming av berederen", "/bereder", {"handling": "tving"}, "mdi:bacteria-outline"),
     ("forleng_borte", "Vi blir borte lenger", "/forleng", {}, "mdi:calendar-arrow-right"),
+    ("helg_bort", "Helg: vi drar bort", "/helg", {"svar": "bort"}, "mdi:car-side"),
+    ("helg_hjemme", "Helg: vi blir hjemme", "/helg", {"svar": "hjemme"}, "mdi:home-heart"),
+    ("ferie", "Ferie (uten hjemkomstdato)", "/ferie", {}, "mdi:beach"),
     ("fjern_overstyringer", "Fjern alle overstyringer", "/fjernoverstyring", {}, "mdi:restore"),
 ]
 

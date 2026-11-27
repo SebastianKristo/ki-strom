@@ -211,6 +211,18 @@ class Stromkalkulator {
     return this.tikk(ms);
   }
 
+  /**
+   * Forbruket hentes fra en annen kilde enn før (register ↔ effekt). De to har hver sin
+   * skala, så nullpunktet settes på nytt, og timen byttet skjer i får ingen topp.
+   */
+  byttKilde(ms) {
+    this.t.sist = null;
+    this.t.sist_effekt = null;
+    // Prøvene fra den gamle kilden kan ikke sammenlignes med de nye: de fjernes.
+    this.maler.m.prover = [];
+    this.maler.m.reset = ms / 1000;
+  }
+
   /** Klokka går uten ny måling: månedsskifte og timer som kan lukkes. Returnerer lukkede timer. */
   tikk(ms) {
     if (this.t.maaned === null) return [];

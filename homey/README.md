@@ -171,6 +171,20 @@ med flow-kortet «Vi kommer hjem kl. …». Fordi kravet stiger på et kjent tid
 oppvarmingen i tide rom for rom. Etter tiden holdes dagtemperatur til noen kommer.
 «Vi blir borte lenger» hopper over den faste hjemkomsten.
 
+**Varsler.** Appen sier fra i Homeys tidslinje (og som push hvis du har slått det på for appen):
+
+- **Helg:** torsdag kl. 17 spør den om dere skal bort i helgen. Svarer du «bort», senkes huset i det siste person
+  drar, uten å vente. Svarer du «hjemme», slås ikke bortemodus på av seg selv den helgen. Uten svar, og dere fortsatt
+  er hjemme, spør den én gang til fredag. Du svarer i innstillingene, med et flow-kort eller fra Home Assistant.
+- **Hjemkomst:** når oppvarmingen til hjemkomst starter, og når klokka er slagen — enten «huset er varmt og klart»
+  eller hvilke rom som ikke er helt varme ennå.
+- **Ferie:** kommer ingen til planlagt tid, eller står huset tomt i to døgn uten noen planlagt hjemkomst, regnes det
+  som ferie. Da hoppes den faste ukentlige oppvarmingen over til noen kommer hjem. Du kan også starte ferie selv, med
+  eller uten hjemkomstdato.
+
+Hvert varsel kan slås av under *Hjemme og borte → Varsler*. Flow-kortet «KI Energi har et varsel» gir samme tekst,
+så du kan sende den som push til en bestemt person eller lese den opp på en høyttaler.
+
 **Berederen** varmer i vinduet (standard 22–05) eller i de billigste timene, slår av når termostaten kobler ut,
 og hviler når huset står tomt.
 
@@ -223,9 +237,9 @@ Tallsensorene logges i Homey Insights.
 
 | | Kort |
 | --- | --- |
-| **Når** | Kapasitetsvarsel · kapasitetstrinnet endret seg · en time er ferdig · tariffen skiftet · strømprisen endret seg · energimotorens status endret seg · et rom ble senket · bortemodus ble slått av eller på · noen kom hjem · berederen er varm · berederen ble ikke varm til fristen |
+| **Når** | Kapasitetsvarsel · kapasitetstrinnet endret seg · en time er ferdig · tariffen skiftet · strømprisen endret seg · energimotorens status endret seg · et rom ble senket · bortemodus ble slått av eller på · noen kom hjem · KI Energi har et varsel · KI Energi spør om dere skal bort i helgen · berederen er varm · berederen ble ikke varm til fristen |
 | **Og** | Tariffen er dagtariff · Norgespris er aktiv · kapasitetsvarsel er på · totalprisen er over … · energimotorens status er … · bortemodus er på · alle er borte |
-| **Så** | Overstyr temperaturen i et rom · fjern overstyringen · slå skyggemodus eller bortemodus av eller på · «vi kommer hjem kl. …» · «vi blir borte lenger» · varm opp berederen nå · kjør en full oppvarming av berederen · slå automatisk elbillading av eller på |
+| **Så** | Overstyr temperaturen i et rom · fjern overstyringen · slå skyggemodus eller bortemodus av eller på · «vi kommer hjem kl. …» · «vi blir borte lenger» · svar på helgespørsmålet · ferie til dato · ferie uten dato · varm opp berederen nå · kjør en full oppvarming av berederen · slå automatisk elbillading av eller på |
 
 ## Home Assistant
 
@@ -261,6 +275,7 @@ bortemodus. Svarer ikke Homey, blir entitetene utilgjengelige og kommer tilbake 
 | GET / PUT | `/husinnstillinger` | Personer, bortemodus, bereder og håndklevarmer |
 | GET | `/personkilder`, `/brytere`, `/alleenheter` | Til oppsettet |
 | POST | `/bortemodus`, `/hjemkomst`, `/forleng`, `/bereder` | `{paa}` / `{tid}` / – / `{handling, minutter}` |
+| POST | `/helg`, `/ferie` | `{svar: "bort" eller "hjemme"}` / `{til}` (tidspunkt, eller tomt) |
 
 ## Feilsøking
 
@@ -273,6 +288,7 @@ bortemodus. Svarer ikke Homey, blir entitetene utilgjengelige og kommer tilbake 
 | Ingenting styres | Skyggemodus står på, eller Energimotor-enheten er slått av. |
 | Et rom følger bare programmet | Rommet er ikke lært ennå; det tar vanligvis et døgn. Uten effektmåling (W) på ovnene går det saktere. Oversikten viser hvor langt den er kommet. |
 | Appen holder en temperatur du ikke har bedt om | Du (eller termostatens eget program) har endret settpunktet; det holdes i tre timer. Eller appen har lært en fast justering — se rommet under *Varme*, der kan den glemmes. |
+| Forbruket står på 0 kWh og toppene oppdateres ikke | Strømmåleren gir ikke verdier, eller feil kWh-register er valgt (velg importert energi, ikke eksport). «Strøm»-kortet på oversikten viser effekten nå, registerverdien, når den sist endret seg og hva appen regner fra. Står registeret stille i to timer mens huset bruker strøm, regner appen fra effekten i stedet og sier fra. |
 | Ingen priser | Sjekk at nettselskap er valgt, og at Homey har internett. |
 | Home Assistant sier «avvist» eller «ingen kontakt» | Sjekk IP-adressen og at API-nøkkelen er riktig. Koblingen er ikke prøvd mot en ekte Homey ennå — meld fra hvis den ikke virker. |
 

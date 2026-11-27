@@ -81,7 +81,13 @@
   "merknader": [
    "kapasitetstrinnet bygger bare på målinger fra 23.11. — legg inn månedens topper fra nettselskapet under Strøm"
   ],
-  "effekt_w": 2400
+  "effekt_w": 2400,
+  "maaler": {
+   "kilde": "register",
+   "effekt_w": 2400,
+   "register_kwh": 166685.27,
+   "register_endret": "2026-11-23T12:00:10.000Z"
+  }
  },
  "motor": {
   "tid": "2026-11-23T13:01:10.000Z",
@@ -218,6 +224,8 @@
    "modus": "Hjemme",
    "borte": false,
    "alle_borte": false,
+   "ferie": false,
+   "helg": null,
    "borte_siden": null,
    "hjemkomst": null,
    "personer": [
@@ -302,6 +310,8 @@
   "modus": "Hjemme",
   "borte": false,
   "alle_borte": false,
+  "ferie": false,
+  "helg": null,
   "borte_siden": null,
   "hjemkomst": null,
   "personer": [
@@ -527,6 +537,7 @@
   "hjemkomstUkedag": 6,
   "hjemkomstTid": "13:00",
   "vanerStyrer": false,
+  "varsler": {},
   "vvb": {
    "bryter": {
     "enhet": "vvb",

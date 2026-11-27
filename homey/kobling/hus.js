@@ -102,7 +102,13 @@ class HusKobling {
    */
   async tick(naa, enheter, motorstatus) {
     const innst = this.innstillinger();
-    const hendelser = this.hus.tick(naa, await this.tilstede(enheter), this.vaner);
+    // Det motoren sist regnet ut sier om oppvarmingen til hjemkomst er i gang, og om rommene er varme.
+    const rom = (this.app.motor.bilde && this.app.motor.bilde.soner) || [];
+    const varme = {
+      forvarmer: rom.some((p) => p.settpunkt !== null && p.mal > p.krav + 0.4 || /Hjemkomst/.test(p.grunn || '')),
+      kalde: rom.filter((p) => p.temp !== null && p.krav !== null && p.temp < p.krav - 0.7).map((p) => ({ navn: p.navn, temp: p.temp, krav: p.krav })),
+    };
+    const hendelser = this.hus.tick(naa, await this.tilstede(enheter), this.vaner, varme);
     const kontekst = this.hus.kontekst(naa, this.vaner);
     kontekst.trangt = motorstatus === 'rod' || motorstatus === 'kritisk';
     kontekst.norgespris = Boolean(this.app.bilde && this.app.bilde.pris && this.app.bilde.pris.norgespris_aktiv);
@@ -239,7 +245,14 @@ class HusKobling {
     const u = this.app.utloser;
     for (const h of hendelser) {
       this.app.log(h.tekst);
-      if (VARSLES.has(h.type)) this.homey.notifications.createNotification({ excerpt: `KI Energi: ${h.tekst}` }).catch(() => {});
+      // Varsler som kan slås av i innstillingene bærer valget med seg (`varsle`); resten følger lista.
+      const varsle = h.varsle === undefined ? VARSLES.has(h.type) : Boolean(h.varsle);
+      if (varsle) {
+        this.homey.notifications.createNotification({ excerpt: `KI Energi: ${h.tekst}` }).catch(() => {});
+        // Samme varsel som flow-kort, så det kan sendes videre: push til en bestemt person, høyttaler, lys.
+        u.varsel.trigger({ type: h.type, tekst: h.tekst }).catch(this.app.error);
+      }
+      if (h.type === 'helg_sporsmaal') u.helg_sporsmaal.trigger({ tekst: h.tekst }).catch(this.app.error);
       if (h.type === 'borte_paa') u.bortemodus_endret.trigger({ borte: true }).catch(this.app.error);
       if (h.type === 'kom_hjem') { u.noen_kom_hjem.trigger({}).catch(this.app.error); u.bortemodus_endret.trigger({ borte: false }).catch(this.app.error); }
       if (h.type === 'mettet') u.bereder_varm.trigger({}).catch(this.app.error);
@@ -266,6 +279,24 @@ class HusKobling {
   }
 
   forleng() { this.hus.forleng(Date.now()); this.lagre(); }
+
+  /** Svar på helgespørsmålet: 'bort' eller 'hjemme'. Bekreftelsen sendes som varsel. */
+  svarHelg(svar) {
+    const tekst = this.hus.svarHelg(svar, Date.now());
+    this.homey.notifications.createNotification({ excerpt: `KI Energi: ${tekst}` }).catch(() => {});
+    this.lagre();
+    return tekst;
+  }
+
+  /** Ferie til et tidspunkt (ms eller ISO-tekst), eller uten sluttdato. */
+  settFerie(til) {
+    const ms = til === null || til === undefined || til === '' ? null : (Number.isFinite(Number(til)) ? Number(til) : Date.parse(til));
+    const var_ = this.hus.t.borte;
+    this.hus.settFerie(Number.isFinite(ms) ? ms : null, Date.now());
+    if (!var_) this.app.utloser.bortemodus_endret.trigger({ borte: true }).catch(this.app.error);
+    this.lagre();
+    return this.hus.t.hjemkomst ? new Date(this.hus.t.hjemkomst).toISOString() : null;
+  }
 
   berederHandling(handling, minutter) {
     if (handling === 'boost') this.bereder.boost(Date.now(), Number(minutter) || 60);

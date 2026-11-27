@@ -4,6 +4,8 @@ const Homey = require('homey');
 const tariffer = require('./lib/tariffer.json');
 const { Stromkalkulator, STANDARD_INNSTILLINGER } = require('./lib/stromkalkulator');
 const { Spotpriser, hentManglende } = require('./lib/spotpris');
+const { velgKilde, rangerRegister } = require('./lib/maalerkilde');
+const { osloTilUtc } = require('./lib/kalender');
 const { MotorKobling } = require('./kobling/motor');
 const { HusKobling } = require('./kobling/hus');
 
@@ -26,7 +28,8 @@ module.exports = class KiEnergiApp extends Homey.App {
     this.spot = new Spotpriser(this.homey.settings.get('spot') || []);
     this.tilstand = this.homey.settings.get('tilstand') || {};
     this.kalkulator = new Stromkalkulator(this.tilstand, this.innstillinger(), tariffer);
-    this.siste = { effekt: null, energi: null, energiMs: null };
+    this.siste = { effekt: null, energi: null, energiMs: null, energiEndretMs: null };
+    this.kilde = null;          // 'register' | 'effekt' | 'ingen'
     this.forrige = {};          // forrige verdier, for å oppdage endringer til flow-kortene
     this.instanser = [];
     this.bilde = null;
@@ -49,7 +52,7 @@ module.exports = class KiEnergiApp extends Homey.App {
 
     await this._hentSpot().catch((e) => this.error('Spotpris:', e.message));
     await this._kobleMaaler().catch((e) => this.error('Kunne ikke koble til måleren:', e.message));
-    this._tick();
+    await this._tick();
     this.log('KI Energi er startet');
   }
 
@@ -84,7 +87,9 @@ module.exports = class KiEnergiApp extends Homey.App {
       if (!kap.length || (e.driverId || '').includes(this.manifest.id)) continue;
       ut.push({
         id: e.id, navn: e.name, sone: (soner[e.zone] && soner[e.zone].name) || '',
-        kapabiliteter: kap.map((k) => ({ id: k, verdi: e.capabilitiesObj && e.capabilitiesObj[k] ? e.capabilitiesObj[k].value : null })),
+        // Registrene sorteres så importert energi kommer først: det er det som skal velges.
+        kapabiliteter: kap.map((k) => ({ id: k, verdi: e.capabilitiesObj && e.capabilitiesObj[k] ? e.capabilitiesObj[k].value : null }))
+          .sort((a, b) => (a.id.startsWith('meter_power') && b.id.startsWith('meter_power') ? rangerRegister(a.id) - rangerRegister(b.id) : 0)),
       });
     }
     return ut.sort((a, b) => a.navn.localeCompare(b.navn, 'no'));
@@ -93,7 +98,7 @@ module.exports = class KiEnergiApp extends Homey.App {
   async _kobleMaaler() {
     for (const i of this.instanser) i.destroy();
     this.instanser = [];
-    this.siste = { effekt: null, energi: null, energiMs: null };
+    this.siste = { effekt: null, energi: null, energiMs: null, energiEndretMs: null };
     const innst = this.innstillinger();
     if (!innst.maalerEnhet) return;
     const api = await this.api();
@@ -113,9 +118,39 @@ module.exports = class KiEnergiApp extends Homey.App {
   _energi(kwh) {
     if (!Number.isFinite(kwh)) return;
     const naa = Date.now();
+    if (kwh !== this.siste.energi) this.siste.energiEndretMs = naa;
     this.siste.energi = kwh;
     this.siste.energiMs = naa;
-    this._timerLukket(this.kalkulator.energi(naa, kwh, this.spot));
+    // Mens registeret ikke er til å stole på, regnes det fra effekten (se _tickKalkulator).
+    if (this.kilde !== 'effekt') this._timerLukket(this.kalkulator.energi(naa, kwh, this.spot));
+  }
+
+  /**
+   * Les måleren direkte. Verdiene kommer vanligvis av seg selv når de endrer seg, men en
+   * kobling som har falt ut skal ikke få stanse regnskapet: hvert minutt hentes de også.
+   */
+  async _lesMaaler() {
+    const innst = this.innstillinger();
+    if (!innst.maalerEnhet) return;
+    const api = await this.api();
+    const enhet = await api.devices.getDevice({ id: innst.maalerEnhet });
+    const les = (kapabilitet) => {
+      const k = kapabilitet && enhet && enhet.capabilitiesObj && enhet.capabilitiesObj[kapabilitet];
+      const v = k ? Number(k.value) : NaN;
+      return k && k.value !== null && k.value !== undefined && Number.isFinite(v) ? v : null;
+    };
+    const w = les(innst.effektKapabilitet);
+    if (w !== null) this.siste.effekt = w;
+    const kwh = les(innst.energiKapabilitet);
+    if (kwh === null || kwh === this.siste.energi) { this.lavereLest = 0; return; }
+    // En lest verdi som er LAVERE enn den vi har, er som regel bare eldre enn det lytteren alt
+    // har levert. Den tas først på alvor (målerbytte) når den har stått slik i ti minutter.
+    if (this.siste.energi !== null && kwh < this.siste.energi) {
+      this.lavereLest = (this.lavereLest || 0) + 1;
+      if (this.lavereLest < 10) return;
+    }
+    this.lavereLest = 0;
+    this._energi(kwh);
   }
 
   // ------------------------------------------------------------------
@@ -132,8 +167,9 @@ module.exports = class KiEnergiApp extends Homey.App {
   // ------------------------------------------------------------------
   //  Hovedløkke
   // ------------------------------------------------------------------
-  _tick() {
+  async _tick() {
     try {
+      await this._lesMaaler().catch((e) => this.error('Kunne ikke lese måleren:', e.message));
       const naa = this._tickKalkulator();
       this._motorTick(naa).catch((e) => this.error('Motoren feilet:', e));
     } catch (e) {
@@ -146,15 +182,31 @@ module.exports = class KiEnergiApp extends Homey.App {
     {
       const naa = Date.now();
       const innst = this.innstillinger();
-      if (innst.energiKapabilitet) {
-        // Registeret mates fra lytteren når det endrer seg. Her går klokka: timer og måned lukkes,
-        // og et register som står stille får en kontrollprøve i ny og ne.
-        this._timerLukket(this.siste.energi === null ? this.kalkulator.tikk(naa) : this.kalkulator.energi(naa, this.siste.energi, this.spot));
-      } else if (!innst.energiKapabilitet && this.siste.effekt !== null) {
+      const valg = velgKilde({ harRegister: Boolean(innst.energiKapabilitet), energi: this.siste.energi, energiEndretMs: this.siste.energiEndretMs, effekt: this.siste.effekt, naa });
+      if (this.kilde && this.kilde !== 'ingen' && valg.kilde !== 'ingen' && valg.kilde !== this.kilde) {
+        this.kalkulator.byttKilde(naa);
+        this.log(`Forbruket regnes nå fra ${valg.kilde === 'register' ? 'kWh-registeret' : 'effekten'}`);
+      }
+      this.kilde = valg.kilde;
+      if (valg.kilde === 'register') {
+        // Registeret mates også fra lytteren når det endrer seg. Her går klokka: timer og måned
+        // lukkes, og et register som står stille får en kontrollprøve i ny og ne.
+        this._timerLukket(this.kalkulator.energi(naa, this.siste.energi, this.spot));
+      } else if (valg.kilde === 'effekt') {
         this._timerLukket(this.kalkulator.effekt(naa, this.siste.effekt, this.spot));
+      } else {
+        this._timerLukket(this.kalkulator.tikk(naa));
       }
       this.bilde = this.kalkulator.snapshot(naa, this.spot);
       this.bilde.effekt_w = this.siste.effekt;
+      this.bilde.maaler = {
+        kilde: valg.kilde,
+        effekt_w: this.siste.effekt,
+        register_kwh: this.siste.energi,
+        register_endret: this.siste.energiEndretMs ? new Date(this.siste.energiEndretMs).toISOString() : null,
+      };
+      if (valg.stille) this.bilde.problemer.push('kWh-registeret står stille mens huset bruker strøm — regner fra effekten. Sjekk hvilket register som er valgt under Strøm');
+      if (valg.kilde === 'ingen' && innst.maalerEnhet) this.bilde.problemer.push('strømmåleren gir ingen verdier — sjekk at den er tilgjengelig i Homey');
       this._flowVedEndring(this.bilde);
       for (const enhet of this.homey.drivers.getDriver('stromkalkulator').getDevices()) {
         enhet.oppdater(this.bilde).catch((e) => this.error('Enhet:', e.message));
@@ -241,6 +293,8 @@ module.exports = class KiEnergiApp extends Homey.App {
       rom_senket: kort('rom_senket'),
       bortemodus_endret: kort('bortemodus_endret'),
       noen_kom_hjem: kort('noen_kom_hjem'),
+      varsel: kort('varsel'),
+      helg_sporsmaal: kort('helg_sporsmaal'),
       bereder_varm: kort('bereder_varm'),
       bereder_ikke_klar: kort('bereder_ikke_klar'),
     };
@@ -248,6 +302,15 @@ module.exports = class KiEnergiApp extends Homey.App {
     handling('sett_bortemodus', (args) => this.hus.settBorte(args.modus === 'paa'));
     handling('sett_hjemkomst', (args) => this.hus.settHjemkomst(args.tid));
     handling('forleng_borte', () => this.hus.forleng());
+    handling('svar_helg', (args) => this.hus.svarHelg(args.svar));
+    handling('sett_ferie', (args) => {
+      // Homey gir datoen som «dd-mm-åååå» og klokka som «tt:mm»
+      const [dag, mnd, aar] = String(args.dato || '').split('-').map(Number);
+      const [time, minutt] = String(args.tid || '13:00').split(':').map(Number);
+      const til = Number.isFinite(aar) ? osloTilUtc(aar, mnd, dag, time || 0, minutt || 0) : null;
+      this.hus.settFerie(til);
+    });
+    handling('ferie_uten_dato', () => this.hus.settFerie(null));
     handling('bereder_boost', (args) => this.hus.berederHandling('boost', args.minutter));
     handling('bereder_tving', () => this.hus.berederHandling('tving'));
     handling('sett_ladeautomatikk', (args) => { this.hus.settInnstillinger({ lading: { automatikk: args.modus === 'paa' } }); });

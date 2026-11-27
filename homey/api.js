@@ -123,6 +123,20 @@ module.exports = {
     return svar;
   },
 
+  /** body: { svar } — 'bort' eller 'hjemme' */
+  async helg({ homey, body }) {
+    const svar = { tekst: homey.app.hus.svarHelg(body && body.svar) };
+    await homey.app.regnNaa();
+    return svar;
+  },
+
+  /** body: { til } — tidspunkt (ISO eller ms) huset skal være varmt igjen, eller tomt for ferie uten sluttdato */
+  async ferie({ homey, body }) {
+    const svar = { hjemkomst: homey.app.hus.settFerie(body && body.til) };
+    await homey.app.regnNaa();
+    return svar;
+  },
+
   async forleng({ homey }) {
     homey.app.hus.forleng();
     const svar = { ok: true };
