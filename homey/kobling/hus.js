@@ -20,7 +20,7 @@ class HusKobling {
     this.app = app;
     this.homey = app.homey;
     this.tilstand = this.homey.settings.get('hus_tilstand') || {};
-    for (const k of ['hus', 'vvb', 'vaner', 'lading', 'lys']) this.tilstand[k] = this.tilstand[k] || {};
+    for (const k of ['hus', 'vvb', 'vaner', 'lading', 'lys', 'hanklevarmer']) this.tilstand[k] = this.tilstand[k] || {};
     const innst = this.innstillinger();
     this.hus = new Hus(this.tilstand.hus, innst);
     this.bereder = new Bereder(this.tilstand.vvb, innst.vvb);
@@ -131,8 +131,12 @@ class HusKobling {
     if (h.styr && h.bryter && h.bryter.enhet) {
       const onske = hk.skalPaa(naa, h, kontekst);
       const raa = HusKobling.verdi(enheter, h.bryter);
-      if (raa !== null && Boolean(raa) !== onske.paa) await this._bryter(enheter, h.bryter, onske.paa, 'hanklevarmer', naa);
-      hanklebilde = { paa: onske.paa, grunn: onske.grunn };
+      const erPaa = raa === null ? null : Boolean(raa);
+      // Settes ved skiftene, ikke fortløpende: det du selv slår av eller på, står til neste skifte.
+      const skal = hk.skriv(this.tilstand.hanklevarmer, naa, onske.paa, erPaa);
+      if (skal !== null) await this._bryter(enheter, h.bryter, skal, 'hanklevarmer', naa);
+      const manuelt = erPaa !== null && erPaa !== onske.paa && skal === null;
+      hanklebilde = { paa: erPaa ?? onske.paa, onsket: onske.paa, grunn: manuelt ? `Slått ${erPaa ? 'på' : 'av'} for hånd — står til neste skifte (${onske.grunn.toLowerCase()})` : onske.grunn };
     }
 
     // --- Elbil: det bilen trekker er styrt last, ikke husets øvrige forbruk ---
