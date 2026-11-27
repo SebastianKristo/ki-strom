@@ -104,6 +104,8 @@ const app = {
     bortemodus: { method: 'POST', path: '/bortemodus' },
     hjemkomst: { method: 'POST', path: '/hjemkomst' },
     forleng: { method: 'POST', path: '/forleng' },
+    helg: { method: 'POST', path: '/helg' },
+    ferie: { method: 'POST', path: '/ferie' },
     bereder: { method: 'POST', path: '/bereder' },
     alleEnheter: { method: 'GET', path: '/alleenheter' },
   },
@@ -190,6 +192,21 @@ const app = {
         tokens: [{ name: 'borte', type: 'boolean', title: { no: 'Bortemodus er på', en: 'Away mode is on' } }],
       },
       { id: 'noen_kom_hjem', title: { no: 'Noen kom hjem til tomt hus', en: 'Someone came home to an empty house' } },
+      {
+        id: 'varsel',
+        title: { no: 'KI Energi har et varsel', en: 'KI Energi has a notification' },
+        hint: { no: 'Utløses for hvert varsel appen sender: helg, ferie, hjemkomst, bereder og bortemodus. Bruk teksten til å sende push til en bestemt person eller lese den opp.', en: 'Fires for every notification the app sends. Use the text to send a push message or read it aloud.' },
+        tokens: [
+          { name: 'tekst', type: 'string', title: { no: 'Tekst', en: 'Text' }, example: 'Oppvarmingen til hjemkomst søndag kl. 13:00 har startet.' },
+          { name: 'type', type: 'string', title: { no: 'Type', en: 'Type' }, example: 'forvarmer' },
+        ],
+      },
+      {
+        id: 'helg_sporsmaal',
+        title: { no: 'KI Energi spør om dere skal bort i helgen', en: 'KI Energi asks whether you are going away this weekend' },
+        hint: { no: 'Svar med handlingskortet «Svar på helgespørsmålet».', en: 'Answer with the action card.' },
+        tokens: [{ name: 'tekst', type: 'string', title: { no: 'Spørsmål', en: 'Question' }, example: 'Skal dere bort i helgen?' }],
+      },
       { id: 'bereder_varm', title: { no: 'Varmtvannsberederen er varm', en: 'The water heater is hot' } },
       {
         id: 'bereder_ikke_klar',
@@ -250,6 +267,19 @@ const app = {
         args: [{ name: 'tid', type: 'time', placeholder: { no: '17:00', en: '17:00' } }],
       },
       { id: 'forleng_borte', title: { no: 'Vi blir borte lenger (hopp over fast hjemkomst)', en: 'We are staying away longer' } },
+      {
+        id: 'svar_helg',
+        title: { no: 'Svar på helgespørsmålet', en: 'Answer the weekend question' },
+        titleFormatted: { no: 'I helgen: [[svar]]', en: 'This weekend: [[svar]]' },
+        args: [{ name: 'svar', type: 'dropdown', values: [{ id: 'bort', label: { no: 'vi drar bort', en: 'we are going away' } }, { id: 'hjemme', label: { no: 'vi blir hjemme', en: 'we are staying home' } }] }],
+      },
+      {
+        id: 'sett_ferie',
+        title: { no: 'Vi drar på ferie og kommer hjem …', en: 'We are going on holiday and return …' },
+        titleFormatted: { no: 'Ferie til [[dato]] kl. [[tid]]', en: 'Holiday until [[dato]] at [[tid]]' },
+        args: [{ name: 'dato', type: 'date', placeholder: { no: '24-12-2026', en: '24-12-2026' } }, { name: 'tid', type: 'time', placeholder: { no: '13:00', en: '13:00' } }],
+      },
+      { id: 'ferie_uten_dato', title: { no: 'Vi drar på ferie (uten hjemkomstdato)', en: 'We are going on holiday (no return date)' } },
       {
         id: 'bereder_boost',
         title: { no: 'Varm opp berederen nå', en: 'Boost the water heater' },

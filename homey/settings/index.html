@@ -277,6 +277,38 @@
     <div id="forslag" class="hjelp" style="white-space: pre-line; margin-top: 10px;"></div>
   </fieldset>
 
+  <fieldset class="homey-form-fieldset">
+    <legend class="homey-form-legend">Varsler</legend>
+    <p class="hjelp">Varslene kommer i Homeys tidslinje og som push hvis du har slått det på for appen. Flow-kortet «KI Energi har et varsel» gir samme tekst, så du kan sende den videre til en bestemt person eller en høyttaler.</p>
+    <div class="homey-form-group rad">
+      <label class="homey-form-checkbox"><input class="homey-form-checkbox-input" type="checkbox" id="n_helg" /><span class="homey-form-checkbox-checkmark"></span><span class="homey-form-checkbox-text">Spør før helgen om vi skal bort</span></label>
+      <p class="hjelp">Svarer du «bort», senkes huset i det siste person drar. Svarer du «hjemme», slås ikke bortemodus på av seg selv den helgen. Uten svar, og dere fortsatt er hjemme, spør den én gang til dagen etter.</p>
+    </div>
+    <div class="rutenett">
+      <div><label for="n_helgDag">Spør på</label><select class="homey-form-select" id="n_helgDag">
+        <option value="0">Mandag</option><option value="1">Tirsdag</option><option value="2">Onsdag</option><option value="3">Torsdag</option><option value="4">Fredag</option><option value="5">Lørdag</option><option value="6">Søndag</option></select></div>
+      <div><label for="n_helgTid">Klokka</label><input class="homey-form-input" id="n_helgTid" type="time" /></div>
+    </div>
+    <div class="homey-form-group rad" style="margin-top:12px">
+      <label class="homey-form-checkbox"><input class="homey-form-checkbox-input" type="checkbox" id="n_hjemkomst" /><span class="homey-form-checkbox-checkmark"></span><span class="homey-form-checkbox-text">Si fra når oppvarmingen til hjemkomst starter, og når huset er varmt</span></label>
+    </div>
+    <div class="homey-form-group rad">
+      <label class="homey-form-checkbox"><input class="homey-form-checkbox-input" type="checkbox" id="n_ferie" /><span class="homey-form-checkbox-checkmark"></span><span class="homey-form-checkbox-text">Si fra når huset regnes som på ferie</span></label>
+      <p class="hjelp">Kommer ingen til planlagt tid, eller står huset tomt lenge uten noen planlagt hjemkomst, regnes det som ferie: den faste ukentlige oppvarmingen hoppes over til noen kommer hjem.</p>
+    </div>
+  </fieldset>
+
+  <fieldset class="homey-form-fieldset">
+    <legend class="homey-form-legend">Akkurat nå</legend>
+    <p class="hjelp" id="helgstatus"></p>
+    <div class="rutenett">
+      <button class="homey-button-secondary-small" data-helg="bort">Helg: vi drar bort</button>
+      <button class="homey-button-secondary-small" data-helg="hjemme">Helg: vi blir hjemme</button>
+      <div><label for="f_til">Ferie — hjemme igjen</label><input class="homey-form-input" id="f_til" type="datetime-local" /></div>
+      <div><label>&nbsp;</label><button class="homey-button-secondary-small" id="f_start">Start ferie</button></div>
+    </div>
+  </fieldset>
+
     <button id="lagreHus" class="homey-button-primary-full">Lagre</button>
   </section>
 
@@ -599,6 +631,8 @@
     const V_TALL = ['billigsteTimer', 'nominellKw', 'intervallDager', 'maksDager'];
     const V_TEKST = ['vinduStart', 'klarInnen'];
     const K_TEKST = ['morgenStart', 'morgenSlutt', 'kveldStart', 'kveldSlutt'];
+    const N_KRYSS = ['helg', 'hjemkomst', 'ferie'];
+    const N_STANDARD = { helg: true, hjemkomst: true, ferie: true, helgDag: 3, helgTid: '17:00' };
     const PERSONTYPER = [['voksen', 'Voksen'], ['ungdom', 'Ungdom'], ['barn', 'Barn']];
     const PERSONTIDER = {
       barn: [['dag', 'Står opp', '05:30'], ['natt', 'Legger seg', '19:00'], ['borteFra', 'Borte fra', '08:00'], ['borteTil', 'Hjemme igjen', '15:00']],
@@ -747,6 +781,7 @@
         for (const r of Object.values(h.lys || {})) linjer.push(`Lys ${r.navn}: ${r.tekst}`);
         el('husstatus').textContent = linjer.join('\n');
         el('forslag').textContent = (h.forslag || []).map((f) => `Forslag: ${f.tekst}`).join('\n');
+        el('helgstatus').textContent = `Modus: ${h.modus}. ` + (h.helg ? (h.helg.svar === 'bort' ? 'Helgen: dere drar bort — huset senkes når alle har dratt.' : h.helg.svar === 'hjemme' ? 'Helgen: dere blir hjemme.' : 'Helgespørsmålet er sendt og venter på svar.') : 'Ingen svar om helgen denne uka.');
       });
     }
 
@@ -762,6 +797,10 @@
         for (const k of V_TALL.concat(V_TEKST)) el(`v_${k}`).value = v[k] ?? '';
         const k2 = h.hanklevarmer || {};
         for (const k of K_TEKST) el(`k_${k}`).value = k2[k] ?? '';
+        const n = { ...N_STANDARD, ...(h.varsler || {}) };
+        for (const k of N_KRYSS) el(`n_${k}`).checked = Boolean(n[k]);
+        el('n_helgDag').value = String(n.helgDag);
+        el('n_helgTid').value = n.helgTid;
         personer = h.personer || [];
         tilstand.personer = personer.length; visSjekkliste();
         startLadingOgLys(Homey, h);
@@ -773,6 +812,26 @@
           fyll(el('k_bryter'), somValg, k2.bryter && k2.bryter.enhet, 'Ingen håndklevarmer');
         });
         visHus(Homey);
+      });
+      document.querySelectorAll('[data-helg]').forEach((knapp) => knapp.addEventListener('click', (hend) => {
+        hend.preventDefault();
+        Homey.api('POST', '/helg', { svar: knapp.dataset.helg }, (feil, svar) => {
+          if (feil) return Homey.alert(feil.message || String(feil));
+          meld(svar && svar.tekst ? svar.tekst : 'Lagret ✓');
+          setTimeout(() => visHus(Homey), 1500);
+        });
+      }));
+      el('f_start').addEventListener('click', (hend) => {
+        hend.preventDefault();
+        const til = el('f_til').value ? new Date(el('f_til').value).toISOString() : null;
+        Homey.confirm(til ? 'Starte ferie nå? Huset settes i bortemodus og er varmt igjen til tidspunktet du valgte.' : 'Starte ferie uten hjemkomstdato? Huset settes i bortemodus til noen kommer hjem.', 'warning', (feil, ja) => {
+          if (!ja) return;
+          Homey.api('POST', '/ferie', { til }, (f2) => {
+            if (f2) return Homey.alert(f2.message || String(f2));
+            meld('Ferie startet ✓');
+            setTimeout(() => visHus(Homey), 1500);
+          });
+        });
       });
       el('nyPerson').addEventListener('click', () => { lesPersoner(); personer.push({ navn: '', type: 'voksen', kilde: null }); tegnPersoner(); });
       el('lagreHus2').addEventListener('click', () => el('lagreHus').click());
@@ -786,6 +845,8 @@
         lesLys();
         lysregler = lysregler.filter((r) => r.lys);      // regler uten valgt lys lagres ikke
         const ny = { personer, vvb: releet(el('v_bryter').value), hanklevarmer: { bryter: releet(el('k_bryter').value).bryter }, lading: ladingFraSkjema(), lys: lysregler };
+        ny.varsler = { helgDag: Number(el('n_helgDag').value), helgTid: el('n_helgTid').value || '17:00' };
+        for (const k of N_KRYSS) ny.varsler[k] = el(`n_${k}`).checked;
         for (const k of H_KRYSS) ny[k] = el(`h_${k}`).checked;
         for (const k of H_TALL) if (el(`h_${k}`).value !== '') ny[k] = Number(el(`h_${k}`).value);
         ny.hjemkomstUkedag = el('h_hjemkomstUkedag').value === '' ? null : Number(el('h_hjemkomstUkedag').value);

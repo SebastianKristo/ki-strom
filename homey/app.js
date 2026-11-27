@@ -5,6 +5,7 @@ const tariffer = require('./lib/tariffer.json');
 const { Stromkalkulator, STANDARD_INNSTILLINGER } = require('./lib/stromkalkulator');
 const { Spotpriser, hentManglende } = require('./lib/spotpris');
 const { velgKilde, rangerRegister } = require('./lib/maalerkilde');
+const { osloTilUtc } = require('./lib/kalender');
 const { MotorKobling } = require('./kobling/motor');
 const { HusKobling } = require('./kobling/hus');
 
@@ -292,6 +293,8 @@ module.exports = class KiEnergiApp extends Homey.App {
       rom_senket: kort('rom_senket'),
       bortemodus_endret: kort('bortemodus_endret'),
       noen_kom_hjem: kort('noen_kom_hjem'),
+      varsel: kort('varsel'),
+      helg_sporsmaal: kort('helg_sporsmaal'),
       bereder_varm: kort('bereder_varm'),
       bereder_ikke_klar: kort('bereder_ikke_klar'),
     };
@@ -299,6 +302,15 @@ module.exports = class KiEnergiApp extends Homey.App {
     handling('sett_bortemodus', (args) => this.hus.settBorte(args.modus === 'paa'));
     handling('sett_hjemkomst', (args) => this.hus.settHjemkomst(args.tid));
     handling('forleng_borte', () => this.hus.forleng());
+    handling('svar_helg', (args) => this.hus.svarHelg(args.svar));
+    handling('sett_ferie', (args) => {
+      // Homey gir datoen som «dd-mm-åååå» og klokka som «tt:mm»
+      const [dag, mnd, aar] = String(args.dato || '').split('-').map(Number);
+      const [time, minutt] = String(args.tid || '13:00').split(':').map(Number);
+      const til = Number.isFinite(aar) ? osloTilUtc(aar, mnd, dag, time || 0, minutt || 0) : null;
+      this.hus.settFerie(til);
+    });
+    handling('ferie_uten_dato', () => this.hus.settFerie(null));
     handling('bereder_boost', (args) => this.hus.berederHandling('boost', args.minutter));
     handling('bereder_tving', () => this.hus.berederHandling('tving'));
     handling('sett_ladeautomatikk', (args) => { this.hus.settInnstillinger({ lading: { automatikk: args.modus === 'paa' } }); });

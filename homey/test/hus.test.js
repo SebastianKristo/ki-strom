@@ -253,3 +253,127 @@ test('håndklevarmeren settes ved skiftene, følges opp et kvarter, og det du gj
   // Første kjøring etter omstart: tilstanden settes
   assert.equal(skriv({}, kl6, true, false), true);
 });
+
+// ----------------------------------------------------------------------
+//  Varsler: helg, ferie og hjemkomst
+// ----------------------------------------------------------------------
+function husMedPerson(innst = {}) {
+  const { Hus } = require('../lib/hus');
+  const h = new Hus({}, { personer: [{ key: 'a', navn: 'A', type: 'voksen' }], borteAutoTimer: 3, ...innst });
+  h.typer = [];
+  h.tekster = [];
+  h.gaa = (ms, hjemme, varme) => { const ut = h.tick(ms, { a: hjemme }, null, varme); h.typer.push(...ut.map((x) => x.type)); h.tekster.push(...ut.map((x) => x.tekst)); return ut; };
+  return h;
+}
+
+test('helgespørsmålet: torsdag kl. 17, én påminnelse fredag hvis dere er hjemme og ikke har svart', () => {
+  const h = husMedPerson();
+  h.gaa(oslo(2026, 11, 26, 16, 59), true);                 // torsdag
+  assert.deepEqual(h.typer, []);
+  const ut = h.gaa(oslo(2026, 11, 26, 17, 0), true);
+  assert.deepEqual(ut.map((x) => [x.type, x.varsle]), [['helg_sporsmaal', true]]);
+  h.gaa(oslo(2026, 11, 26, 20, 0), true);
+  h.gaa(oslo(2026, 11, 27, 12, 0), true);
+  assert.equal(h.typer.length, 1, 'spør ikke på nytt før fredag kl. 17');
+  h.gaa(oslo(2026, 11, 27, 17, 0), true);
+  assert.match(h.tekster[1], /fortsatt hjemme/);
+  h.gaa(oslo(2026, 11, 27, 19, 0), true);
+  h.gaa(oslo(2026, 11, 28, 17, 0), true);
+  assert.equal(h.typer.length, 2, 'aldri mer enn to ganger');
+  // Uka etter spørres det på nytt
+  h.gaa(oslo(2026, 12, 3, 17, 0), true);
+  assert.equal(h.typer.length, 3);
+  // Slått av: flow-kortet utløses fortsatt, men uten varsel
+  const av = husMedPerson({ varsler: { helg: false } });
+  assert.equal(av.gaa(oslo(2026, 11, 26, 17, 0), true)[0].varsle, false);
+});
+
+test('svaret «bort» senker huset i det siste person drar; «hjemme» hindrer automatisk bortemodus', () => {
+  const bort = husMedPerson();
+  bort.gaa(oslo(2026, 11, 26, 17, 0), true);
+  assert.match(bort.svarHelg('bort', oslo(2026, 11, 26, 17, 5)), /søndag kl\. 13:00/);
+  bort.gaa(oslo(2026, 11, 27, 15, 0), true);
+  assert.equal(bort.t.borte, false);
+  bort.gaa(oslo(2026, 11, 27, 15, 1), false);              // siste person drar fredag
+  assert.equal(bort.t.borte, true, 'uten å vente tre timer');
+  assert.match(bort.tekster[bort.tekster.length - 1], /varmt igjen søndag kl\. 13:00/);
+  // Ingen påminnelse fredag kl. 17: det er svart
+  bort.gaa(oslo(2026, 11, 27, 17, 0), false);
+  assert.equal(bort.typer.filter((x) => x === 'helg_sporsmaal').length, 1);
+
+  const hjemme = husMedPerson();
+  hjemme.svarHelg('hjemme', oslo(2026, 11, 26, 17, 5));
+  hjemme.gaa(oslo(2026, 11, 28, 10, 0), false);
+  hjemme.gaa(oslo(2026, 11, 28, 16, 0), false);            // seks timer på tur
+  assert.equal(hjemme.t.borte, false);
+  // Uka etter gjelder ikke svaret lenger
+  hjemme.gaa(oslo(2026, 12, 1, 10, 0), false);
+  hjemme.gaa(oslo(2026, 12, 1, 14, 0), false);
+  assert.equal(hjemme.t.borte, true);
+});
+
+test('hjemkomst: varsel når oppvarmingen starter og når huset er klart, én gang hver', () => {
+  const h = husMedPerson();
+  h.gaa(oslo(2026, 11, 27, 10, 0), false);
+  h.gaa(oslo(2026, 11, 27, 13, 1), false);                 // bortemodus etter tre timer
+  assert.deepEqual(h.typer, ['borte_paa']);
+  h.gaa(oslo(2026, 11, 29, 6, 0), false, { forvarmer: false });
+  h.gaa(oslo(2026, 11, 29, 7, 0), false, { forvarmer: true });
+  h.gaa(oslo(2026, 11, 29, 8, 0), false, { forvarmer: true });
+  assert.deepEqual(h.typer.slice(1), ['forvarmer']);
+  assert.match(h.tekster[1], /søndag kl\. 13:00 har startet/);
+  h.gaa(oslo(2026, 11, 29, 13, 0), false, { kalde: [{ navn: 'Stue', temp: 20.5, krav: 22 }] });
+  h.gaa(oslo(2026, 11, 29, 13, 5), false, { kalde: [] });
+  assert.deepEqual(h.typer.slice(2), ['hjemkomst_klar']);
+  assert.match(h.tekster[2], /ikke helt varmt ennå: Stue 20,5 °C av 22/);
+  // Noen kommer: velkommen hjem
+  h.gaa(oslo(2026, 11, 29, 14, 0), true);
+  assert.equal(h.typer[3], 'kom_hjem');
+  // Alt varmt gir den hyggelige utgaven
+  const varm = husMedPerson();
+  varm.settHjemkomst('13:00', oslo(2026, 11, 29, 8, 0));
+  assert.match(varm.gaa(oslo(2026, 11, 29, 13, 0), false, { kalde: [] })[0].tekst, /varmt og klart/);
+});
+
+test('ferie: ingen kom til planlagt tid, og den faste ukentlige oppvarmingen hoppes over til noen kommer', () => {
+  const h = husMedPerson();
+  h.gaa(oslo(2026, 11, 27, 10, 0), false);
+  h.gaa(oslo(2026, 11, 27, 13, 1), false);
+  h.gaa(oslo(2026, 11, 29, 13, 0), false);                 // søndag: ventet hjem
+  h.gaa(oslo(2026, 11, 29, 19, 1), false);                 // seks timer senere: ingen kom
+  assert.ok(h.typer.includes('kom_ikke'));
+  assert.equal(h.bilde(oslo(2026, 11, 29, 20, 0)).modus, 'Ferie');
+  // Neste søndag varmes det ikke opp
+  assert.equal(h.hjemkomstMs(oslo(2026, 12, 6, 9, 0)), null);
+  // Du sier fra: da er det varmt til dere kommer
+  const til = h.settHjemkomst(oslo(2026, 12, 12, 15, 0), oslo(2026, 12, 10, 9, 0));
+  assert.equal(h.hjemkomstMs(oslo(2026, 12, 12, 9, 0)), til);
+  h.gaa(oslo(2026, 12, 12, 15, 30), true);
+  assert.match(h.tekster[h.tekster.length - 1], /Velkommen hjem fra ferie/);
+  assert.equal(h.t.ferie, false);
+  // Og uka etter er den faste hjemkomsten tilbake
+  h.gaa(oslo(2026, 12, 18, 10, 0), false);
+  h.gaa(oslo(2026, 12, 18, 13, 1), false);
+  assert.ok(h.hjemkomstMs(oslo(2026, 12, 19, 9, 0)) !== null);
+});
+
+test('ferie satt for hånd, med og uten hjemkomstdato', () => {
+  const h = husMedPerson();
+  const til = oslo(2026, 12, 27, 13, 0);
+  h.settFerie(til, oslo(2026, 12, 20, 9, 0));
+  const ut = h.gaa(oslo(2026, 12, 20, 9, 1), true);         // dere er fortsatt hjemme og pakker
+  assert.deepEqual(ut.map((x) => x.type), ['ferie']);
+  assert.match(ut[0].tekst, /varmt igjen søndag 27\.12\. kl\. 13:00/);
+  assert.equal(h.hjemkomstMs(oslo(2026, 12, 21, 9, 0)), til);
+  const uten = husMedPerson({ hjemkomstUkedag: null });
+  uten.settFerie(null, oslo(2026, 12, 20, 9, 0));
+  assert.match(uten.gaa(oslo(2026, 12, 20, 9, 1), false)[0].tekst, /Si fra når dere kommer/);
+  // Uten fast hjemkomst blir et hus som står tomt i to døgn regnet som ferie av seg selv
+  const auto = husMedPerson({ hjemkomstUkedag: null });
+  auto.gaa(oslo(2026, 12, 20, 9, 0), false);
+  auto.gaa(oslo(2026, 12, 20, 12, 1), false);
+  auto.gaa(oslo(2026, 12, 21, 12, 0), false);
+  assert.ok(!auto.typer.includes('ferie'));
+  auto.gaa(oslo(2026, 12, 22, 9, 1), false);
+  assert.ok(auto.typer.includes('ferie'));
+});

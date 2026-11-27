@@ -224,6 +224,8 @@
    "modus": "Hjemme",
    "borte": false,
    "alle_borte": false,
+   "ferie": false,
+   "helg": null,
    "borte_siden": null,
    "hjemkomst": null,
    "personer": [
@@ -308,6 +310,8 @@
   "modus": "Hjemme",
   "borte": false,
   "alle_borte": false,
+  "ferie": false,
+  "helg": null,
   "borte_siden": null,
   "hjemkomst": null,
   "personer": [
@@ -533,6 +537,7 @@
   "hjemkomstUkedag": 6,
   "hjemkomstTid": "13:00",
   "vanerStyrer": false,
+  "varsler": {},
   "vvb": {
    "bryter": {
     "enhet": "vvb",
